@@ -1,0 +1,14 @@
+[workspace]
+members = ["apps/server"]
+default-members = ["apps/server"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[profile.release]
+panic = "abort"
+lto = "thin"
+strip = true

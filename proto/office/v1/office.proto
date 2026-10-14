@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package office.v1;
+
+// The board is exchanged as JSON while the frontend domain model is evolving.
+// This keeps the RPC contract stable while preserving JSON's flexible shape.
+service OfficeService {
+  rpc GetBoard(GetBoardRequest) returns (GetBoardResponse);
+  rpc SaveBoard(SaveBoardRequest) returns (SaveBoardResponse);
+}
+
+message GetBoardRequest {}
+message GetBoardResponse { string board_json = 1; }
+message SaveBoardRequest { string board_json = 1; }
+message SaveBoardResponse { string board_json = 1; }
