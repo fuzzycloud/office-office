@@ -1,6 +1,6 @@
 # First GitHub push
 
-The scaffold targets https://github.com/fuzzycloud/office-office. The Codex session could write project files but `.git` was mounted read-only, so no repository, commit, remote or push was created by the agent.
+The scaffold targets https://github.com/fuzzycloud/office-office. Git is configured with the `origin` remote pointing to this repository. The commands below describe the initial setup for a fresh checkout.
 
 Run from the repository root in your own terminal:
 
