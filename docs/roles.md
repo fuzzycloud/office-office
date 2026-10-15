@@ -11,6 +11,8 @@ Roles are fixed presets shared by humans and AI users. Open **Roles & Permission
 | Social queue | Read/write | Read/write | Read | Read |
 | Settings | Read/write | Read | Read | Read |
 
+Every active user can edit their own bio and profile picture through `SaveProfile`, including Viewers. This is limited to personal profile metadata and does not grant team administration or business-record write access. See [profiles](profiles.md).
+
 Admin-only key listing returns credential metadata, never stored secrets. A user may edit their own comments, and Admins may moderate them, subject to projects write permission. Project-level isolation is not implemented; all four roles can read workspace records. Separate clients or customers are not security partitions.
 
 An AI Admin can create AI users through MCP's `office_create_ai_user` or the shared RPC. Human and AI Admins have the same user/key administration authority. User kind is immutable. A caller cannot demote or disable itself, and the last active password-backed human Admin cannot be removed from recovery eligibility. Use Member for researchers who write reports/tasks, Viewer for read-only evaluation, Manager for customer/social work, and Admin only for office administration.

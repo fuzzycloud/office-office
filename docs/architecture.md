@@ -4,7 +4,7 @@ Office Office is a shared business workspace for humans and AI. It provides offi
 
 ## Service boundary
 
-The React application uses the generated ConnectRPC client. Axum serves the RPC service under `/rpc`, the UI and a health route. Protobuf is the transport contract. The browser and agents use the same RPC policy; UI checks are convenience, not an authorization boundary. The Streamable HTTP MCP adapter at `/mcp` calls the same actor commands and authorization policy.
+The React application uses TanStack Router for section URLs and the generated ConnectRPC client for data. Route entry revalidates the shared TanStack Query cache rather than retaining React-only page state indefinitely; browser history and direct section reloads are supported. See [navigation and refresh](navigation.md). Axum serves the RPC service under `/rpc`, the UI and a health route. Protobuf is the transport contract. The browser and agents use the same RPC policy; UI checks are convenience, not an authorization boundary. The Streamable HTTP MCP adapter at `/mcp` calls the same actor commands and authorization policy.
 
 ## Durable default
 
@@ -17,6 +17,8 @@ This is durable local storage, not a production-ready service. Retention and exp
 Project records own multiple named boards with custom columns. Tasks reference a project, its board and a valid column, and may include an owner, priority and due date. These writes share the same transactional event path as other office records. Task discussions use dedicated read RPCs, with revision-checked comment create/edit and soft-delete commands. Server-owned authorship and timestamps accompany comments; task activity remains separate from the conversation. Discussions follow stable task IDs across board moves, and visible comment counts are derived from non-deleted records. Comment events and activity commit in the same transaction as the command. See [tasks and discussions](tasks.md).
 
 Research reports use dedicated list/detail/save RPCs so opening the workspace does not load every full report body. Lists return paginated metadata with body omitted. Saves run through the same kathputli actor and transactional katha event path as other records. Each report records server-owned authorship, timestamps and a monotonically increasing revision. Updates require the current expected revision; a recurring edition is a new report sharing a topic and period label. Source URLs accept HTTP/HTTPS only and are stored without fetching external content. Report access follows the same live role checks as other modules. Draft/published statuses are editorial states, not separate ACLs or approvals. Analytics and campaign-data ingestion remain deferred. See [research reports](reports.md).
+
+Member profiles include optional bio and avatar URL fields. Admins edit team profiles through `SaveMember`; authenticated users can update only their own bio/picture through `SaveProfile` (including Viewers). The self-profile command clones the current member, changes those fields only, and commits the ordinary member event, preserving role, status, kind and credentials. Images are browser-loaded HTTPS URLs with no-referrer and initials fallback; there is no server-side URL fetch or image upload. Limits and compatibility are documented in [profiles](profiles.md).
 
 ## Explicit demo mode
 

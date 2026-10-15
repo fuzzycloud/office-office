@@ -10,6 +10,7 @@ import {
 	type Member,
 	type Task,
 } from "./api";
+import MemberAvatar from "./MemberAvatar";
 
 const time = (value: bigint) =>
 	new Intl.DateTimeFormat(undefined, {
@@ -436,6 +437,18 @@ export default function TaskDetails({
 										{comments.map((comment) => (
 											<article className="task-comment" key={comment.id}>
 												<div className="task-comment-byline">
+													{(() => {
+														const author = members.find(
+															(member) => member.id === comment.authorId,
+														);
+														return author ? (
+															<MemberAvatar
+																name={author.name}
+																avatarUrl={author.avatarUrl}
+																className="size-8"
+															/>
+														) : null;
+													})()}
 													<strong>
 														{comment.authorName || "Unknown author"}
 													</strong>

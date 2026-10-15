@@ -60,3 +60,9 @@ The prior v0.3.0 implementation passed all 30 Rust tests and all 20 real-server 
 ## Fixed roles and AI provisioning verification — 2026-10-16
 
 The fixed-role implementation passed all 32 Rust tests and Clippy with warnings denied. All 21 real-server Chromium scenarios were verified: 20 passed in the full run, and onboarding passed on its focused rerun after narrowing ambiguous selectors. Frontend and browser-source TypeScript checks, Biome, schema generation and the production UI build passed. Coverage includes the complete role matrix and write enforcement, automatic one-time AI keys, direct-key MCP access, AI Admin provisioning, atomic rotation invalidating old keys/tokens, live role changes, AI Admin comment moderation and a Viewer reading the roles page. The browser suite caught and fixed a key dialog that originally rendered only in Settings instead of immediately after Team creation. These are local checks; live client evaluation and deployment remain separate.
+
+## Profiles and URL navigation checkpoint — 2026-10-16
+
+The profile backend passed 35 Rust tests and Clippy with warnings denied. All 27 browser scenarios were verified: 26 passed in the full run, and the mobile suite passed on a focused rerun after replacing its old reload-to-Overview expectation with preservation of `/settings`. Frontend and new browser-source TypeScript checks, browser-source Biome, schema generation and the UI production build passed. Coverage includes human/AI self-profile permissions, image failure/recovery, validation, SQLite replay, direct section URLs, reload HTTP 200, back/forward, deep-link login and route-entry refresh after separate AI writes to customers and reports.
+
+This checkpoint is committed for continued development; it has not been released or deployed. The hosted test office remains v0.4.0. Section routes are implemented; individual task/board/report deep links and image uploads remain outside this slice.

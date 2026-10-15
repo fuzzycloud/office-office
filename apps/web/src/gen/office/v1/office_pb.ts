@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file office/v1/office.proto.
  */
 export const file_office_v1_office: GenFile = /*@__PURE__*/
-  fileDesc("ChZvZmZpY2UvdjEvb2ZmaWNlLnByb3RvEglvZmZpY2UudjEiFwoVR2V0U2V0dXBTdGF0dXNSZXF1ZXN0IlwKFkdldFNldHVwU3RhdHVzUmVzcG9uc2USEwoLbmVlZHNfc2V0dXAYASABKAgSEQoJZGVtb19tb2RlGAIgASgIEhoKEnBlcnNpc3RlbnRfc3RvcmFnZRgDIAEoCCJ2ChVCb290c3RyYXBBZG1pblJlcXVlc3QSDAoEbmFtZRgBIAEoCRINCgVlbWFpbBgCIAEoCRIQCghwYXNzd29yZBgDIAEoCRIWCg53b3Jrc3BhY2VfbmFtZRgEIAEoCRIWCg5sb2FkX2RlbW9fZGF0YRgFIAEoCCIvCgxMb2dpblJlcXVlc3QSDQoFZW1haWwYASABKAkSEAoIcGFzc3dvcmQYAiABKAkiXAoWQm9vdHN0cmFwQWRtaW5SZXNwb25zZRINCgV0b2tlbhgBIAEoCRIfCgR1c2VyGAIgASgLMhEub2ZmaWNlLnYxLk1lbWJlchISCgpleHBpcmVzX2F0GAMgASgDIlMKDUxvZ2luUmVzcG9uc2USDQoFdG9rZW4YASABKAkSHwoEdXNlchgCIAEoCzIRLm9mZmljZS52MS5NZW1iZXISEgoKZXhwaXJlc19hdBgDIAEoAyImChdFeGNoYW5nZUFnZW50S2V5UmVxdWVzdBILCgNrZXkYASABKAkiXgoYRXhjaGFuZ2VBZ2VudEtleVJlc3BvbnNlEg0KBXRva2VuGAEgASgJEh8KBHVzZXIYAiABKAsyES5vZmZpY2UudjEuTWVtYmVyEhIKCmV4cGlyZXNfYXQYAyABKAMiEgoQTGlzdFJvbGVzUmVxdWVzdCIzChFMaXN0Um9sZXNSZXNwb25zZRIeCgVyb2xlcxgBIAMoCzIPLm9mZmljZS52MS5Sb2xlIkoKBFJvbGUSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRITCgtkZXNjcmlwdGlvbhgDIAEoCRITCgtwZXJtaXNzaW9ucxgEIAMoCSIVChNHZXRXb3Jrc3BhY2VSZXF1ZXN0IukDChRHZXRXb3Jrc3BhY2VSZXNwb25zZRIRCglkZW1vX21vZGUYASABKAgSLgoIc2V0dGluZ3MYAiABKAsyHC5vZmZpY2UudjEuV29ya3NwYWNlU2V0dGluZ3MSJwoMY3VycmVudF91c2VyGAMgASgLMhEub2ZmaWNlLnYxLk1lbWJlchIiCgdtZW1iZXJzGAQgAygLMhEub2ZmaWNlLnYxLk1lbWJlchImCgljdXN0b21lcnMYBSADKAsyEy5vZmZpY2UudjEuQ3VzdG9tZXISJAoIcHJvamVjdHMYBiADKAsyEi5vZmZpY2UudjEuUHJvamVjdBIwCgtjb25uZWN0aW9ucxgHIAMoCzIbLm9mZmljZS52MS5Tb2NpYWxDb25uZWN0aW9uEicKBXBvc3RzGAggAygLMhgub2ZmaWNlLnYxLlNjaGVkdWxlZFBvc3QSJQoIYWN0aXZpdHkYCSADKAsyEy5vZmZpY2UudjEuQWN0aXZpdHkSIAoGYm9hcmRzGAogAygLMhAub2ZmaWNlLnYxLkJvYXJkEh4KBXRhc2tzGAsgAygLMg8ub2ZmaWNlLnYxLlRhc2sSGgoScGVyc2lzdGVudF9zdG9yYWdlGAwgASgIEhMKC3Blcm1pc3Npb25zGA0gAygJIkgKEVNhdmVNZW1iZXJSZXF1ZXN0EiEKBm1lbWJlchgBIAEoCzIRLm9mZmljZS52MS5NZW1iZXISEAoIcGFzc3dvcmQYAiABKAkibwoSU2F2ZU1lbWJlclJlc3BvbnNlEiEKBm1lbWJlchgBIAEoCzIRLm9mZmljZS52MS5NZW1iZXISJgoJYWdlbnRfa2V5GAIgASgLMhMub2ZmaWNlLnYxLkFnZW50S2V5Eg4KBnNlY3JldBgDIAEoCSI8ChNTYXZlQ3VzdG9tZXJSZXF1ZXN0EiUKCGN1c3RvbWVyGAEgASgLMhMub2ZmaWNlLnYxLkN1c3RvbWVyIj0KFFNhdmVDdXN0b21lclJlc3BvbnNlEiUKCGN1c3RvbWVyGAEgASgLMhMub2ZmaWNlLnYxLkN1c3RvbWVyIjkKElNhdmVQcm9qZWN0UmVxdWVzdBIjCgdwcm9qZWN0GAEgASgLMhIub2ZmaWNlLnYxLlByb2plY3QiOgoTU2F2ZVByb2plY3RSZXNwb25zZRIjCgdwcm9qZWN0GAEgASgLMhIub2ZmaWNlLnYxLlByb2plY3QiMwoQU2F2ZUJvYXJkUmVxdWVzdBIfCgVib2FyZBgBIAEoCzIQLm9mZmljZS52MS5Cb2FyZCI0ChFTYXZlQm9hcmRSZXNwb25zZRIfCgVib2FyZBgBIAEoCzIQLm9mZmljZS52MS5Cb2FyZCIwCg9TYXZlVGFza1JlcXVlc3QSHQoEdGFzaxgBIAEoCzIPLm9mZmljZS52MS5UYXNrIjEKEFNhdmVUYXNrUmVzcG9uc2USHQoEdGFzaxgBIAEoCzIPLm9mZmljZS52MS5UYXNrImoKEkxpc3RSZXBvcnRzUmVxdWVzdBINCgVxdWVyeRgBIAEoCRIOCgZzdGF0dXMYAiABKAkSEgoKcHJvamVjdF9pZBgDIAEoCRIRCglwYWdlX3NpemUYBCABKA0SDgoGb2Zmc2V0GAUgASgNImMKE0xpc3RSZXBvcnRzUmVzcG9uc2USIgoHcmVwb3J0cxgBIAMoCzIRLm9mZmljZS52MS5SZXBvcnQSEwoLdG90YWxfY291bnQYAiABKA0SEwoLbmV4dF9vZmZzZXQYAyABKA0iHgoQR2V0UmVwb3J0UmVxdWVzdBIKCgJpZBgBIAEoCSI2ChFHZXRSZXBvcnRSZXNwb25zZRIhCgZyZXBvcnQYASABKAsyES5vZmZpY2UudjEuUmVwb3J0IlEKEVNhdmVSZXBvcnRSZXF1ZXN0EiEKBnJlcG9ydBgBIAEoCzIRLm9mZmljZS52MS5SZXBvcnQSGQoRZXhwZWN0ZWRfcmV2aXNpb24YAiABKA0iNwoSU2F2ZVJlcG9ydFJlc3BvbnNlEiEKBnJlcG9ydBgBIAEoCzIRLm9mZmljZS52MS5SZXBvcnQiFgoUTGlzdEFnZW50S2V5c1JlcXVlc3QiOgoVTGlzdEFnZW50S2V5c1Jlc3BvbnNlEiEKBGtleXMYASADKAsyEy5vZmZpY2UudjEuQWdlbnRLZXkiYQoVQ3JlYXRlQWdlbnRLZXlSZXF1ZXN0EgwKBG5hbWUYASABKAkSDgoGc2NvcGVzGAIgAygJEhcKD2V4cGlyZXNfaW5fZGF5cxgDIAEoBRIRCgltZW1iZXJfaWQYBCABKAkiSgoWQ3JlYXRlQWdlbnRLZXlSZXNwb25zZRIgCgNrZXkYASABKAsyEy5vZmZpY2UudjEuQWdlbnRLZXkSDgoGc2VjcmV0GAIgASgJIiMKFVJldm9rZUFnZW50S2V5UmVxdWVzdBIKCgJpZBgBIAEoCSI6ChZSZXZva2VBZ2VudEtleVJlc3BvbnNlEiAKA2tleRgBIAEoCzITLm9mZmljZS52MS5BZ2VudEtleSIqChVSb3RhdGVBZ2VudEtleVJlcXVlc3QSEQoJbWVtYmVyX2lkGAEgASgJIkoKFlJvdGF0ZUFnZW50S2V5UmVzcG9uc2USIAoDa2V5GAEgASgLMhMub2ZmaWNlLnYxLkFnZW50S2V5Eg4KBnNlY3JldBgCIAEoCSI5Cg9TYXZlUG9zdFJlcXVlc3QSJgoEcG9zdBgBIAEoCzIYLm9mZmljZS52MS5TY2hlZHVsZWRQb3N0IjoKEFNhdmVQb3N0UmVzcG9uc2USJgoEcG9zdBgBIAEoCzIYLm9mZmljZS52MS5TY2hlZHVsZWRQb3N0IkUKE1NhdmVTZXR0aW5nc1JlcXVlc3QSLgoIc2V0dGluZ3MYASABKAsyHC5vZmZpY2UudjEuV29ya3NwYWNlU2V0dGluZ3MiRgoUU2F2ZVNldHRpbmdzUmVzcG9uc2USLgoIc2V0dGluZ3MYASABKAsyHC5vZmZpY2UudjEuV29ya3NwYWNlU2V0dGluZ3MilAEKBk1lbWJlchIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEg0KBWVtYWlsGAMgASgJEhEKCWpvYl90aXRsZRgEIAEoCRISCgpkZXBhcnRtZW50GAUgASgJEgwKBHJvbGUYBiABKAkSDgoGc3RhdHVzGAcgASgJEg4KBmFjY2VzcxgIIAMoCRIMCgRraW5kGAkgASgJInUKCEN1c3RvbWVyEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDwoHY29tcGFueRgDIAEoCRINCgVlbWFpbBgEIAEoCRIOCgZzdGF0dXMYBSABKAkSEAoIb3duZXJfaWQYBiABKAkSDQoFbm90ZXMYByABKAkigAEKB1Byb2plY3QSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRITCgtjdXN0b21lcl9pZBgDIAEoCRIQCghvd25lcl9pZBgEIAEoCRIOCgZzdGF0dXMYBSABKAkSDwoHc3VtbWFyeRgGIAEoCRITCgt0YXJnZXRfZGF0ZRgHIAEoCSJGCgVCb2FyZBIKCgJpZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEgwKBG5hbWUYAyABKAkSDwoHY29sdW1ucxgEIAMoCSK8AQoEVGFzaxIKCgJpZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhAKCGJvYXJkX2lkGAMgASgJEg4KBmNvbHVtbhgEIAEoCRINCgV0aXRsZRgFIAEoCRITCgtkZXNjcmlwdGlvbhgGIAEoCRITCgthc3NpZ25lZV9pZBgHIAEoCRIQCghwcmlvcml0eRgIIAEoCRIQCghkdWVfZGF0ZRgJIAEoCRIVCg1jb21tZW50X2NvdW50GAogASgNIioKDFJlcG9ydFNvdXJjZRINCgV0aXRsZRgBIAEoCRILCgN1cmwYAiABKAkixAIKBlJlcG9ydBIKCgJpZBgBIAEoCRINCgV0aXRsZRgCIAEoCRIPCgdzdW1tYXJ5GAMgASgJEgwKBGJvZHkYBCABKAkSDAoEa2luZBgFIAEoCRIOCgZzdGF0dXMYBiABKAkSDQoFdG9waWMYByABKAkSDgoGcGVyaW9kGAggASgJEhIKCnByb2plY3RfaWQYCSABKAkSDwoHdGFza19pZBgKIAEoCRIRCglhdXRob3JfaWQYCyABKAkSEwoLYXV0aG9yX25hbWUYDCABKAkSEgoKY3JlYXRlZF9hdBgNIAEoAxISCgp1cGRhdGVkX2F0GA4gASgDEhIKCnVwZGF0ZWRfYnkYDyABKAkSEAoIcmV2aXNpb24YECABKA0SKAoHc291cmNlcxgRIAMoCzIXLm9mZmljZS52MS5SZXBvcnRTb3VyY2UikwEKCEFnZW50S2V5EgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDgoGc2NvcGVzGAMgAygJEhIKCmV4cGlyZXNfYXQYBCABKAMSEgoKY3JlYXRlZF9hdBgFIAEoAxIPCgdyZXZva2VkGAYgASgIEhEKCW1lbWJlcl9pZBgHIAEoCRIRCglpc3N1ZWRfYnkYCCABKAkiXAoQU29jaWFsQ29ubmVjdGlvbhIKCgJpZBgBIAEoCRIQCghwbGF0Zm9ybRgCIAEoCRIMCgRuYW1lGAMgASgJEg4KBnN0YXR1cxgEIAEoCRIMCgRkZW1vGAUgASgIInwKDVNjaGVkdWxlZFBvc3QSCgoCaWQYASABKAkSFQoNY29ubmVjdGlvbl9pZBgCIAEoCRIPCgdjb250ZW50GAMgASgJEhQKDHNjaGVkdWxlZF9hdBgEIAEoCRIOCgZzdGF0dXMYBSABKAkSEQoJYXV0aG9yX2lkGAYgASgJIl4KCEFjdGl2aXR5EgoKAmlkGAEgASgJEgwKBGtpbmQYAiABKAkSDwoHc3VtbWFyeRgDIAEoCRISCgphY3Rvcl9uYW1lGAQgASgJEhMKC29jY3VycmVkX2F0GAUgASgJIlQKEVdvcmtzcGFjZVNldHRpbmdzEhYKDndvcmtzcGFjZV9uYW1lGAEgASgJEhUKDWRlZmF1bHRfdGhlbWUYAiABKAkSEAoIdGltZXpvbmUYAyABKAkivwEKC1Rhc2tDb21tZW50EgoKAmlkGAEgASgJEg8KB3Rhc2tfaWQYAiABKAkSDAoEYm9keRgDIAEoCRIRCglhdXRob3JfaWQYBCABKAkSEwoLYXV0aG9yX25hbWUYBSABKAkSEgoKY3JlYXRlZF9hdBgGIAEoAxISCgp1cGRhdGVkX2F0GAcgASgDEhAKCHJldmlzaW9uGAggASgNEg8KB2RlbGV0ZWQYCSABKAgSEgoKYWN0b3Jfa2luZBgKIAEoCSKZAQoMVGFza0FjdGl2aXR5EgoKAmlkGAEgASgJEg8KB3Rhc2tfaWQYAiABKAkSDAoEa2luZBgDIAEoCRIPCgdzdW1tYXJ5GAQgASgJEhAKCGFjdG9yX2lkGAUgASgJEhIKCmFjdG9yX25hbWUYBiABKAkSEgoKYWN0b3Jfa2luZBgHIAEoCRITCgtvY2N1cnJlZF9hdBgIIAEoAyIsChlMaXN0VGFza0Rpc2N1c3Npb25SZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAkicQoaTGlzdFRhc2tEaXNjdXNzaW9uUmVzcG9uc2USKAoIY29tbWVudHMYASADKAsyFi5vZmZpY2UudjEuVGFza0NvbW1lbnQSKQoIYWN0aXZpdHkYAiADKAsyFy5vZmZpY2UudjEuVGFza0FjdGl2aXR5ImYKFlNhdmVUYXNrQ29tbWVudFJlcXVlc3QSDwoHdGFza19pZBgBIAEoCRISCgpjb21tZW50X2lkGAIgASgJEgwKBGJvZHkYAyABKAkSGQoRZXhwZWN0ZWRfcmV2aXNpb24YBCABKA0iQgoXU2F2ZVRhc2tDb21tZW50UmVzcG9uc2USJwoHY29tbWVudBgBIAEoCzIWLm9mZmljZS52MS5UYXNrQ29tbWVudCJaChhEZWxldGVUYXNrQ29tbWVudFJlcXVlc3QSDwoHdGFza19pZBgBIAEoCRISCgpjb21tZW50X2lkGAIgASgJEhkKEWV4cGVjdGVkX3JldmlzaW9uGAMgASgNIkQKGURlbGV0ZVRhc2tDb21tZW50UmVzcG9uc2USJwoHY29tbWVudBgBIAEoCzIWLm9mZmljZS52MS5UYXNrQ29tbWVudDLTDgoNT2ZmaWNlU2VydmljZRJVCg5HZXRTZXR1cFN0YXR1cxIgLm9mZmljZS52MS5HZXRTZXR1cFN0YXR1c1JlcXVlc3QaIS5vZmZpY2UudjEuR2V0U2V0dXBTdGF0dXNSZXNwb25zZRJVCg5Cb290c3RyYXBBZG1pbhIgLm9mZmljZS52MS5Cb290c3RyYXBBZG1pblJlcXVlc3QaIS5vZmZpY2UudjEuQm9vdHN0cmFwQWRtaW5SZXNwb25zZRI6CgVMb2dpbhIXLm9mZmljZS52MS5Mb2dpblJlcXVlc3QaGC5vZmZpY2UudjEuTG9naW5SZXNwb25zZRJbChBFeGNoYW5nZUFnZW50S2V5EiIub2ZmaWNlLnYxLkV4Y2hhbmdlQWdlbnRLZXlSZXF1ZXN0GiMub2ZmaWNlLnYxLkV4Y2hhbmdlQWdlbnRLZXlSZXNwb25zZRJGCglMaXN0Um9sZXMSGy5vZmZpY2UudjEuTGlzdFJvbGVzUmVxdWVzdBocLm9mZmljZS52MS5MaXN0Um9sZXNSZXNwb25zZRJPCgxHZXRXb3Jrc3BhY2USHi5vZmZpY2UudjEuR2V0V29ya3NwYWNlUmVxdWVzdBofLm9mZmljZS52MS5HZXRXb3Jrc3BhY2VSZXNwb25zZRJJCgpTYXZlTWVtYmVyEhwub2ZmaWNlLnYxLlNhdmVNZW1iZXJSZXF1ZXN0Gh0ub2ZmaWNlLnYxLlNhdmVNZW1iZXJSZXNwb25zZRJPCgxTYXZlQ3VzdG9tZXISHi5vZmZpY2UudjEuU2F2ZUN1c3RvbWVyUmVxdWVzdBofLm9mZmljZS52MS5TYXZlQ3VzdG9tZXJSZXNwb25zZRJMCgtTYXZlUHJvamVjdBIdLm9mZmljZS52MS5TYXZlUHJvamVjdFJlcXVlc3QaHi5vZmZpY2UudjEuU2F2ZVByb2plY3RSZXNwb25zZRJGCglTYXZlQm9hcmQSGy5vZmZpY2UudjEuU2F2ZUJvYXJkUmVxdWVzdBocLm9mZmljZS52MS5TYXZlQm9hcmRSZXNwb25zZRJDCghTYXZlVGFzaxIaLm9mZmljZS52MS5TYXZlVGFza1JlcXVlc3QaGy5vZmZpY2UudjEuU2F2ZVRhc2tSZXNwb25zZRJhChJMaXN0VGFza0Rpc2N1c3Npb24SJC5vZmZpY2UudjEuTGlzdFRhc2tEaXNjdXNzaW9uUmVxdWVzdBolLm9mZmljZS52MS5MaXN0VGFza0Rpc2N1c3Npb25SZXNwb25zZRJYCg9TYXZlVGFza0NvbW1lbnQSIS5vZmZpY2UudjEuU2F2ZVRhc2tDb21tZW50UmVxdWVzdBoiLm9mZmljZS52MS5TYXZlVGFza0NvbW1lbnRSZXNwb25zZRJeChFEZWxldGVUYXNrQ29tbWVudBIjLm9mZmljZS52MS5EZWxldGVUYXNrQ29tbWVudFJlcXVlc3QaJC5vZmZpY2UudjEuRGVsZXRlVGFza0NvbW1lbnRSZXNwb25zZRJMCgtMaXN0UmVwb3J0cxIdLm9mZmljZS52MS5MaXN0UmVwb3J0c1JlcXVlc3QaHi5vZmZpY2UudjEuTGlzdFJlcG9ydHNSZXNwb25zZRJGCglHZXRSZXBvcnQSGy5vZmZpY2UudjEuR2V0UmVwb3J0UmVxdWVzdBocLm9mZmljZS52MS5HZXRSZXBvcnRSZXNwb25zZRJJCgpTYXZlUmVwb3J0Ehwub2ZmaWNlLnYxLlNhdmVSZXBvcnRSZXF1ZXN0Gh0ub2ZmaWNlLnYxLlNhdmVSZXBvcnRSZXNwb25zZRJSCg1MaXN0QWdlbnRLZXlzEh8ub2ZmaWNlLnYxLkxpc3RBZ2VudEtleXNSZXF1ZXN0GiAub2ZmaWNlLnYxLkxpc3RBZ2VudEtleXNSZXNwb25zZRJVCg5DcmVhdGVBZ2VudEtleRIgLm9mZmljZS52MS5DcmVhdGVBZ2VudEtleVJlcXVlc3QaIS5vZmZpY2UudjEuQ3JlYXRlQWdlbnRLZXlSZXNwb25zZRJVCg5SZXZva2VBZ2VudEtleRIgLm9mZmljZS52MS5SZXZva2VBZ2VudEtleVJlcXVlc3QaIS5vZmZpY2UudjEuUmV2b2tlQWdlbnRLZXlSZXNwb25zZRJVCg5Sb3RhdGVBZ2VudEtleRIgLm9mZmljZS52MS5Sb3RhdGVBZ2VudEtleVJlcXVlc3QaIS5vZmZpY2UudjEuUm90YXRlQWdlbnRLZXlSZXNwb25zZRJDCghTYXZlUG9zdBIaLm9mZmljZS52MS5TYXZlUG9zdFJlcXVlc3QaGy5vZmZpY2UudjEuU2F2ZVBvc3RSZXNwb25zZRJPCgxTYXZlU2V0dGluZ3MSHi5vZmZpY2UudjEuU2F2ZVNldHRpbmdzUmVxdWVzdBofLm9mZmljZS52MS5TYXZlU2V0dGluZ3NSZXNwb25zZWIGcHJvdG8z");
+  fileDesc("ChZvZmZpY2UvdjEvb2ZmaWNlLnByb3RvEglvZmZpY2UudjEiFwoVR2V0U2V0dXBTdGF0dXNSZXF1ZXN0IlwKFkdldFNldHVwU3RhdHVzUmVzcG9uc2USEwoLbmVlZHNfc2V0dXAYASABKAgSEQoJZGVtb19tb2RlGAIgASgIEhoKEnBlcnNpc3RlbnRfc3RvcmFnZRgDIAEoCCJ2ChVCb290c3RyYXBBZG1pblJlcXVlc3QSDAoEbmFtZRgBIAEoCRINCgVlbWFpbBgCIAEoCRIQCghwYXNzd29yZBgDIAEoCRIWCg53b3Jrc3BhY2VfbmFtZRgEIAEoCRIWCg5sb2FkX2RlbW9fZGF0YRgFIAEoCCIvCgxMb2dpblJlcXVlc3QSDQoFZW1haWwYASABKAkSEAoIcGFzc3dvcmQYAiABKAkiXAoWQm9vdHN0cmFwQWRtaW5SZXNwb25zZRINCgV0b2tlbhgBIAEoCRIfCgR1c2VyGAIgASgLMhEub2ZmaWNlLnYxLk1lbWJlchISCgpleHBpcmVzX2F0GAMgASgDIlMKDUxvZ2luUmVzcG9uc2USDQoFdG9rZW4YASABKAkSHwoEdXNlchgCIAEoCzIRLm9mZmljZS52MS5NZW1iZXISEgoKZXhwaXJlc19hdBgDIAEoAyImChdFeGNoYW5nZUFnZW50S2V5UmVxdWVzdBILCgNrZXkYASABKAkiXgoYRXhjaGFuZ2VBZ2VudEtleVJlc3BvbnNlEg0KBXRva2VuGAEgASgJEh8KBHVzZXIYAiABKAsyES5vZmZpY2UudjEuTWVtYmVyEhIKCmV4cGlyZXNfYXQYAyABKAMiEgoQTGlzdFJvbGVzUmVxdWVzdCIzChFMaXN0Um9sZXNSZXNwb25zZRIeCgVyb2xlcxgBIAMoCzIPLm9mZmljZS52MS5Sb2xlIkoKBFJvbGUSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRITCgtkZXNjcmlwdGlvbhgDIAEoCRITCgtwZXJtaXNzaW9ucxgEIAMoCSIVChNHZXRXb3Jrc3BhY2VSZXF1ZXN0IukDChRHZXRXb3Jrc3BhY2VSZXNwb25zZRIRCglkZW1vX21vZGUYASABKAgSLgoIc2V0dGluZ3MYAiABKAsyHC5vZmZpY2UudjEuV29ya3NwYWNlU2V0dGluZ3MSJwoMY3VycmVudF91c2VyGAMgASgLMhEub2ZmaWNlLnYxLk1lbWJlchIiCgdtZW1iZXJzGAQgAygLMhEub2ZmaWNlLnYxLk1lbWJlchImCgljdXN0b21lcnMYBSADKAsyEy5vZmZpY2UudjEuQ3VzdG9tZXISJAoIcHJvamVjdHMYBiADKAsyEi5vZmZpY2UudjEuUHJvamVjdBIwCgtjb25uZWN0aW9ucxgHIAMoCzIbLm9mZmljZS52MS5Tb2NpYWxDb25uZWN0aW9uEicKBXBvc3RzGAggAygLMhgub2ZmaWNlLnYxLlNjaGVkdWxlZFBvc3QSJQoIYWN0aXZpdHkYCSADKAsyEy5vZmZpY2UudjEuQWN0aXZpdHkSIAoGYm9hcmRzGAogAygLMhAub2ZmaWNlLnYxLkJvYXJkEh4KBXRhc2tzGAsgAygLMg8ub2ZmaWNlLnYxLlRhc2sSGgoScGVyc2lzdGVudF9zdG9yYWdlGAwgASgIEhMKC3Blcm1pc3Npb25zGA0gAygJIkgKEVNhdmVNZW1iZXJSZXF1ZXN0EiEKBm1lbWJlchgBIAEoCzIRLm9mZmljZS52MS5NZW1iZXISEAoIcGFzc3dvcmQYAiABKAkibwoSU2F2ZU1lbWJlclJlc3BvbnNlEiEKBm1lbWJlchgBIAEoCzIRLm9mZmljZS52MS5NZW1iZXISJgoJYWdlbnRfa2V5GAIgASgLMhMub2ZmaWNlLnYxLkFnZW50S2V5Eg4KBnNlY3JldBgDIAEoCSI1ChJTYXZlUHJvZmlsZVJlcXVlc3QSCwoDYmlvGAEgASgJEhIKCmF2YXRhcl91cmwYAiABKAkiOAoTU2F2ZVByb2ZpbGVSZXNwb25zZRIhCgZtZW1iZXIYASABKAsyES5vZmZpY2UudjEuTWVtYmVyIjwKE1NhdmVDdXN0b21lclJlcXVlc3QSJQoIY3VzdG9tZXIYASABKAsyEy5vZmZpY2UudjEuQ3VzdG9tZXIiPQoUU2F2ZUN1c3RvbWVyUmVzcG9uc2USJQoIY3VzdG9tZXIYASABKAsyEy5vZmZpY2UudjEuQ3VzdG9tZXIiOQoSU2F2ZVByb2plY3RSZXF1ZXN0EiMKB3Byb2plY3QYASABKAsyEi5vZmZpY2UudjEuUHJvamVjdCI6ChNTYXZlUHJvamVjdFJlc3BvbnNlEiMKB3Byb2plY3QYASABKAsyEi5vZmZpY2UudjEuUHJvamVjdCIzChBTYXZlQm9hcmRSZXF1ZXN0Eh8KBWJvYXJkGAEgASgLMhAub2ZmaWNlLnYxLkJvYXJkIjQKEVNhdmVCb2FyZFJlc3BvbnNlEh8KBWJvYXJkGAEgASgLMhAub2ZmaWNlLnYxLkJvYXJkIjAKD1NhdmVUYXNrUmVxdWVzdBIdCgR0YXNrGAEgASgLMg8ub2ZmaWNlLnYxLlRhc2siMQoQU2F2ZVRhc2tSZXNwb25zZRIdCgR0YXNrGAEgASgLMg8ub2ZmaWNlLnYxLlRhc2siagoSTGlzdFJlcG9ydHNSZXF1ZXN0Eg0KBXF1ZXJ5GAEgASgJEg4KBnN0YXR1cxgCIAEoCRISCgpwcm9qZWN0X2lkGAMgASgJEhEKCXBhZ2Vfc2l6ZRgEIAEoDRIOCgZvZmZzZXQYBSABKA0iYwoTTGlzdFJlcG9ydHNSZXNwb25zZRIiCgdyZXBvcnRzGAEgAygLMhEub2ZmaWNlLnYxLlJlcG9ydBITCgt0b3RhbF9jb3VudBgCIAEoDRITCgtuZXh0X29mZnNldBgDIAEoDSIeChBHZXRSZXBvcnRSZXF1ZXN0EgoKAmlkGAEgASgJIjYKEUdldFJlcG9ydFJlc3BvbnNlEiEKBnJlcG9ydBgBIAEoCzIRLm9mZmljZS52MS5SZXBvcnQiUQoRU2F2ZVJlcG9ydFJlcXVlc3QSIQoGcmVwb3J0GAEgASgLMhEub2ZmaWNlLnYxLlJlcG9ydBIZChFleHBlY3RlZF9yZXZpc2lvbhgCIAEoDSI3ChJTYXZlUmVwb3J0UmVzcG9uc2USIQoGcmVwb3J0GAEgASgLMhEub2ZmaWNlLnYxLlJlcG9ydCIWChRMaXN0QWdlbnRLZXlzUmVxdWVzdCI6ChVMaXN0QWdlbnRLZXlzUmVzcG9uc2USIQoEa2V5cxgBIAMoCzITLm9mZmljZS52MS5BZ2VudEtleSJhChVDcmVhdGVBZ2VudEtleVJlcXVlc3QSDAoEbmFtZRgBIAEoCRIOCgZzY29wZXMYAiADKAkSFwoPZXhwaXJlc19pbl9kYXlzGAMgASgFEhEKCW1lbWJlcl9pZBgEIAEoCSJKChZDcmVhdGVBZ2VudEtleVJlc3BvbnNlEiAKA2tleRgBIAEoCzITLm9mZmljZS52MS5BZ2VudEtleRIOCgZzZWNyZXQYAiABKAkiIwoVUmV2b2tlQWdlbnRLZXlSZXF1ZXN0EgoKAmlkGAEgASgJIjoKFlJldm9rZUFnZW50S2V5UmVzcG9uc2USIAoDa2V5GAEgASgLMhMub2ZmaWNlLnYxLkFnZW50S2V5IioKFVJvdGF0ZUFnZW50S2V5UmVxdWVzdBIRCgltZW1iZXJfaWQYASABKAkiSgoWUm90YXRlQWdlbnRLZXlSZXNwb25zZRIgCgNrZXkYASABKAsyEy5vZmZpY2UudjEuQWdlbnRLZXkSDgoGc2VjcmV0GAIgASgJIjkKD1NhdmVQb3N0UmVxdWVzdBImCgRwb3N0GAEgASgLMhgub2ZmaWNlLnYxLlNjaGVkdWxlZFBvc3QiOgoQU2F2ZVBvc3RSZXNwb25zZRImCgRwb3N0GAEgASgLMhgub2ZmaWNlLnYxLlNjaGVkdWxlZFBvc3QiRQoTU2F2ZVNldHRpbmdzUmVxdWVzdBIuCghzZXR0aW5ncxgBIAEoCzIcLm9mZmljZS52MS5Xb3Jrc3BhY2VTZXR0aW5ncyJGChRTYXZlU2V0dGluZ3NSZXNwb25zZRIuCghzZXR0aW5ncxgBIAEoCzIcLm9mZmljZS52MS5Xb3Jrc3BhY2VTZXR0aW5ncyK1AQoGTWVtYmVyEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDQoFZW1haWwYAyABKAkSEQoJam9iX3RpdGxlGAQgASgJEhIKCmRlcGFydG1lbnQYBSABKAkSDAoEcm9sZRgGIAEoCRIOCgZzdGF0dXMYByABKAkSDgoGYWNjZXNzGAggAygJEgwKBGtpbmQYCSABKAkSCwoDYmlvGAogASgJEhIKCmF2YXRhcl91cmwYCyABKAkidQoIQ3VzdG9tZXISCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRIPCgdjb21wYW55GAMgASgJEg0KBWVtYWlsGAQgASgJEg4KBnN0YXR1cxgFIAEoCRIQCghvd25lcl9pZBgGIAEoCRINCgVub3RlcxgHIAEoCSKAAQoHUHJvamVjdBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEhMKC2N1c3RvbWVyX2lkGAMgASgJEhAKCG93bmVyX2lkGAQgASgJEg4KBnN0YXR1cxgFIAEoCRIPCgdzdW1tYXJ5GAYgASgJEhMKC3RhcmdldF9kYXRlGAcgASgJIkYKBUJvYXJkEgoKAmlkGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkSDAoEbmFtZRgDIAEoCRIPCgdjb2x1bW5zGAQgAygJIrwBCgRUYXNrEgoKAmlkGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkSEAoIYm9hcmRfaWQYAyABKAkSDgoGY29sdW1uGAQgASgJEg0KBXRpdGxlGAUgASgJEhMKC2Rlc2NyaXB0aW9uGAYgASgJEhMKC2Fzc2lnbmVlX2lkGAcgASgJEhAKCHByaW9yaXR5GAggASgJEhAKCGR1ZV9kYXRlGAkgASgJEhUKDWNvbW1lbnRfY291bnQYCiABKA0iKgoMUmVwb3J0U291cmNlEg0KBXRpdGxlGAEgASgJEgsKA3VybBgCIAEoCSLEAgoGUmVwb3J0EgoKAmlkGAEgASgJEg0KBXRpdGxlGAIgASgJEg8KB3N1bW1hcnkYAyABKAkSDAoEYm9keRgEIAEoCRIMCgRraW5kGAUgASgJEg4KBnN0YXR1cxgGIAEoCRINCgV0b3BpYxgHIAEoCRIOCgZwZXJpb2QYCCABKAkSEgoKcHJvamVjdF9pZBgJIAEoCRIPCgd0YXNrX2lkGAogASgJEhEKCWF1dGhvcl9pZBgLIAEoCRITCgthdXRob3JfbmFtZRgMIAEoCRISCgpjcmVhdGVkX2F0GA0gASgDEhIKCnVwZGF0ZWRfYXQYDiABKAMSEgoKdXBkYXRlZF9ieRgPIAEoCRIQCghyZXZpc2lvbhgQIAEoDRIoCgdzb3VyY2VzGBEgAygLMhcub2ZmaWNlLnYxLlJlcG9ydFNvdXJjZSKTAQoIQWdlbnRLZXkSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRIOCgZzY29wZXMYAyADKAkSEgoKZXhwaXJlc19hdBgEIAEoAxISCgpjcmVhdGVkX2F0GAUgASgDEg8KB3Jldm9rZWQYBiABKAgSEQoJbWVtYmVyX2lkGAcgASgJEhEKCWlzc3VlZF9ieRgIIAEoCSJcChBTb2NpYWxDb25uZWN0aW9uEgoKAmlkGAEgASgJEhAKCHBsYXRmb3JtGAIgASgJEgwKBG5hbWUYAyABKAkSDgoGc3RhdHVzGAQgASgJEgwKBGRlbW8YBSABKAgifAoNU2NoZWR1bGVkUG9zdBIKCgJpZBgBIAEoCRIVCg1jb25uZWN0aW9uX2lkGAIgASgJEg8KB2NvbnRlbnQYAyABKAkSFAoMc2NoZWR1bGVkX2F0GAQgASgJEg4KBnN0YXR1cxgFIAEoCRIRCglhdXRob3JfaWQYBiABKAkiXgoIQWN0aXZpdHkSCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRIPCgdzdW1tYXJ5GAMgASgJEhIKCmFjdG9yX25hbWUYBCABKAkSEwoLb2NjdXJyZWRfYXQYBSABKAkiVAoRV29ya3NwYWNlU2V0dGluZ3MSFgoOd29ya3NwYWNlX25hbWUYASABKAkSFQoNZGVmYXVsdF90aGVtZRgCIAEoCRIQCgh0aW1lem9uZRgDIAEoCSK/AQoLVGFza0NvbW1lbnQSCgoCaWQYASABKAkSDwoHdGFza19pZBgCIAEoCRIMCgRib2R5GAMgASgJEhEKCWF1dGhvcl9pZBgEIAEoCRITCgthdXRob3JfbmFtZRgFIAEoCRISCgpjcmVhdGVkX2F0GAYgASgDEhIKCnVwZGF0ZWRfYXQYByABKAMSEAoIcmV2aXNpb24YCCABKA0SDwoHZGVsZXRlZBgJIAEoCBISCgphY3Rvcl9raW5kGAogASgJIpkBCgxUYXNrQWN0aXZpdHkSCgoCaWQYASABKAkSDwoHdGFza19pZBgCIAEoCRIMCgRraW5kGAMgASgJEg8KB3N1bW1hcnkYBCABKAkSEAoIYWN0b3JfaWQYBSABKAkSEgoKYWN0b3JfbmFtZRgGIAEoCRISCgphY3Rvcl9raW5kGAcgASgJEhMKC29jY3VycmVkX2F0GAggASgDIiwKGUxpc3RUYXNrRGlzY3Vzc2lvblJlcXVlc3QSDwoHdGFza19pZBgBIAEoCSJxChpMaXN0VGFza0Rpc2N1c3Npb25SZXNwb25zZRIoCghjb21tZW50cxgBIAMoCzIWLm9mZmljZS52MS5UYXNrQ29tbWVudBIpCghhY3Rpdml0eRgCIAMoCzIXLm9mZmljZS52MS5UYXNrQWN0aXZpdHkiZgoWU2F2ZVRhc2tDb21tZW50UmVxdWVzdBIPCgd0YXNrX2lkGAEgASgJEhIKCmNvbW1lbnRfaWQYAiABKAkSDAoEYm9keRgDIAEoCRIZChFleHBlY3RlZF9yZXZpc2lvbhgEIAEoDSJCChdTYXZlVGFza0NvbW1lbnRSZXNwb25zZRInCgdjb21tZW50GAEgASgLMhYub2ZmaWNlLnYxLlRhc2tDb21tZW50IloKGERlbGV0ZVRhc2tDb21tZW50UmVxdWVzdBIPCgd0YXNrX2lkGAEgASgJEhIKCmNvbW1lbnRfaWQYAiABKAkSGQoRZXhwZWN0ZWRfcmV2aXNpb24YAyABKA0iRAoZRGVsZXRlVGFza0NvbW1lbnRSZXNwb25zZRInCgdjb21tZW50GAEgASgLMhYub2ZmaWNlLnYxLlRhc2tDb21tZW50MqEPCg1PZmZpY2VTZXJ2aWNlElUKDkdldFNldHVwU3RhdHVzEiAub2ZmaWNlLnYxLkdldFNldHVwU3RhdHVzUmVxdWVzdBohLm9mZmljZS52MS5HZXRTZXR1cFN0YXR1c1Jlc3BvbnNlElUKDkJvb3RzdHJhcEFkbWluEiAub2ZmaWNlLnYxLkJvb3RzdHJhcEFkbWluUmVxdWVzdBohLm9mZmljZS52MS5Cb290c3RyYXBBZG1pblJlc3BvbnNlEjoKBUxvZ2luEhcub2ZmaWNlLnYxLkxvZ2luUmVxdWVzdBoYLm9mZmljZS52MS5Mb2dpblJlc3BvbnNlElsKEEV4Y2hhbmdlQWdlbnRLZXkSIi5vZmZpY2UudjEuRXhjaGFuZ2VBZ2VudEtleVJlcXVlc3QaIy5vZmZpY2UudjEuRXhjaGFuZ2VBZ2VudEtleVJlc3BvbnNlEkYKCUxpc3RSb2xlcxIbLm9mZmljZS52MS5MaXN0Um9sZXNSZXF1ZXN0Ghwub2ZmaWNlLnYxLkxpc3RSb2xlc1Jlc3BvbnNlEk8KDEdldFdvcmtzcGFjZRIeLm9mZmljZS52MS5HZXRXb3Jrc3BhY2VSZXF1ZXN0Gh8ub2ZmaWNlLnYxLkdldFdvcmtzcGFjZVJlc3BvbnNlEkkKClNhdmVNZW1iZXISHC5vZmZpY2UudjEuU2F2ZU1lbWJlclJlcXVlc3QaHS5vZmZpY2UudjEuU2F2ZU1lbWJlclJlc3BvbnNlEkwKC1NhdmVQcm9maWxlEh0ub2ZmaWNlLnYxLlNhdmVQcm9maWxlUmVxdWVzdBoeLm9mZmljZS52MS5TYXZlUHJvZmlsZVJlc3BvbnNlEk8KDFNhdmVDdXN0b21lchIeLm9mZmljZS52MS5TYXZlQ3VzdG9tZXJSZXF1ZXN0Gh8ub2ZmaWNlLnYxLlNhdmVDdXN0b21lclJlc3BvbnNlEkwKC1NhdmVQcm9qZWN0Eh0ub2ZmaWNlLnYxLlNhdmVQcm9qZWN0UmVxdWVzdBoeLm9mZmljZS52MS5TYXZlUHJvamVjdFJlc3BvbnNlEkYKCVNhdmVCb2FyZBIbLm9mZmljZS52MS5TYXZlQm9hcmRSZXF1ZXN0Ghwub2ZmaWNlLnYxLlNhdmVCb2FyZFJlc3BvbnNlEkMKCFNhdmVUYXNrEhoub2ZmaWNlLnYxLlNhdmVUYXNrUmVxdWVzdBobLm9mZmljZS52MS5TYXZlVGFza1Jlc3BvbnNlEmEKEkxpc3RUYXNrRGlzY3Vzc2lvbhIkLm9mZmljZS52MS5MaXN0VGFza0Rpc2N1c3Npb25SZXF1ZXN0GiUub2ZmaWNlLnYxLkxpc3RUYXNrRGlzY3Vzc2lvblJlc3BvbnNlElgKD1NhdmVUYXNrQ29tbWVudBIhLm9mZmljZS52MS5TYXZlVGFza0NvbW1lbnRSZXF1ZXN0GiIub2ZmaWNlLnYxLlNhdmVUYXNrQ29tbWVudFJlc3BvbnNlEl4KEURlbGV0ZVRhc2tDb21tZW50EiMub2ZmaWNlLnYxLkRlbGV0ZVRhc2tDb21tZW50UmVxdWVzdBokLm9mZmljZS52MS5EZWxldGVUYXNrQ29tbWVudFJlc3BvbnNlEkwKC0xpc3RSZXBvcnRzEh0ub2ZmaWNlLnYxLkxpc3RSZXBvcnRzUmVxdWVzdBoeLm9mZmljZS52MS5MaXN0UmVwb3J0c1Jlc3BvbnNlEkYKCUdldFJlcG9ydBIbLm9mZmljZS52MS5HZXRSZXBvcnRSZXF1ZXN0Ghwub2ZmaWNlLnYxLkdldFJlcG9ydFJlc3BvbnNlEkkKClNhdmVSZXBvcnQSHC5vZmZpY2UudjEuU2F2ZVJlcG9ydFJlcXVlc3QaHS5vZmZpY2UudjEuU2F2ZVJlcG9ydFJlc3BvbnNlElIKDUxpc3RBZ2VudEtleXMSHy5vZmZpY2UudjEuTGlzdEFnZW50S2V5c1JlcXVlc3QaIC5vZmZpY2UudjEuTGlzdEFnZW50S2V5c1Jlc3BvbnNlElUKDkNyZWF0ZUFnZW50S2V5EiAub2ZmaWNlLnYxLkNyZWF0ZUFnZW50S2V5UmVxdWVzdBohLm9mZmljZS52MS5DcmVhdGVBZ2VudEtleVJlc3BvbnNlElUKDlJldm9rZUFnZW50S2V5EiAub2ZmaWNlLnYxLlJldm9rZUFnZW50S2V5UmVxdWVzdBohLm9mZmljZS52MS5SZXZva2VBZ2VudEtleVJlc3BvbnNlElUKDlJvdGF0ZUFnZW50S2V5EiAub2ZmaWNlLnYxLlJvdGF0ZUFnZW50S2V5UmVxdWVzdBohLm9mZmljZS52MS5Sb3RhdGVBZ2VudEtleVJlc3BvbnNlEkMKCFNhdmVQb3N0Ehoub2ZmaWNlLnYxLlNhdmVQb3N0UmVxdWVzdBobLm9mZmljZS52MS5TYXZlUG9zdFJlc3BvbnNlEk8KDFNhdmVTZXR0aW5ncxIeLm9mZmljZS52MS5TYXZlU2V0dGluZ3NSZXF1ZXN0Gh8ub2ZmaWNlLnYxLlNhdmVTZXR0aW5nc1Jlc3BvbnNlYgZwcm90bzM");
 
 /**
  * @generated from message office.v1.GetSetupStatusRequest
@@ -411,6 +411,47 @@ export const SaveMemberResponseSchema: GenMessage<SaveMemberResponse> = /*@__PUR
   messageDesc(file_office_v1_office, 14);
 
 /**
+ * Updates only the authenticated member's public profile. Empty values clear fields.
+ *
+ * @generated from message office.v1.SaveProfileRequest
+ */
+export type SaveProfileRequest = Message<"office.v1.SaveProfileRequest"> & {
+  /**
+   * @generated from field: string bio = 1;
+   */
+  bio: string;
+
+  /**
+   * @generated from field: string avatar_url = 2;
+   */
+  avatarUrl: string;
+};
+
+/**
+ * Describes the message office.v1.SaveProfileRequest.
+ * Use `create(SaveProfileRequestSchema)` to create a new message.
+ */
+export const SaveProfileRequestSchema: GenMessage<SaveProfileRequest> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 15);
+
+/**
+ * @generated from message office.v1.SaveProfileResponse
+ */
+export type SaveProfileResponse = Message<"office.v1.SaveProfileResponse"> & {
+  /**
+   * @generated from field: office.v1.Member member = 1;
+   */
+  member?: Member | undefined;
+};
+
+/**
+ * Describes the message office.v1.SaveProfileResponse.
+ * Use `create(SaveProfileResponseSchema)` to create a new message.
+ */
+export const SaveProfileResponseSchema: GenMessage<SaveProfileResponse> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 16);
+
+/**
  * @generated from message office.v1.SaveCustomerRequest
  */
 export type SaveCustomerRequest = Message<"office.v1.SaveCustomerRequest"> & {
@@ -425,7 +466,7 @@ export type SaveCustomerRequest = Message<"office.v1.SaveCustomerRequest"> & {
  * Use `create(SaveCustomerRequestSchema)` to create a new message.
  */
 export const SaveCustomerRequestSchema: GenMessage<SaveCustomerRequest> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 15);
+  messageDesc(file_office_v1_office, 17);
 
 /**
  * @generated from message office.v1.SaveCustomerResponse
@@ -442,7 +483,7 @@ export type SaveCustomerResponse = Message<"office.v1.SaveCustomerResponse"> & {
  * Use `create(SaveCustomerResponseSchema)` to create a new message.
  */
 export const SaveCustomerResponseSchema: GenMessage<SaveCustomerResponse> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 16);
+  messageDesc(file_office_v1_office, 18);
 
 /**
  * @generated from message office.v1.SaveProjectRequest
@@ -459,7 +500,7 @@ export type SaveProjectRequest = Message<"office.v1.SaveProjectRequest"> & {
  * Use `create(SaveProjectRequestSchema)` to create a new message.
  */
 export const SaveProjectRequestSchema: GenMessage<SaveProjectRequest> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 17);
+  messageDesc(file_office_v1_office, 19);
 
 /**
  * @generated from message office.v1.SaveProjectResponse
@@ -476,7 +517,7 @@ export type SaveProjectResponse = Message<"office.v1.SaveProjectResponse"> & {
  * Use `create(SaveProjectResponseSchema)` to create a new message.
  */
 export const SaveProjectResponseSchema: GenMessage<SaveProjectResponse> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 18);
+  messageDesc(file_office_v1_office, 20);
 
 /**
  * @generated from message office.v1.SaveBoardRequest
@@ -493,7 +534,7 @@ export type SaveBoardRequest = Message<"office.v1.SaveBoardRequest"> & {
  * Use `create(SaveBoardRequestSchema)` to create a new message.
  */
 export const SaveBoardRequestSchema: GenMessage<SaveBoardRequest> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 19);
+  messageDesc(file_office_v1_office, 21);
 
 /**
  * @generated from message office.v1.SaveBoardResponse
@@ -510,7 +551,7 @@ export type SaveBoardResponse = Message<"office.v1.SaveBoardResponse"> & {
  * Use `create(SaveBoardResponseSchema)` to create a new message.
  */
 export const SaveBoardResponseSchema: GenMessage<SaveBoardResponse> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 20);
+  messageDesc(file_office_v1_office, 22);
 
 /**
  * @generated from message office.v1.SaveTaskRequest
@@ -527,7 +568,7 @@ export type SaveTaskRequest = Message<"office.v1.SaveTaskRequest"> & {
  * Use `create(SaveTaskRequestSchema)` to create a new message.
  */
 export const SaveTaskRequestSchema: GenMessage<SaveTaskRequest> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 21);
+  messageDesc(file_office_v1_office, 23);
 
 /**
  * @generated from message office.v1.SaveTaskResponse
@@ -544,7 +585,7 @@ export type SaveTaskResponse = Message<"office.v1.SaveTaskResponse"> & {
  * Use `create(SaveTaskResponseSchema)` to create a new message.
  */
 export const SaveTaskResponseSchema: GenMessage<SaveTaskResponse> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 22);
+  messageDesc(file_office_v1_office, 24);
 
 /**
  * @generated from message office.v1.ListReportsRequest
@@ -581,7 +622,7 @@ export type ListReportsRequest = Message<"office.v1.ListReportsRequest"> & {
  * Use `create(ListReportsRequestSchema)` to create a new message.
  */
 export const ListReportsRequestSchema: GenMessage<ListReportsRequest> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 23);
+  messageDesc(file_office_v1_office, 25);
 
 /**
  * @generated from message office.v1.ListReportsResponse
@@ -608,7 +649,7 @@ export type ListReportsResponse = Message<"office.v1.ListReportsResponse"> & {
  * Use `create(ListReportsResponseSchema)` to create a new message.
  */
 export const ListReportsResponseSchema: GenMessage<ListReportsResponse> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 24);
+  messageDesc(file_office_v1_office, 26);
 
 /**
  * @generated from message office.v1.GetReportRequest
@@ -625,7 +666,7 @@ export type GetReportRequest = Message<"office.v1.GetReportRequest"> & {
  * Use `create(GetReportRequestSchema)` to create a new message.
  */
 export const GetReportRequestSchema: GenMessage<GetReportRequest> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 25);
+  messageDesc(file_office_v1_office, 27);
 
 /**
  * @generated from message office.v1.GetReportResponse
@@ -642,7 +683,7 @@ export type GetReportResponse = Message<"office.v1.GetReportResponse"> & {
  * Use `create(GetReportResponseSchema)` to create a new message.
  */
 export const GetReportResponseSchema: GenMessage<GetReportResponse> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 26);
+  messageDesc(file_office_v1_office, 28);
 
 /**
  * @generated from message office.v1.SaveReportRequest
@@ -664,7 +705,7 @@ export type SaveReportRequest = Message<"office.v1.SaveReportRequest"> & {
  * Use `create(SaveReportRequestSchema)` to create a new message.
  */
 export const SaveReportRequestSchema: GenMessage<SaveReportRequest> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 27);
+  messageDesc(file_office_v1_office, 29);
 
 /**
  * @generated from message office.v1.SaveReportResponse
@@ -681,7 +722,7 @@ export type SaveReportResponse = Message<"office.v1.SaveReportResponse"> & {
  * Use `create(SaveReportResponseSchema)` to create a new message.
  */
 export const SaveReportResponseSchema: GenMessage<SaveReportResponse> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 28);
+  messageDesc(file_office_v1_office, 30);
 
 /**
  * @generated from message office.v1.ListAgentKeysRequest
@@ -694,7 +735,7 @@ export type ListAgentKeysRequest = Message<"office.v1.ListAgentKeysRequest"> & {
  * Use `create(ListAgentKeysRequestSchema)` to create a new message.
  */
 export const ListAgentKeysRequestSchema: GenMessage<ListAgentKeysRequest> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 29);
+  messageDesc(file_office_v1_office, 31);
 
 /**
  * @generated from message office.v1.ListAgentKeysResponse
@@ -711,7 +752,7 @@ export type ListAgentKeysResponse = Message<"office.v1.ListAgentKeysResponse"> &
  * Use `create(ListAgentKeysResponseSchema)` to create a new message.
  */
 export const ListAgentKeysResponseSchema: GenMessage<ListAgentKeysResponse> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 30);
+  messageDesc(file_office_v1_office, 32);
 
 /**
  * @generated from message office.v1.CreateAgentKeyRequest
@@ -745,7 +786,7 @@ export type CreateAgentKeyRequest = Message<"office.v1.CreateAgentKeyRequest"> &
  * Use `create(CreateAgentKeyRequestSchema)` to create a new message.
  */
 export const CreateAgentKeyRequestSchema: GenMessage<CreateAgentKeyRequest> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 31);
+  messageDesc(file_office_v1_office, 33);
 
 /**
  * @generated from message office.v1.CreateAgentKeyResponse
@@ -767,7 +808,7 @@ export type CreateAgentKeyResponse = Message<"office.v1.CreateAgentKeyResponse">
  * Use `create(CreateAgentKeyResponseSchema)` to create a new message.
  */
 export const CreateAgentKeyResponseSchema: GenMessage<CreateAgentKeyResponse> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 32);
+  messageDesc(file_office_v1_office, 34);
 
 /**
  * @generated from message office.v1.RevokeAgentKeyRequest
@@ -784,7 +825,7 @@ export type RevokeAgentKeyRequest = Message<"office.v1.RevokeAgentKeyRequest"> &
  * Use `create(RevokeAgentKeyRequestSchema)` to create a new message.
  */
 export const RevokeAgentKeyRequestSchema: GenMessage<RevokeAgentKeyRequest> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 33);
+  messageDesc(file_office_v1_office, 35);
 
 /**
  * @generated from message office.v1.RevokeAgentKeyResponse
@@ -801,7 +842,7 @@ export type RevokeAgentKeyResponse = Message<"office.v1.RevokeAgentKeyResponse">
  * Use `create(RevokeAgentKeyResponseSchema)` to create a new message.
  */
 export const RevokeAgentKeyResponseSchema: GenMessage<RevokeAgentKeyResponse> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 34);
+  messageDesc(file_office_v1_office, 36);
 
 /**
  * @generated from message office.v1.RotateAgentKeyRequest
@@ -818,7 +859,7 @@ export type RotateAgentKeyRequest = Message<"office.v1.RotateAgentKeyRequest"> &
  * Use `create(RotateAgentKeyRequestSchema)` to create a new message.
  */
 export const RotateAgentKeyRequestSchema: GenMessage<RotateAgentKeyRequest> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 35);
+  messageDesc(file_office_v1_office, 37);
 
 /**
  * @generated from message office.v1.RotateAgentKeyResponse
@@ -840,7 +881,7 @@ export type RotateAgentKeyResponse = Message<"office.v1.RotateAgentKeyResponse">
  * Use `create(RotateAgentKeyResponseSchema)` to create a new message.
  */
 export const RotateAgentKeyResponseSchema: GenMessage<RotateAgentKeyResponse> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 36);
+  messageDesc(file_office_v1_office, 38);
 
 /**
  * @generated from message office.v1.SavePostRequest
@@ -857,7 +898,7 @@ export type SavePostRequest = Message<"office.v1.SavePostRequest"> & {
  * Use `create(SavePostRequestSchema)` to create a new message.
  */
 export const SavePostRequestSchema: GenMessage<SavePostRequest> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 37);
+  messageDesc(file_office_v1_office, 39);
 
 /**
  * @generated from message office.v1.SavePostResponse
@@ -874,7 +915,7 @@ export type SavePostResponse = Message<"office.v1.SavePostResponse"> & {
  * Use `create(SavePostResponseSchema)` to create a new message.
  */
 export const SavePostResponseSchema: GenMessage<SavePostResponse> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 38);
+  messageDesc(file_office_v1_office, 40);
 
 /**
  * @generated from message office.v1.SaveSettingsRequest
@@ -891,7 +932,7 @@ export type SaveSettingsRequest = Message<"office.v1.SaveSettingsRequest"> & {
  * Use `create(SaveSettingsRequestSchema)` to create a new message.
  */
 export const SaveSettingsRequestSchema: GenMessage<SaveSettingsRequest> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 39);
+  messageDesc(file_office_v1_office, 41);
 
 /**
  * @generated from message office.v1.SaveSettingsResponse
@@ -908,7 +949,7 @@ export type SaveSettingsResponse = Message<"office.v1.SaveSettingsResponse"> & {
  * Use `create(SaveSettingsResponseSchema)` to create a new message.
  */
 export const SaveSettingsResponseSchema: GenMessage<SaveSettingsResponse> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 40);
+  messageDesc(file_office_v1_office, 42);
 
 /**
  * @generated from message office.v1.Member
@@ -962,6 +1003,18 @@ export type Member = Message<"office.v1.Member"> & {
    * @generated from field: string kind = 9;
    */
   kind: string;
+
+  /**
+   * @generated from field: string bio = 10;
+   */
+  bio: string;
+
+  /**
+   * Optional HTTPS image URL; Office Office does not fetch or upload the image.
+   *
+   * @generated from field: string avatar_url = 11;
+   */
+  avatarUrl: string;
 };
 
 /**
@@ -969,7 +1022,7 @@ export type Member = Message<"office.v1.Member"> & {
  * Use `create(MemberSchema)` to create a new message.
  */
 export const MemberSchema: GenMessage<Member> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 41);
+  messageDesc(file_office_v1_office, 43);
 
 /**
  * @generated from message office.v1.Customer
@@ -1016,7 +1069,7 @@ export type Customer = Message<"office.v1.Customer"> & {
  * Use `create(CustomerSchema)` to create a new message.
  */
 export const CustomerSchema: GenMessage<Customer> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 42);
+  messageDesc(file_office_v1_office, 44);
 
 /**
  * @generated from message office.v1.Project
@@ -1063,7 +1116,7 @@ export type Project = Message<"office.v1.Project"> & {
  * Use `create(ProjectSchema)` to create a new message.
  */
 export const ProjectSchema: GenMessage<Project> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 43);
+  messageDesc(file_office_v1_office, 45);
 
 /**
  * @generated from message office.v1.Board
@@ -1095,7 +1148,7 @@ export type Board = Message<"office.v1.Board"> & {
  * Use `create(BoardSchema)` to create a new message.
  */
 export const BoardSchema: GenMessage<Board> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 44);
+  messageDesc(file_office_v1_office, 46);
 
 /**
  * @generated from message office.v1.Task
@@ -1157,7 +1210,7 @@ export type Task = Message<"office.v1.Task"> & {
  * Use `create(TaskSchema)` to create a new message.
  */
 export const TaskSchema: GenMessage<Task> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 45);
+  messageDesc(file_office_v1_office, 47);
 
 /**
  * @generated from message office.v1.ReportSource
@@ -1179,7 +1232,7 @@ export type ReportSource = Message<"office.v1.ReportSource"> & {
  * Use `create(ReportSourceSchema)` to create a new message.
  */
 export const ReportSourceSchema: GenMessage<ReportSource> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 46);
+  messageDesc(file_office_v1_office, 48);
 
 /**
  * @generated from message office.v1.Report
@@ -1276,7 +1329,7 @@ export type Report = Message<"office.v1.Report"> & {
  * Use `create(ReportSchema)` to create a new message.
  */
 export const ReportSchema: GenMessage<Report> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 47);
+  messageDesc(file_office_v1_office, 49);
 
 /**
  * @generated from message office.v1.AgentKey
@@ -1330,7 +1383,7 @@ export type AgentKey = Message<"office.v1.AgentKey"> & {
  * Use `create(AgentKeySchema)` to create a new message.
  */
 export const AgentKeySchema: GenMessage<AgentKey> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 48);
+  messageDesc(file_office_v1_office, 50);
 
 /**
  * @generated from message office.v1.SocialConnection
@@ -1367,7 +1420,7 @@ export type SocialConnection = Message<"office.v1.SocialConnection"> & {
  * Use `create(SocialConnectionSchema)` to create a new message.
  */
 export const SocialConnectionSchema: GenMessage<SocialConnection> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 49);
+  messageDesc(file_office_v1_office, 51);
 
 /**
  * @generated from message office.v1.ScheduledPost
@@ -1409,7 +1462,7 @@ export type ScheduledPost = Message<"office.v1.ScheduledPost"> & {
  * Use `create(ScheduledPostSchema)` to create a new message.
  */
 export const ScheduledPostSchema: GenMessage<ScheduledPost> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 50);
+  messageDesc(file_office_v1_office, 52);
 
 /**
  * @generated from message office.v1.Activity
@@ -1446,7 +1499,7 @@ export type Activity = Message<"office.v1.Activity"> & {
  * Use `create(ActivitySchema)` to create a new message.
  */
 export const ActivitySchema: GenMessage<Activity> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 51);
+  messageDesc(file_office_v1_office, 53);
 
 /**
  * @generated from message office.v1.WorkspaceSettings
@@ -1473,7 +1526,7 @@ export type WorkspaceSettings = Message<"office.v1.WorkspaceSettings"> & {
  * Use `create(WorkspaceSettingsSchema)` to create a new message.
  */
 export const WorkspaceSettingsSchema: GenMessage<WorkspaceSettings> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 52);
+  messageDesc(file_office_v1_office, 54);
 
 /**
  * @generated from message office.v1.TaskComment
@@ -1535,7 +1588,7 @@ export type TaskComment = Message<"office.v1.TaskComment"> & {
  * Use `create(TaskCommentSchema)` to create a new message.
  */
 export const TaskCommentSchema: GenMessage<TaskComment> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 53);
+  messageDesc(file_office_v1_office, 55);
 
 /**
  * @generated from message office.v1.TaskActivity
@@ -1587,7 +1640,7 @@ export type TaskActivity = Message<"office.v1.TaskActivity"> & {
  * Use `create(TaskActivitySchema)` to create a new message.
  */
 export const TaskActivitySchema: GenMessage<TaskActivity> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 54);
+  messageDesc(file_office_v1_office, 56);
 
 /**
  * @generated from message office.v1.ListTaskDiscussionRequest
@@ -1604,7 +1657,7 @@ export type ListTaskDiscussionRequest = Message<"office.v1.ListTaskDiscussionReq
  * Use `create(ListTaskDiscussionRequestSchema)` to create a new message.
  */
 export const ListTaskDiscussionRequestSchema: GenMessage<ListTaskDiscussionRequest> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 55);
+  messageDesc(file_office_v1_office, 57);
 
 /**
  * @generated from message office.v1.ListTaskDiscussionResponse
@@ -1626,7 +1679,7 @@ export type ListTaskDiscussionResponse = Message<"office.v1.ListTaskDiscussionRe
  * Use `create(ListTaskDiscussionResponseSchema)` to create a new message.
  */
 export const ListTaskDiscussionResponseSchema: GenMessage<ListTaskDiscussionResponse> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 56);
+  messageDesc(file_office_v1_office, 58);
 
 /**
  * @generated from message office.v1.SaveTaskCommentRequest
@@ -1658,7 +1711,7 @@ export type SaveTaskCommentRequest = Message<"office.v1.SaveTaskCommentRequest">
  * Use `create(SaveTaskCommentRequestSchema)` to create a new message.
  */
 export const SaveTaskCommentRequestSchema: GenMessage<SaveTaskCommentRequest> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 57);
+  messageDesc(file_office_v1_office, 59);
 
 /**
  * @generated from message office.v1.SaveTaskCommentResponse
@@ -1675,7 +1728,7 @@ export type SaveTaskCommentResponse = Message<"office.v1.SaveTaskCommentResponse
  * Use `create(SaveTaskCommentResponseSchema)` to create a new message.
  */
 export const SaveTaskCommentResponseSchema: GenMessage<SaveTaskCommentResponse> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 58);
+  messageDesc(file_office_v1_office, 60);
 
 /**
  * @generated from message office.v1.DeleteTaskCommentRequest
@@ -1702,7 +1755,7 @@ export type DeleteTaskCommentRequest = Message<"office.v1.DeleteTaskCommentReque
  * Use `create(DeleteTaskCommentRequestSchema)` to create a new message.
  */
 export const DeleteTaskCommentRequestSchema: GenMessage<DeleteTaskCommentRequest> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 59);
+  messageDesc(file_office_v1_office, 61);
 
 /**
  * @generated from message office.v1.DeleteTaskCommentResponse
@@ -1719,7 +1772,7 @@ export type DeleteTaskCommentResponse = Message<"office.v1.DeleteTaskCommentResp
  * Use `create(DeleteTaskCommentResponseSchema)` to create a new message.
  */
 export const DeleteTaskCommentResponseSchema: GenMessage<DeleteTaskCommentResponse> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 60);
+  messageDesc(file_office_v1_office, 62);
 
 /**
  * @generated from service office.v1.OfficeService
@@ -1780,6 +1833,14 @@ export const OfficeService: GenService<{
     methodKind: "unary";
     input: typeof SaveMemberRequestSchema;
     output: typeof SaveMemberResponseSchema;
+  },
+  /**
+   * @generated from rpc office.v1.OfficeService.SaveProfile
+   */
+  saveProfile: {
+    methodKind: "unary";
+    input: typeof SaveProfileRequestSchema;
+    output: typeof SaveProfileResponseSchema;
   },
   /**
    * @generated from rpc office.v1.OfficeService.SaveCustomer

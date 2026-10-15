@@ -96,14 +96,11 @@ test("browser theme survives reload and settings stay within mobile and desktop 
 	await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 	await expectNoPageOverflow(page);
 	await page.reload();
+	await expect(page).toHaveURL(`${office.url}/settings`);
 	await expect(
-		page.getByRole("heading", {
-			name: "Your office, at a glance",
-			exact: true,
-		}),
+		page.getByRole("heading", { name: "Settings", level: 1, exact: true }),
 	).toBeVisible();
 	await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-	await navigateMobile(page, "Settings");
 	await expect(page.getByLabel("Color theme", { exact: true })).toHaveValue(
 		"dark",
 	);

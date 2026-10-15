@@ -190,6 +190,21 @@ fn valid_http_url(value: &str) -> bool {
         && parsed.username().is_empty()
         && parsed.password().is_none()
 }
+fn validate_profile(bio: &str, avatar_url: &str) -> Result<(), ConnectError> {
+    if bio.len() > 2000 {
+        return Err(bad("bio must be at most 2000 bytes"));
+    }
+    if avatar_url.len() > 2048 {
+        return Err(bad("avatar URL must be at most 2048 bytes"));
+    }
+    if !avatar_url.is_empty()
+        && (!valid_http_url(avatar_url)
+            || !url::Url::parse(avatar_url).is_ok_and(|url| url.scheme() == "https"))
+    {
+        return Err(bad("avatar URL must be HTTPS without credentials"));
+    }
+    Ok(())
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 struct Claims {
@@ -345,6 +360,7 @@ fn upsert<T>(items: &mut Vec<T>, value: T, key: impl Fn(&T) -> &String) {
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum EngineCommand {
     SaveMember(SaveMemberRequest),
+    SaveProfile(SaveProfileRequest),
     SaveCustomer(SaveCustomerRequest),
     SaveProject(SaveProjectRequest),
     SaveBoard(SaveBoardRequest),
@@ -360,6 +376,7 @@ pub enum EngineCommand {
 #[derive(Serialize, Deserialize)]
 pub enum EngineOutcome {
     Member(SaveMemberResponse),
+    Profile(SaveProfileResponse),
     Customer(SaveCustomerResponse),
     Project(SaveProjectResponse),
     Board(SaveBoardResponse),
@@ -520,6 +537,10 @@ impl WorkspaceActor {
                 ["active", "inactive", "pending"].contains(&member.status.as_str())
                     && member.access.iter().all(|a| MODULES.contains(&a.as_str())),
                 "invalid member access or status"
+            );
+            ensure!(
+                validate_profile(&member.bio, &member.avatar_url).is_ok(),
+                "invalid member profile"
             );
             ensure!(
                 member.status != "active"
@@ -1236,6 +1257,7 @@ impl WorkspaceActor {
         Self::permit(&actor, "team", true)?;
         let mut m = request.member.ok_or_else(|| bad("member required"))?;
         required(&m.name, "name", 120)?;
+        validate_profile(&m.bio, &m.avatar_url)?;
         if m.kind.is_empty() {
             m.kind = "human".into();
         }
@@ -1308,6 +1330,26 @@ impl WorkspaceActor {
             member: Some(m).into(),
             agent_key: agent_key.into(),
             secret,
+            ..Default::default()
+        })
+    }
+    fn save_profile(
+        &mut self,
+        token: String,
+        request: SaveProfileRequest,
+    ) -> Result<SaveProfileResponse, ConnectError> {
+        let actor = self.user(&token)?;
+        validate_profile(&request.bio, &request.avatar_url)?;
+        let mut member = actor.member.clone();
+        member.bio = request.bio;
+        member.avatar_url = request.avatar_url;
+        self.commit(
+            Edit::Member(member.clone()),
+            &actor.name,
+            "Member profile saved",
+        );
+        Ok(SaveProfileResponse {
+            member: Some(display_member(member)).into(),
             ..Default::default()
         })
     }
@@ -2006,6 +2048,9 @@ impl WorkspaceActor {
             EngineCommand::SaveMember(v) => {
                 self.save_member(token, v).await.map(EngineOutcome::Member)
             }
+            EngineCommand::SaveProfile(v) => {
+                self.save_profile(token, v).map(EngineOutcome::Profile)
+            }
             EngineCommand::SaveCustomer(v) => {
                 self.save_customer(token, v).map(EngineOutcome::Customer)
             }
@@ -2561,6 +2606,20 @@ impl OfficeService for OfficePreviewService {
         let token = bearer(&ctx)?;
         let EngineOutcome::Member(result) = self
             .execute(&token, EngineCommand::SaveMember(req.to_owned_message()))
+            .await?
+        else {
+            unreachable!()
+        };
+        Response::ok(result)
+    }
+    async fn save_profile<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, SaveProfileRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<SaveProfileResponse> + Send + use<'a>> {
+        let token = bearer(&ctx)?;
+        let EngineOutcome::Profile(result) = self
+            .execute(&token, EngineCommand::SaveProfile(req.to_owned_message()))
             .await?
         else {
             unreachable!()

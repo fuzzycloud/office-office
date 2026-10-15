@@ -30,9 +30,15 @@ For a container, mount persistent storage at `/data`; the image runs as UID 1000
 
 ## Development
 
+The browser uses TanStack Router for section URLs, browser back/forward and direct reloads. Entering a section refreshes workspace data through the shared TanStack Query cache, so external agent writes are visible without a full browser reload. See [navigation and refresh](docs/navigation.md).
+
 The protobuf service is the shared domain boundary for the browser and agents. Project workspaces support multiple boards with custom columns and tasks, owners, priorities and due dates. Task details include comments and a separate activity timeline for humans and agents. Comments support revision-checked edits and event-based soft deletion. See [tasks and discussions](docs/tasks.md). The MCP adapter uses the same actor commands and permission checks. Sample records are created by an explicit engine-command scenario, not by pre-filling projections, direct database inserts or frontend fixtures. Tests can call the typed engine without starting an HTTP server. See [starter data and engine testing](docs/demo.md). Run `just check` for the repository's full check suite; `just generate` lints protobuf and regenerates the TypeScript client. Do not edit generated clients by hand. `just test-e2e` builds the UI and server and runs isolated browser/HTTP scenarios against disposable SQLite offices, including task discussions, reports, permissions, restart persistence and MCP access. See [automated testing](docs/testing.md) for setup, focused runs and failure reports.
 
 The durable adapter uses rusqlite to put event writes and private credential tables in the same SQLite transaction; it does not use `katha-sqlx`. This preserves the one-writer model and atomic commit boundary. It is not a claim of production readiness: retention, export, request throttling, a public authentication perimeter and a verified restore process remain to be completed.
+
+## Team profiles
+
+Human and AI members have an optional plain-text bio and HTTPS profile picture URL. Admins edit them in Team; every active user can edit their own bio and picture in Settings, including Viewers. Self-profile editing cannot change roles, account status or credentials. Initials remain the fallback when an image is missing or fails to load. This first version uses hosted image URLs, not uploads; the server never fetches those URLs. Profile changes use the same event/actor/SQLite pipeline as other records. See [profiles](docs/profiles.md).
 
 ## Research reports
 

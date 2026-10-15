@@ -32,6 +32,7 @@ import {
 	RotateAgentKeyRequestSchema,
 	ListRolesRequestSchema,
 	SaveMemberRequestSchema,
+	SaveProfileRequestSchema,
 	SavePostRequestSchema,
 	SaveProjectRequestSchema,
 	SaveSettingsRequestSchema,
@@ -76,6 +77,8 @@ export type Member = {
 	email: string;
 	jobTitle: string;
 	department: string;
+	bio: string;
+	avatarUrl: string;
 	role: string;
 	status: string;
 	access: string[];
@@ -183,6 +186,11 @@ export async function saveMember(member: Member) {
 			member: create(MemberSchema, record),
 			password,
 		}),
+	);
+}
+export async function saveProfile(bio: string, avatarUrl: string) {
+	return client.saveProfile(
+		create(SaveProfileRequestSchema, { bio, avatarUrl }),
 	);
 }
 export async function listRoles() {

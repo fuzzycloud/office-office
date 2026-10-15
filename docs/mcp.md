@@ -53,6 +53,7 @@ The reverse proxy must preserve the HTTP `Host` (or HTTP/2 authority) for the pu
 | `office_list_roles` | Inspect fixed roles and permissions | Any authenticated user |
 | `office_create_ai_user` | Create AI member and return its key once | Admin |
 | `office_rotate_ai_key` | Replace all keys for an AI member | Admin |
+| `office_update_profile` | Replace your own bio and HTTPS picture URL | Any active user; self only |
 | `office_get_workspace` | Read the records visible to this key | Current role |
 | `office_save_board` | Create or update a project's board and columns | `projects:write` |
 | `office_save_task` | Create or update a task, including its board column | `projects:write` |
@@ -66,7 +67,7 @@ The reverse proxy must preserve the HTTP `Host` (or HTTP/2 authority) for the pu
 
 Read the workspace first to discover project IDs, board IDs and column names. Send a blank ID to create a board or task; use an existing ID to update one. Task references, dates, assignees and columns are validated by the server. Save tools replace the supplied record, so include existing fields you want to keep. Creation with a blank ID is not idempotent: read the workspace before retrying a request whose result is uncertain. Writes do not publish posts, send invoices or trigger provider actions.
 
-The member's current role is the sole permissions source. Admins can create AI users and rotate keys through MCP; Members can write projects/reports and Viewers are read-only. `office_get_workspace` returns the same role-authorized data as RPC, including the team directory. The issuing administrator is not the acting identity. Read [roles](roles.md) before upgrading from legacy per-user access/per-key scope restrictions.
+The member's current role determines business and administration permissions. Self-profile editing is available to every active user and cannot change roles, status or credentials. See [profiles](profiles.md). Admins can create AI users and rotate keys through MCP; Members can write projects/reports and Viewers are read-only. `office_get_workspace` returns the same role-authorized data as RPC, including the team directory. The issuing administrator is not the acting identity. Read [roles](roles.md) before upgrading from legacy per-user access/per-key scope restrictions.
 
 Revocation or deactivation denies new exchanges and existing sessions immediately on subsequent calls. Rotation revokes all keys for the selected AI member and creates one replacement atomically.
 

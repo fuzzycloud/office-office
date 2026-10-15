@@ -9,6 +9,7 @@ service OfficeService {
   rpc ListRoles(ListRolesRequest) returns (ListRolesResponse);
   rpc GetWorkspace(GetWorkspaceRequest) returns (GetWorkspaceResponse);
   rpc SaveMember(SaveMemberRequest) returns (SaveMemberResponse);
+  rpc SaveProfile(SaveProfileRequest) returns (SaveProfileResponse);
   rpc SaveCustomer(SaveCustomerRequest) returns (SaveCustomerResponse);
   rpc SaveProject(SaveProjectRequest) returns (SaveProjectResponse);
   rpc SaveBoard(SaveBoardRequest) returns (SaveBoardResponse);
@@ -56,6 +57,9 @@ message GetWorkspaceResponse {
 }
 message SaveMemberRequest { Member member = 1; string password = 2; }
 message SaveMemberResponse { Member member = 1; AgentKey agent_key = 2; string secret = 3; }
+// Updates only the authenticated member's public profile. Empty values clear fields.
+message SaveProfileRequest { string bio = 1; string avatar_url = 2; }
+message SaveProfileResponse { Member member = 1; }
 message SaveCustomerRequest { Customer customer = 1; }
 message SaveCustomerResponse { Customer customer = 1; }
 message SaveProjectRequest { Project project = 1; }
@@ -101,6 +105,9 @@ message Member {
   repeated string access = 8;
   // Empty means human for events created before explicit member kinds.
   string kind = 9;
+  string bio = 10;
+  // Optional HTTPS image URL; Office Office does not fetch or upload the image.
+  string avatar_url = 11;
 }
 message Customer {
   string id = 1;

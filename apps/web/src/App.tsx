@@ -7,10 +7,12 @@ import {
 	type ReactNode,
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useMatches, useNavigate } from "@tanstack/react-router";
 import { useForm } from "@tanstack/react-form";
 import * as v from "valibot";
 import Reports from "./Reports";
 import TaskDetails from "./TaskDetails";
+import MemberAvatar from "./MemberAvatar";
 import {
 	bootstrapAdmin,
 	listRoles,
@@ -26,6 +28,7 @@ import {
 	savePost,
 	saveProject,
 	saveSettings,
+	saveProfile,
 	saveTask,
 	type Board,
 	type Customer,
@@ -45,6 +48,19 @@ type Page =
 	| "roles"
 	| "social"
 	| "settings";
+const pagePaths = {
+	overview: "/",
+	team: "/team",
+	customers: "/customers",
+	projects: "/projects",
+	reports: "/reports",
+	roles: "/roles",
+	social: "/social",
+	settings: "/settings",
+} as const satisfies Record<Page, string>;
+const pathPages = Object.fromEntries(
+	Object.entries(pagePaths).map(([page, path]) => [path, page]),
+) as Record<string, Page>;
 type RecordDraft = {
 	id: string;
 	name: string;
@@ -55,6 +71,8 @@ type RecordDraft = {
 	notes: string;
 	jobTitle: string;
 	department: string;
+	bio: string;
+	avatarUrl: string;
 	role: string;
 	kind: string;
 	password: string;
@@ -145,12 +163,35 @@ const initials = (name: string) =>
 		.join("")
 		.slice(0, 2)
 		.toUpperCase();
+const validAvatarUrl = (value: string) => {
+	if (!value) return true;
+	if (
+		new TextEncoder().encode(value).length > 2048 ||
+		/[\s\\\u0000-\u001f\u007f]/.test(value)
+	)
+		return false;
+	try {
+		const url = new URL(value);
+		return (
+			url.protocol === "https:" &&
+			!!url.hostname &&
+			!url.username &&
+			!url.password
+		);
+	} catch {
+		return false;
+	}
+};
 
 export default function App() {
+	const matchedPath = useMatches({
+		select: (matches) => matches.at(-1)?.fullPath,
+	});
+	const page = pathPages[matchedPath ?? ""] ?? "overview";
+	const routerNavigate = useNavigate();
 	const [sessionToken, setSessionToken] = useState(
 		() => sessionStorage.getItem(tokenKey) || "",
 	);
-	const [page, setPage] = useState<Page>("overview");
 	const [navigationOpen, setNavigationOpen] = useState(false);
 	const [theme, setTheme] = useState(initialTheme);
 	const [dialog, setDialog] = useState<
@@ -214,7 +255,7 @@ export default function App() {
 		!!data?.permissions.includes(`${area}:read`);
 	const navigate = (next: Page) => {
 		if (canView(next)) {
-			setPage(next);
+			void routerNavigate({ to: pagePaths[next] });
 			setNavigationOpen(false);
 		}
 	};
@@ -230,7 +271,7 @@ export default function App() {
 		setNavigationOpen(false);
 		sessionStorage.removeItem(tokenKey);
 		setSessionToken("");
-		setPage("overview");
+		void routerNavigate({ to: "/" });
 		setDialog(null);
 		setEditing(null);
 		setSecretToReveal("");
@@ -330,6 +371,18 @@ export default function App() {
 			/>
 		);
 	if (!data || !me) return null;
+	if (!canView(page))
+		return (
+			<main className="grid min-h-screen place-content-center gap-4 bg-base-200 p-6 text-center">
+				<h1 className="text-3xl font-semibold">Section unavailable</h1>
+				<p className="text-base-content/70">
+					Your role cannot open this office section.
+				</p>
+				<Link to="/" className="btn btn-primary">
+					Return to overview
+				</Link>
+			</main>
+		);
 	const counts = {
 		projects: data.projects.filter((x) => x.status === "active").length,
 		customers: data.customers.length,
@@ -348,6 +401,8 @@ export default function App() {
 					email: draft.email,
 					jobTitle: draft.jobTitle,
 					department: draft.department,
+					bio: draft.bio,
+					avatarUrl: draft.avatarUrl.trim(),
 					role: draft.role,
 					kind: draft.kind || "human",
 					status: draft.status,
@@ -433,16 +488,18 @@ export default function App() {
 							</div>
 							<div className="dropdown dropdown-end">
 								<button
-									className="btn btn-ghost btn-circle avatar placeholder"
+									className="btn btn-ghost btn-circle"
 									aria-label="Account menu"
 								>
-									<span className="rounded-full bg-primary text-primary-content">
-										{initials(me.name)}
-									</span>
+									<MemberAvatar
+										name={me.name}
+										avatarUrl={me.avatarUrl}
+										className="size-9"
+									/>
 								</button>
 								<ul className="menu dropdown-content z-30 mt-3 w-48 rounded-box bg-base-100 p-2 shadow">
 									<li>
-										<button onClick={() => setPage("settings")}>
+										<button onClick={() => navigate("settings")}>
 											Settings
 										</button>
 									</li>
@@ -469,11 +526,11 @@ export default function App() {
 							</div>
 							{page !== "settings" && (
 								<div className="hidden items-center gap-2 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm sm:flex">
-									<span className="avatar placeholder">
-										<span className="w-8 rounded-full bg-secondary text-secondary-content">
-											{initials(me.name)}
-										</span>
-									</span>
+									<MemberAvatar
+										name={me.name}
+										avatarUrl={me.avatarUrl}
+										className="size-8"
+									/>
 									<span>
 										<b className="block">{me.name}</b>
 										<span className="text-base-content/60">{me.jobTitle}</span>
@@ -603,6 +660,12 @@ export default function App() {
 								theme={theme}
 								onTheme={updateTheme}
 								onSave={(value) => mutation.mutate({ kind: "settings", value })}
+								onSaveProfile={async (bio, avatarUrl) => {
+									await saveProfile(bio, avatarUrl);
+									await queryClient.invalidateQueries({
+										queryKey: ["workspace"],
+									});
+								}}
 								onSecret={(secret) => setSecretToReveal(secret)}
 							/>
 						)}
@@ -618,12 +681,9 @@ export default function App() {
 						className="drawer-overlay"
 					/>
 					<aside className="flex min-h-full w-72 flex-col border-r border-base-300 bg-base-100 p-4">
-						<a
-							href="#overview"
-							onClick={(e) => {
-								e.preventDefault();
-								setPage("overview");
-							}}
+						<Link
+							to="/"
+							onClick={() => setNavigationOpen(false)}
 							className="mb-8 flex items-center gap-3 rounded-box px-2 py-3"
 						>
 							<span className="grid size-11 place-items-center rounded-xl bg-primary text-xl font-semibold text-primary-content">
@@ -635,7 +695,7 @@ export default function App() {
 									THE SHARED WORKSPACE
 								</span>
 							</span>
-						</a>
+						</Link>
 						<div className="mb-2 px-3 text-sm font-semibold uppercase tracking-wider text-base-content/50">
 							Workspace
 						</div>
@@ -667,11 +727,7 @@ export default function App() {
 						</ul>
 						<div className="mt-auto rounded-box bg-base-200 p-3">
 							<div className="flex items-center gap-3">
-								<div className="avatar placeholder">
-									<div className="w-10 rounded-full bg-secondary text-secondary-content">
-										<span>{initials(me.name)}</span>
-									</div>
-								</div>
+								<MemberAvatar name={me.name} avatarUrl={me.avatarUrl} />
 								<div className="min-w-0 flex-1">
 									<b className="block truncate text-sm">{me.name}</b>
 									<span className="text-sm capitalize text-base-content/60">
@@ -1322,16 +1378,20 @@ function Team({
 							<tr key={person.id}>
 								<td>
 									<div className="flex items-center gap-3">
-										<div className="avatar placeholder">
-											<div className="w-10 rounded-full bg-secondary text-secondary-content">
-												<span>{initials(person.name)}</span>
-											</div>
-										</div>
+										<MemberAvatar
+											name={person.name}
+											avatarUrl={person.avatarUrl}
+										/>
 										<span>
 											<b className="block">{person.name}</b>
 											{person.kind === "agent" && (
 												<span className="badge badge-secondary badge-sm">
 													AI user
+												</span>
+											)}
+											{person.bio && (
+												<span className="mt-1 block max-w-md whitespace-pre-wrap text-sm text-base-content/70">
+													{person.bio}
 												</span>
 											)}
 											<span className="text-sm text-base-content/60">
@@ -2563,6 +2623,7 @@ function Settings({
 	theme,
 	onTheme,
 	onSave,
+	onSaveProfile,
 	onSecret,
 }: {
 	data: Workspace;
@@ -2573,6 +2634,7 @@ function Settings({
 	theme: string;
 	onTheme: (theme: string) => void;
 	onSave: (settings: Workspace["settings"]) => void;
+	onSaveProfile: (bio: string, avatarUrl: string) => Promise<void>;
 	onSecret: (secret: string) => void;
 }) {
 	const [workspaceName, setWorkspaceName] = useState(
@@ -2580,8 +2642,17 @@ function Settings({
 	);
 	const [timezone, setTimezone] = useState(data.settings.timezone);
 	const [keyError, setKeyError] = useState("");
+	const [bio, setBio] = useState(data.currentUser.bio);
+	const [avatarUrl, setAvatarUrl] = useState(data.currentUser.avatarUrl);
+	const [profileError, setProfileError] = useState("");
+	const [profileSaved, setProfileSaved] = useState(false);
+	const [profileBusy, setProfileBusy] = useState(false);
 	const fieldId = useId();
 	const queryClient = useQueryClient();
+	useEffect(() => {
+		setBio(data.currentUser.bio);
+		setAvatarUrl(data.currentUser.avatarUrl);
+	}, [data.currentUser.bio, data.currentUser.avatarUrl]);
 	const keysQuery = useQuery({
 		queryKey: ["agent-keys"],
 		queryFn: listAgentKeys,
@@ -2716,13 +2787,96 @@ function Settings({
 						<p className="text-sm font-semibold uppercase tracking-wider text-base-content/50">
 							Your profile
 						</p>
-						<h2 className="text-xl font-semibold">{data.currentUser.name}</h2>
+						<div className="flex items-center gap-3">
+							<MemberAvatar
+								name={data.currentUser.name}
+								avatarUrl={data.currentUser.avatarUrl}
+								className="size-14"
+							/>
+							<h2 className="text-xl font-semibold">{data.currentUser.name}</h2>
+						</div>
 						<div className="grid gap-1 text-sm text-base-content/65">
 							<span>{data.currentUser.email}</span>
 							<span>
 								{data.currentUser.jobTitle} · {data.currentUser.department}
 							</span>
 						</div>
+						<form
+							className="mt-4 grid gap-3"
+							onSubmit={async (event) => {
+								event.preventDefault();
+								setProfileError("");
+								setProfileSaved(false);
+								setProfileBusy(true);
+								try {
+									if (new TextEncoder().encode(bio).length > 2000)
+										throw new Error("Bio must be 2000 bytes or fewer.");
+									if (!validAvatarUrl(avatarUrl.trim()))
+										throw new Error(
+											"Enter an HTTPS image URL without credentials (2048 bytes maximum).",
+										);
+									await onSaveProfile(bio, avatarUrl.trim());
+									setProfileSaved(true);
+								} catch (error) {
+									setProfileError(
+										error instanceof Error
+											? error.message
+											: "Could not save your profile.",
+									);
+								} finally {
+									setProfileBusy(false);
+								}
+							}}
+						>
+							<div className="form-control">
+								<label
+									htmlFor={`${fieldId}-profile-picture`}
+									className="label-text mb-2 font-medium"
+								>
+									Profile picture URL (hosted HTTPS image)
+								</label>
+								<input
+									id={`${fieldId}-profile-picture`}
+									aria-describedby={`${fieldId}-profile-picture-help`}
+									className="input input-bordered"
+									type="url"
+									value={avatarUrl}
+									onChange={(event) => setAvatarUrl(event.target.value)}
+									placeholder="https://example.com/photo.jpg"
+								/>
+								<span
+									id={`${fieldId}-profile-picture-help`}
+									className="label-text-alt mt-1"
+								>
+									Leave blank to remove your profile picture.
+								</span>
+							</div>
+							<label className="form-control">
+								<span className="label-text mb-2 font-medium">Bio</span>
+								<textarea
+									className="textarea textarea-bordered min-h-24"
+									maxLength={2000}
+									value={bio}
+									onChange={(event) => setBio(event.target.value)}
+								/>
+							</label>
+							{profileError && (
+								<p role="alert" className="text-sm text-error">
+									{profileError}
+								</p>
+							)}
+							{profileSaved && (
+								<p role="status" className="text-sm text-success">
+									Profile saved.
+								</p>
+							)}
+							<button className="btn btn-primary w-fit" disabled={profileBusy}>
+								{profileBusy && (
+									<span className="loading loading-spinner loading-sm" />
+								)}
+								Save profile
+							</button>
+						</form>
 						<div className="divider" />
 						<span className="badge badge-primary badge-outline w-fit capitalize">
 							{data.currentUser.role}
@@ -2919,6 +3073,8 @@ function RecordDialog({
 		notes: readString("notes"),
 		jobTitle: readString("jobTitle"),
 		department: readString("department"),
+		bio: readString("bio"),
+		avatarUrl: readString("avatarUrl"),
 		role: readString("role", "member"),
 		kind: readString("kind", "human"),
 		password: "",
@@ -2945,6 +3101,12 @@ function RecordDialog({
 			: [{ name: "email" as const, label: "Email", type: "email" }]),
 		{ name: "jobTitle", label: "Job title" },
 		{ name: "department", label: "Department" },
+		{ name: "bio", label: "Bio", textarea: true },
+		{
+			name: "avatarUrl",
+			label: "Profile picture URL (hosted HTTPS image)",
+			type: "url",
+		},
 		{
 			name: "role",
 			label: "Role",
@@ -3094,6 +3256,19 @@ function RecordDialog({
 			values.password.length < 12
 		) {
 			setFormError("Use at least 12 characters for a temporary password.");
+			return;
+		}
+		if (
+			kind === "member" &&
+			new TextEncoder().encode(values.bio).length > 2000
+		) {
+			setFormError("Bio must be 2000 bytes or fewer.");
+			return;
+		}
+		if (kind === "member" && !validAvatarUrl(values.avatarUrl.trim())) {
+			setFormError(
+				"Enter an HTTPS image URL without credentials (2048 bytes maximum).",
+			);
 			return;
 		}
 		setFormError("");

@@ -33,8 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .merge(mcp::router(service.clone(), mcp_config))
         .nest_service("/rpc", connect.into_axum_service())
         .fallback_service(
-            ServeDir::new("apps/web/dist")
-                .not_found_service(ServeFile::new("apps/web/dist/index.html")),
+            ServeDir::new("apps/web/dist").fallback(ServeFile::new("apps/web/dist/index.html")),
         );
     let listener = tokio::net::TcpListener::bind(addr).await?;
     if demo {

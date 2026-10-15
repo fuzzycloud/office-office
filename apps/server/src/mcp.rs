@@ -13,7 +13,7 @@ use office_server::{
     EngineCommand, EngineOutcome, OfficePreviewService,
     proto::office::v1::{
         Board, DeleteTaskCommentRequest, ListReportsRequest, Member, Report, ReportSource,
-        SaveMemberRequest, SaveReportRequest, SaveTaskCommentRequest, Task,
+        SaveMemberRequest, SaveProfileRequest, SaveReportRequest, SaveTaskCommentRequest, Task,
     },
 };
 use rmcp::{
@@ -154,7 +154,8 @@ fn tools() -> Vec<Tool> {
         .open_world(false);
     vec![
         Tool::new("office_list_roles", "Read the fixed roles and their permissions. Human and AI users follow the same role policy.", schema(json!({"type":"object","properties":{},"additionalProperties":false}))).with_annotations(read.clone()),
-        Tool::new("office_create_ai_user", "Admin only: create an AI team member and its login key. Returns a secret once; deliver it securely to the new client, never put it in comments or reports. Role determines all access. Does not launch an agent.", schema(json!({"type":"object","properties":{"name":{"type":"string","minLength":1},"role":{"type":"string","enum":["admin","manager","member","viewer"],"default":"member"},"job_title":{"type":"string"},"department":{"type":"string"}},"required":["name"],"additionalProperties":false}))).with_annotations(write.clone()),
+        Tool::new("office_create_ai_user", "Admin only: create an AI team member and its login key. Returns a secret once; deliver it securely to the new client, never put it in comments or reports. Role determines all access. Does not launch an agent.", schema(json!({"type":"object","properties":{"name":{"type":"string","minLength":1},"role":{"type":"string","enum":["admin","manager","member","viewer"],"default":"member"},"job_title":{"type":"string"},"department":{"type":"string"},"bio":{"type":"string","maxLength":2000},"avatar_url":{"type":"string","maxLength":2048,"description":"Optional HTTPS profile image URL; never fetched by the server"}},"required":["name"],"additionalProperties":false}))).with_annotations(write.clone()),
+        Tool::new("office_update_profile", "Replace your own bio and profile image URL. Available to every active human or AI user, including Viewer. Supply both fields; empty values clear them. Cannot change identity, role, account status or credentials. Bio is plain text (up to 2000 UTF-8 bytes); picture must be an HTTPS URL without credentials (up to 2048 bytes). Read your current profile in office_get_workspace first to preserve existing values.", schema(json!({"type":"object","properties":{"bio":{"type":"string","maxLength":2000},"avatar_url":{"type":"string","maxLength":2048}},"required":["bio","avatar_url"],"additionalProperties":false}))).with_annotations(write.clone()),
         Tool::new("office_rotate_ai_key", "Admin only: replace an AI user's login key, immediately revoking all its old keys and sessions. Returns the new secret once. Deliver it securely; never put it in workspace records.", schema(json!({"type":"object","properties":{"member_id":{"type":"string","minLength":1}},"required":["member_id"],"additionalProperties":false}))).with_annotations(write.clone()),
         Tool::new(
             "office_get_workspace",
@@ -358,6 +359,8 @@ impl ServerHandler for OfficeMcp {
                         status: "active".into(),
                         job_title: string_arg(&args, "job_title")?,
                         department: string_arg(&args, "department")?,
+                        bio: string_arg(&args, "bio")?,
+                        avatar_url: string_arg(&args, "avatar_url")?,
                         ..Default::default()
                     })
                 })();
@@ -381,6 +384,26 @@ impl ServerHandler for OfficeMcp {
                             "AI user could not be created. Requires Admin role, a name and a valid fixed role. Read the team before retrying.",
                         ),
                     },
+                }
+            }
+            "office_update_profile" => {
+                let parsed = (|| -> Result<SaveProfileRequest, String> {
+                    if !args.contains_key("bio") || !args.contains_key("avatar_url") {
+                        return Err("Supply both bio and avatar_url; use empty strings to clear them. Read your current profile first to preserve values.".into());
+                    }
+                    Ok(SaveProfileRequest {
+                        bio: string_arg(&args, "bio")?,
+                        avatar_url: string_arg(&args, "avatar_url")?,
+                        ..Default::default()
+                    })
+                })();
+                match parsed {
+                    Err(message) => failure(message),
+                    Ok(profile) => match self.service.execute(&self.token, EngineCommand::SaveProfile(profile)).await {
+                        Ok(EngineOutcome::Profile(saved)) => success(json!({"member":saved.member})),
+                        Err(error) => failure(error.message.unwrap_or_else(|| "Profile could not be saved. Check your login, bio length and HTTPS image URL.".into())),
+                        _ => failure("Unexpected profile response. Read your workspace before retrying."),
+                    }
                 }
             }
             "office_rotate_ai_key" => match string_arg(&args, "member_id") {
@@ -752,15 +775,50 @@ mod tests {
             None,
             call(
                 "office_create_ai_user",
-                json!({"name":"Research assistant","role":"viewer"}),
+                json!({"name":"Research assistant","role":"viewer","bio":"A research specialist","avatar_url":"https://example.test/assistant.png"}),
             ),
         )
         .await;
         assert_eq!(created["result"]["isError"], false, "{created}");
         let data = &created["result"]["structuredContent"];
         assert_eq!(data["member"]["kind"], "agent");
+        assert_eq!(data["member"]["bio"], "A research specialist");
+        assert_eq!(
+            data["member"]["avatarUrl"],
+            "https://example.test/assistant.png"
+        );
         let id = data["member"]["id"].as_str().unwrap();
         let raw = data["secret"].as_str().unwrap();
+        let (_, updated) = mcp(
+            &app,
+            Some(raw),
+            None,
+            call(
+                "office_update_profile",
+                json!({"bio":"Updated by the Viewer AI", "avatar_url":""}),
+            ),
+        )
+        .await;
+        assert_eq!(updated["result"]["isError"], false, "{updated}");
+        assert_eq!(
+            updated["result"]["structuredContent"]["member"]["bio"],
+            "Updated by the Viewer AI"
+        );
+        assert_eq!(
+            updated["result"]["structuredContent"]["member"]["role"],
+            "viewer"
+        );
+        let (_, invalid) = mcp(
+            &app,
+            Some(raw),
+            None,
+            call(
+                "office_update_profile",
+                json!({"bio":"Blocked", "avatar_url":"javascript:alert(1)"}),
+            ),
+        )
+        .await;
+        assert_eq!(invalid["result"]["isError"], true);
         let (_, catalog) = mcp(&app, Some(raw), None, call("office_list_roles", json!({}))).await;
         assert_eq!(
             catalog["result"]["structuredContent"]["roles"]
@@ -1066,7 +1124,7 @@ mod tests {
         .await;
         assert_eq!(
             listed["result"]["tools"].as_array().unwrap().len(),
-            13,
+            14,
             "{listed}"
         );
         let (_, read) = mcp(&app, Some(&secret), None, json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"office_get_workspace","arguments":{"project_id":project_id}}})).await;
