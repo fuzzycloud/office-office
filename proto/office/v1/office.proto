@@ -11,6 +11,12 @@ service OfficeService {
   rpc SaveProject(SaveProjectRequest) returns (SaveProjectResponse);
   rpc SaveBoard(SaveBoardRequest) returns (SaveBoardResponse);
   rpc SaveTask(SaveTaskRequest) returns (SaveTaskResponse);
+  rpc ListTaskDiscussion(ListTaskDiscussionRequest) returns (ListTaskDiscussionResponse);
+  rpc SaveTaskComment(SaveTaskCommentRequest) returns (SaveTaskCommentResponse);
+  rpc DeleteTaskComment(DeleteTaskCommentRequest) returns (DeleteTaskCommentResponse);
+  rpc ListReports(ListReportsRequest) returns (ListReportsResponse);
+  rpc GetReport(GetReportRequest) returns (GetReportResponse);
+  rpc SaveReport(SaveReportRequest) returns (SaveReportResponse);
   rpc ListAgentKeys(ListAgentKeysRequest) returns (ListAgentKeysResponse);
   rpc CreateAgentKey(CreateAgentKeyRequest) returns (CreateAgentKeyResponse);
   rpc RevokeAgentKey(RevokeAgentKeyRequest) returns (RevokeAgentKeyResponse);
@@ -19,8 +25,8 @@ service OfficeService {
 }
 
 message GetSetupStatusRequest {}
-message GetSetupStatusResponse { bool needs_setup = 1; bool demo_mode = 2; }
-message BootstrapAdminRequest { string name = 1; string email = 2; string password = 3; string workspace_name = 4; }
+message GetSetupStatusResponse { bool needs_setup = 1; bool demo_mode = 2; bool persistent_storage = 3; }
+message BootstrapAdminRequest { string name = 1; string email = 2; string password = 3; string workspace_name = 4; bool load_demo_data = 5; }
 message LoginRequest { string email = 1; string password = 2; }
 message BootstrapAdminResponse { string token = 1; Member user = 2; int64 expires_at = 3; }
 message LoginResponse { string token = 1; Member user = 2; int64 expires_at = 3; }
@@ -37,6 +43,7 @@ message GetWorkspaceResponse {
   repeated Activity activity = 9;
   repeated Board boards = 10;
   repeated Task tasks = 11;
+  bool persistent_storage = 12;
 }
 message SaveMemberRequest { Member member = 1; string password = 2; }
 message SaveMemberResponse { Member member = 1; }
@@ -48,6 +55,12 @@ message SaveBoardRequest { Board board = 1; }
 message SaveBoardResponse { Board board = 1; }
 message SaveTaskRequest { Task task = 1; }
 message SaveTaskResponse { Task task = 1; }
+message ListReportsRequest { string query = 1; string status = 2; string project_id = 3; uint32 page_size = 4; uint32 offset = 5; }
+message ListReportsResponse { repeated Report reports = 1; uint32 total_count = 2; uint32 next_offset = 3; }
+message GetReportRequest { string id = 1; }
+message GetReportResponse { Report report = 1; }
+message SaveReportRequest { Report report = 1; uint32 expected_revision = 2; }
+message SaveReportResponse { Report report = 1; }
 message ListAgentKeysRequest {}
 message ListAgentKeysResponse { repeated AgentKey keys = 1; }
 message CreateAgentKeyRequest { string name = 1; repeated string scopes = 2; int32 expires_in_days = 3; }
@@ -103,6 +116,27 @@ message Task {
   string assignee_id = 7;
   string priority = 8;
   string due_date = 9;
+  uint32 comment_count = 10;
+}
+message ReportSource { string title = 1; string url = 2; }
+message Report {
+  string id = 1;
+  string title = 2;
+  string summary = 3;
+  string body = 4;
+  string kind = 5;
+  string status = 6;
+  string topic = 7;
+  string period = 8;
+  string project_id = 9;
+  string task_id = 10;
+  string author_id = 11;
+  string author_name = 12;
+  int64 created_at = 13;
+  int64 updated_at = 14;
+  string updated_by = 15;
+  uint32 revision = 16;
+  repeated ReportSource sources = 17;
 }
 message AgentKey {
   string id = 1;
@@ -135,3 +169,32 @@ message Activity {
   string occurred_at = 5;
 }
 message WorkspaceSettings { string workspace_name = 1; string default_theme = 2; string timezone = 3; }
+
+message TaskComment {
+  string id = 1;
+  string task_id = 2;
+  string body = 3;
+  string author_id = 4;
+  string author_name = 5;
+  int64 created_at = 6;
+  int64 updated_at = 7;
+  uint32 revision = 8;
+  bool deleted = 9;
+  string actor_kind = 10;
+}
+message TaskActivity {
+  string id = 1;
+  string task_id = 2;
+  string kind = 3;
+  string summary = 4;
+  string actor_id = 5;
+  string actor_name = 6;
+  string actor_kind = 7;
+  int64 occurred_at = 8;
+}
+message ListTaskDiscussionRequest { string task_id = 1; }
+message ListTaskDiscussionResponse { repeated TaskComment comments = 1; repeated TaskActivity activity = 2; }
+message SaveTaskCommentRequest { string task_id = 1; string comment_id = 2; string body = 3; uint32 expected_revision = 4; }
+message SaveTaskCommentResponse { TaskComment comment = 1; }
+message DeleteTaskCommentRequest { string task_id = 1; string comment_id = 2; uint32 expected_revision = 3; }
+message DeleteTaskCommentResponse { TaskComment comment = 1; }

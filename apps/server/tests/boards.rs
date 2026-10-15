@@ -48,7 +48,7 @@ async fn bootstrap(app: &Router) -> String {
         None,
         json!({
             "name":"Admin", "email":"admin@example.test", "password":"sample-password-123",
-            "workspaceName":"Office"
+            "workspaceName":"Office", "loadDemoData":true
         }),
     )
     .await;
@@ -60,6 +60,8 @@ async fn bootstrap(app: &Router) -> String {
 async fn boards_tasks_and_moves_validate_project_and_columns() {
     let app = app(Arc::new(OfficePreviewService::new()));
     let token = bootstrap(&app).await;
+    let (_, seeded) = rpc(&app, "GetWorkspace", Some(&token), json!({})).await;
+    let sample_project_id = seeded["projects"][0]["id"].as_str().unwrap();
     let (_, created) = rpc(
         &app,
         "SaveProject",
@@ -78,7 +80,13 @@ async fn boards_tasks_and_moves_validate_project_and_columns() {
             .iter()
             .any(|b| b["projectId"] == project_id)
     );
-    assert_eq!(workspace["tasks"][0]["title"], "Sample task — plan launch");
+    assert!(
+        workspace["tasks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|task| task["title"] == "Sample task — plan launch")
+    );
 
     let (status, board) = rpc(
         &app,
@@ -102,7 +110,7 @@ async fn boards_tasks_and_moves_validate_project_and_columns() {
     assert_eq!(status, StatusCode::OK, "{moved}");
     assert_eq!(moved["task"]["column"], "Doing");
     for invalid in [
-        json!({"projectId":"demo-project-1", "boardId":board_id, "column":"Doing", "title":"Wrong project", "priority":"high"}),
+        json!({"projectId":sample_project_id, "boardId":board_id, "column":"Doing", "title":"Wrong project", "priority":"high"}),
         json!({"projectId":project_id, "boardId":board_id, "column":"Missing", "title":"Wrong column", "priority":"high"}),
         json!({"projectId":project_id, "boardId":board_id, "column":"Ready", "title":"Wrong date", "priority":"high", "dueDate":"2026-02-30"}),
     ] {
@@ -133,6 +141,16 @@ async fn agent_keys_are_scoped_audited_and_revoked() {
     let service = Arc::new(OfficePreviewService::new());
     let app = app(service.clone());
     let token = bootstrap(&app).await;
+    let (_, seeded) = rpc(&app, "GetWorkspace", Some(&token), json!({})).await;
+    let project_id = seeded["projects"][0]["id"].as_str().unwrap().to_owned();
+    let board = seeded["boards"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|board| board["projectId"] == project_id)
+        .unwrap();
+    let board_id = board["id"].as_str().unwrap().to_owned();
+    let column = board["columns"][0].as_str().unwrap().to_owned();
     let (status, created) = rpc(
         &app,
         "CreateAgentKey",
@@ -160,9 +178,9 @@ async fn agent_keys_are_scoped_audited_and_revoked() {
         .agent_save_task(
             secret,
             Task {
-                project_id: "demo-project-1".into(),
-                board_id: "demo-board-1".into(),
-                column: "Todo".into(),
+                project_id: project_id.clone(),
+                board_id: board_id.clone(),
+                column: column.clone(),
                 title: "AI planning task".into(),
                 priority: "low".into(),
                 ..Default::default()
@@ -222,9 +240,9 @@ async fn agent_keys_are_scoped_audited_and_revoked() {
             .agent_save_task(
                 reader_secret,
                 Task {
-                    project_id: "demo-project-1".into(),
-                    board_id: "demo-board-1".into(),
-                    column: "Todo".into(),
+                    project_id: project_id.clone(),
+                    board_id: board_id.clone(),
+                    column: column.clone(),
                     title: "Forbidden".into(),
                     priority: "low".into(),
                     ..Default::default()

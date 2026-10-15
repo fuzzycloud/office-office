@@ -1,27 +1,31 @@
 # Security boundaries
 
-## Current demo
+## Identity and authorization
 
-The demo uses the server RPC layer for authentication and authorization. The browser does not grant itself permissions. Passwords are stored as Argon2 hashes, and login issues a 15-minute JWT signed with a random key held in process memory. The server checks current role and module access on each request. Roles are admin, manager, member and viewer; module access covers team, customers, projects, social and settings.
+Authentication and authorization are enforced by the server, with the same actor commands for UI RPC and MCP. Roles are admin, manager, member and viewer; module access covers team, customers, projects, reports, social and settings. Every operation checks the current account state, so changing access or disabling an account takes effect on subsequent requests. UI visibility is not a security boundary.
 
-The first-admin bootstrap is intentionally available only while no workspace exists. The server serializes bootstrap attempts so concurrent requests cannot create competing initial admins. This prevents a race, but anyone who can reach an uninitialized public server could claim it. Keep the current demo bound to loopback and do not expose it to the internet. The demo has no durable account store or durable signing key: a restart resets accounts, records and sessions.
+First-admin setup is available only while a new office is uninitialized. Bootstrap is serialized and committed atomically with the administrator's password hash and workspace events. Anyone who can reach a fresh office first could claim it: keep setup behind a private ingress. Startup fails on a damaged or unsupported database instead of falling back to setup.
 
-Sample customers, projects and social channels are fictitious backend-seeded records, marked as samples and reset on restart. They do not send posts, invitations or provider requests. This prevents demo data from causing external side effects. Never represent sample activity as a successful customer interaction or provider connection.
+Passwords are stored as Argon2 hashes in private SQLite tables. JWTs last 15 minutes and use a signing key retained in the same protected database, so restart does not invalidate an unexpired session. The raw signing key is never returned to clients or included in domain events. Backups of the database therefore include sensitive authentication material; restrict and encrypt both the volume and backups. SQLite is not encrypted by the application.
 
 ## Agent credentials
 
-AI access uses named opaque bearer keys with explicit module read/write scopes, expiry and immediate revocation. Administrators create and revoke keys using JWT sessions. The raw key is returned once and is never included in domain events or key listings; only its SHA-256 digest is retained in memory. Every MCP request rechecks validity and every operation intersects key scope with the creator's current account permissions. Disabling the creator disables access. Keys grant no account or key administration capability.
+AI access uses named opaque bearer keys with module scopes, expiry and immediate revocation. JWT-authenticated administrators create and revoke them. The raw secret is returned once; only its SHA-256 digest and owner binding are retained privately. Credentials are committed atomically with public key metadata events. A module write scope also permits reads in that module. Key scopes are intersected with the owner's current role and module access on each operation; keys cannot administer accounts or other keys.
 
-MCP rejects browser Origin headers to reduce cross-origin and DNS-rebinding exposure; native MCP clients should omit Origin. Treat bearer keys as passwords and use HTTPS for any future hosted deployment. The preview has no durable key storage or production perimeter.
+AI writes identify the key name in activity. MCP rejects supplied Origin headers; native clients should omit Origin. Use HTTPS for any future hosted deployment. Neither database persistence nor `OFFICE_ALLOW_REMOTE=true` supplies a production perimeter.
 
-## Deferred production controls
+## Event and storage boundary
 
-The demo does not provide durable storage, encrypted provider settings, audit history, backup or restore. Production use requires a single SQLite writer, durable protected signing and encryption key recovery, verified restoration before serving traffic, and audited authorization decisions. Litestream is planned for offsite backup only; it does not provide active-active availability. Never overwrite an existing database during bootstrap.
+Katha domain events contain records and activity. Password hashes, key digests and signing material live outside those events. A kathputli actor stages changes and commits each command's events and private authentication changes in one SQLite transaction before success. A failed commit restores the prior projection and credentials. Startup rebuilds projections from the journal before accepting HTTP requests. A process lock excludes another application writer.
 
-Provider settings must be encrypted server-side, with a separate recovery secret. A key stored only alongside the encrypted database cannot recover it after loss. Deployment identity and AWS credentials may authorize infrastructure access but do not replace application signing/encryption recovery material. Do not pass provider secrets to agents.
+Normal startup uses empty durable records. `OFFICE_DEMO_MODE=true` selects in-memory storage that resets on restart. First-admin registration separately offers sample starter data, created through normal authenticated engine commands. SQLite can retain the same samples across restarts. Pending sample teammates receive no shared password. No mode sends invitations, messages, invoices, provider requests or social posts. Demo records never represent successful external interactions.
 
-Future social publishing must use explicit provider scopes, server-side credentials, an idempotency key per operation, audit records, provider receipts and safe retry behavior. A retry must not silently publish a duplicate post. Business connector access remains read-only by default; narrow actions such as sending an invoice require separate permission and audit records.
+Append-only history retains previous personal data values. Event/backup retention, export and erasure workflows remain deferred and must be designed before production use. Storage access is trusted: this is not a cryptographically tamper-evident journal.
 
-## Trust boundary
+## Recovery and deferred controls
 
-Humans and agents use the same RPC authorization path. UI visibility and client-side validation are not security controls. Hermes remains responsible for agent execution and messaging channels. Office Office owns the records and any future, separately scoped social publishing workflow.
+[Storage and recovery](storage.md) describes the optional Litestream template and manual restore drill. Replication is not started by the image or application and has not been verified against AWS. Never overwrite an existing database during restore or treat a failed restore as a new office. Restoring an older backup can resurrect revoked keys or old passwords; review credentials after recovery.
+
+This development build still needs a production review of TLS/ingress, request throttling, password recovery, retention/erasure and verified backup monitoring. Future provider settings require encryption server-side and a separate protected decryption recovery secret; no such credentials are stored today. Future publishing or invoice actions need explicit narrow permissions, operation IDs, receipts and retry handling. Never pass provider secrets to agents.
+
+Hermes owns agent execution and conversational channels. Office Office owns records and the separately scoped future social publishing queue.

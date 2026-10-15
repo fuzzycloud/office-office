@@ -1,6 +1,7 @@
 import {
 	useEffect,
 	useMemo,
+	useId,
 	useState,
 	type FormEvent,
 	type ReactNode,
@@ -8,6 +9,8 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
 import * as v from "valibot";
+import Reports from "./Reports";
+import TaskDetails from "./TaskDetails";
 import {
 	bootstrapAdmin,
 	createAgentKey,
@@ -37,6 +40,7 @@ type Page =
 	| "team"
 	| "customers"
 	| "projects"
+	| "reports"
 	| "social"
 	| "settings";
 type RecordDraft = {
@@ -71,6 +75,7 @@ const nav: { id: Page; label: string; icon: string }[] = [
 	{ id: "team", label: "Team", icon: "♧" },
 	{ id: "customers", label: "Customers", icon: "◎" },
 	{ id: "projects", label: "Projects", icon: "▤" },
+	{ id: "reports", label: "Reports", icon: "⌕" },
 	{ id: "social", label: "Social queue", icon: "◷" },
 	{ id: "settings", label: "Settings", icon: "⚙" },
 ];
@@ -118,6 +123,7 @@ const title: Record<Page, string> = {
 	team: "Team",
 	customers: "Customers",
 	projects: "Projects",
+	reports: "Reports",
 	social: "Social queue",
 	settings: "Settings",
 };
@@ -141,6 +147,7 @@ export default function App() {
 		() => sessionStorage.getItem(tokenKey) || "",
 	);
 	const [page, setPage] = useState<Page>("overview");
+	const [navigationOpen, setNavigationOpen] = useState(false);
 	const [theme, setTheme] = useState(initialTheme);
 	const [dialog, setDialog] = useState<
 		null | "member" | "customer" | "project" | "post"
@@ -169,6 +176,7 @@ export default function App() {
 						email: string;
 						password: string;
 						workspaceName: string;
+						loadDemoData: boolean;
 				  },
 		) =>
 			payload.mode === "login"
@@ -201,7 +209,10 @@ export default function App() {
 		me?.role === "admin" ||
 		!!me?.access.includes(area);
 	const navigate = (next: Page) => {
-		if (canView(next)) setPage(next);
+		if (canView(next)) {
+			setPage(next);
+			setNavigationOpen(false);
+		}
 	};
 	useEffect(() => {
 		document.documentElement.dataset.theme = theme;
@@ -212,6 +223,7 @@ export default function App() {
 		document.documentElement.dataset.theme = value;
 	}
 	function signOut() {
+		setNavigationOpen(false);
 		sessionStorage.removeItem(tokenKey);
 		setSessionToken("");
 		setPage("overview");
@@ -261,6 +273,7 @@ export default function App() {
 			<AuthPage
 				mode="setup"
 				demoMode={setup.data.demoMode}
+				persistentStorage={setup.data.persistentStorage}
 				busy={sessionMutation.isPending}
 				error={sessionMutation.error?.message}
 				onSubmit={(value) =>
@@ -270,6 +283,7 @@ export default function App() {
 						workspaceName: value.workspaceName ?? "My office",
 						email: value.email,
 						password: value.password,
+						loadDemoData: value.loadDemoData ?? false,
 					})
 				}
 			/>
@@ -278,7 +292,8 @@ export default function App() {
 		return (
 			<AuthPage
 				mode="login"
-				demoMode={setup.data?.demoMode ?? true}
+				demoMode={setup.data?.demoMode ?? false}
+				persistentStorage={setup.data?.persistentStorage ?? false}
 				busy={sessionMutation.isPending}
 				error={sessionMutation.error?.message}
 				onSubmit={(value) =>
@@ -375,7 +390,13 @@ export default function App() {
 			data-theme={theme}
 		>
 			<div className="drawer lg:drawer-open min-h-screen">
-				<input id="office-drawer" type="checkbox" className="drawer-toggle" />
+				<input
+					id="office-drawer"
+					type="checkbox"
+					className="drawer-toggle"
+					checked={navigationOpen}
+					onChange={(event) => setNavigationOpen(event.target.checked)}
+				/>
 				<div className="drawer-content flex min-h-screen flex-col">
 					<header className="navbar sticky top-0 z-20 min-h-16 border-b border-base-300 bg-base-100/95 px-4 backdrop-blur sm:px-7">
 						<div className="flex-none lg:hidden">
@@ -397,7 +418,8 @@ export default function App() {
 						</div>
 						<div className="flex-none gap-2">
 							<div className="badge badge-success badge-outline gap-1">
-								● Demo
+								● {data.demoMode ? "Sample data" : "Office data"} ·{" "}
+								{data.persistentStorage ? "SQLite saved" : "In-memory"}
 							</div>
 							<div className="dropdown dropdown-end">
 								<button
@@ -449,12 +471,31 @@ export default function App() {
 								</div>
 							)}
 						</div>
-						<div className="alert mb-6 border border-warning/20 bg-warning/10 text-sm shadow-sm">
+						<div
+							className={`alert mb-6 border text-sm shadow-sm ${data.demoMode ? "border-warning/20 bg-warning/10" : "border-info/20 bg-info/10"}`}
+						>
 							<span aria-hidden="true">ⓘ</span>
-							<span>
-								<b>Demo workspace.</b> Sample records and changes reset when the
-								server restarts. No posts or invitations are sent.
-							</span>
+							{data.demoMode ? (
+								<span>
+									<b>Sample starter data loaded.</b>{" "}
+									{data.persistentStorage
+										? "Sample records are saved in SQLite and survive restarts."
+										: "Sample records and changes reset when the server restarts."}{" "}
+									No posts or invitations are sent.
+								</span>
+							) : (
+								<span>
+									<b>
+										{data.persistentStorage
+											? "Saved in SQLite."
+											: "In-memory workspace."}
+									</b>{" "}
+									{data.persistentStorage
+										? "Workspace records persist across restarts."
+										: "Workspace records reset when the server restarts."}{" "}
+									External connectors and social posting are not available yet.
+								</span>
+							)}
 						</div>
 						{me.role === "viewer" && (
 							<div className="alert mb-6 border border-info/20 bg-info/10 text-sm">
@@ -503,6 +544,7 @@ export default function App() {
 								members={data.members}
 								currentUser={me}
 								canEdit={canWrite("projects")}
+								canReadReports={canView("reports")}
 								currentUserId={me.id}
 								onSaveBoard={async (board) => {
 									await saveBoard(board);
@@ -524,14 +566,27 @@ export default function App() {
 							<Social
 								items={data.posts}
 								connections={data.connections}
+								demoMode={data.demoMode}
+								persistentStorage={data.persistentStorage}
 								canEdit={canWrite("social")}
 								onEdit={(item) => edit("post", item)}
 								onAdd={() => edit("post")}
 							/>
 						)}
+						{page === "reports" && (
+							<Reports
+								canEdit={canWrite("reports")}
+								currentUser={me}
+								members={data.members}
+								projects={data.projects}
+								tasks={data.tasks}
+							/>
+						)}
 						{page === "settings" && (
 							<Settings
 								data={data}
+								demoMode={data.demoMode}
+								persistentStorage={data.persistentStorage}
 								canManage={canManageTeam}
 								theme={theme}
 								onTheme={updateTheme}
@@ -677,12 +732,14 @@ function FullError({
 function AuthPage({
 	mode,
 	demoMode,
+	persistentStorage,
 	busy,
 	error,
 	onSubmit,
 }: {
 	mode: "setup" | "login";
 	demoMode: boolean;
+	persistentStorage: boolean;
 	busy: boolean;
 	error?: string;
 	onSubmit: (value: {
@@ -690,9 +747,11 @@ function AuthPage({
 		email: string;
 		password: string;
 		workspaceName?: string;
+		loadDemoData?: boolean;
 	}) => void;
 }) {
 	const [formError, setFormError] = useState("");
+	const [loadDemoData, setLoadDemoData] = useState(demoMode);
 	const form = useForm({
 		defaultValues: {
 			name: "",
@@ -707,7 +766,7 @@ function AuthPage({
 				return;
 			}
 			setFormError("");
-			onSubmit(mode === "setup" ? { ...value } : value);
+			onSubmit(mode === "setup" ? { ...value, loadDemoData } : value);
 		},
 	});
 	const field = (
@@ -819,12 +878,20 @@ function AuthPage({
 										: "Use your office account to continue."}
 								</p>
 							</div>
-							{demoMode && (
+							{!persistentStorage && (
 								<div className="alert border border-warning/20 bg-warning/10 text-sm">
 									<span>ⓘ</span>
 									<span>
-										Demo mode uses sample data and passwords. Everything resets
-										when the server restarts.
+										This in-memory workspace resets when the server restarts.
+									</span>
+								</div>
+							)}
+							{persistentStorage && (
+								<div className="alert border border-info/20 bg-info/10 text-sm">
+									<span>ⓘ</span>
+									<span>
+										Workspace records are saved in SQLite. External connectors
+										and social posting are not available yet.
 									</span>
 								</div>
 							)}
@@ -845,6 +912,35 @@ function AuthPage({
 									<>
 										{field("name", "Your name")}
 										{field("workspaceName", "Workspace name")}
+										<div className="flex items-start gap-3 rounded-box border border-base-300 p-3">
+											<input
+												id="bootstrap-sample-data"
+												type="checkbox"
+												className="checkbox checkbox-primary"
+												checked={loadDemoData}
+												disabled={busy}
+												aria-describedby="bootstrap-sample-data-help"
+												onChange={(event) =>
+													setLoadDemoData(event.target.checked)
+												}
+											/>
+											<div>
+												<label
+													htmlFor="bootstrap-sample-data"
+													className="block cursor-pointer font-semibold"
+												>
+													Start with sample office data
+												</label>
+												<p
+													id="bootstrap-sample-data-help"
+													className="text-sm text-base-content/65"
+												>
+													Creates sample teammates, customers, projects, boards,
+													tasks and a research report. No invitations or posts
+													are sent.
+												</p>
+											</div>
+										</div>
 									</>
 								)}
 								{field("email", "Email address", "email")}
@@ -1311,6 +1407,7 @@ function Projects({
 	members,
 	currentUser,
 	canEdit,
+	canReadReports,
 	currentUserId,
 	onSaveBoard,
 	onSaveTask,
@@ -1324,6 +1421,7 @@ function Projects({
 	members: Member[];
 	currentUser: Member;
 	canEdit: boolean;
+	canReadReports: boolean;
 	currentUserId: string;
 	onSaveBoard: (board: Board) => Promise<unknown>;
 	onSaveTask: (task: Task) => Promise<unknown>;
@@ -1335,6 +1433,13 @@ function Projects({
 		items[0]?.id || "",
 	);
 	const [selectedBoardId, setSelectedBoardId] = useState("");
+	const [selectedTaskId, setSelectedTaskId] = useState("");
+	const [taskSearch, setTaskSearch] = useState("");
+	const [ownerFilter, setOwnerFilter] = useState("");
+	const [priorityFilter, setPriorityFilter] = useState("");
+	const [dragTaskId, setDragTaskId] = useState("");
+	const [dropColumn, setDropColumn] = useState("");
+	const [moveNotice, setMoveNotice] = useState("");
 	const [taskDraft, setTaskDraft] = useState<Task | null>(null);
 	const [boardEditor, setBoardEditor] = useState(false);
 	const [boardName, setBoardName] = useState("");
@@ -1353,7 +1458,42 @@ function Projects({
 	const selectedBoard =
 		projectBoards.find((board) => board.id === selectedBoardId) ||
 		projectBoards[0];
-	const boardTasks = tasks.filter((task) => task.boardId === selectedBoard?.id);
+	const allBoardTasks = tasks.filter(
+		(task) => task.boardId === selectedBoard?.id,
+	);
+	const boardTasks = allBoardTasks.filter(
+		(task) =>
+			`${task.title} ${task.description}`
+				.toLowerCase()
+				.includes(taskSearch.toLowerCase()) &&
+			(!ownerFilter ||
+				(ownerFilter === "unassigned"
+					? !task.assigneeId
+					: task.assigneeId === ownerFilter)) &&
+			(!priorityFilter || task.priority === priorityFilter),
+	);
+	const selectedTask = tasks.find((task) => task.id === selectedTaskId);
+	const moveTask = async (task: Task, column: string) => {
+		if (!canEdit || saving || task.column === column) return;
+		setSaving(true);
+		setSaveError("");
+		setMoveNotice(`Moving ${task.title}…`);
+		try {
+			await onSaveTask({ ...task, column });
+			setMoveNotice(`Moved ${task.title} to ${column}.`);
+		} catch (error) {
+			setSaveError(
+				error instanceof Error
+					? error.message
+					: "Could not move task. Try again.",
+			);
+			setMoveNotice("");
+		} finally {
+			setSaving(false);
+			setDragTaskId("");
+			setDropColumn("");
+		}
+	};
 	const availableOwners = members.some((member) => member.id === currentUserId)
 		? members
 		: [...members, currentUser];
@@ -1658,6 +1798,83 @@ function Projects({
 								</div>
 							)}
 							{selectedBoard && (
+								<div
+									className="board-task-filters"
+									aria-label="Filter board tasks"
+								>
+									<label className="form-control">
+										<span className="label-text mb-1">Search tasks</span>
+										<input
+											className="input input-bordered input-sm"
+											value={taskSearch}
+											onChange={(event) => setTaskSearch(event.target.value)}
+											placeholder="Title or description"
+										/>
+									</label>
+									<div className="form-control">
+										<label
+											className="label-text mb-1"
+											htmlFor="board-filter-owner"
+										>
+											Owner
+										</label>
+										<select
+											id="board-filter-owner"
+											className="select select-bordered select-sm"
+											value={ownerFilter}
+											onChange={(event) => setOwnerFilter(event.target.value)}
+										>
+											<option value="">All owners</option>
+											<option value="unassigned">Unassigned</option>
+											{availableOwners.map((member) => (
+												<option key={member.id} value={member.id}>
+													{member.name}
+												</option>
+											))}
+										</select>
+									</div>
+									<div className="form-control">
+										<label
+											className="label-text mb-1"
+											htmlFor="board-filter-priority"
+										>
+											Priority
+										</label>
+										<select
+											id="board-filter-priority"
+											className="select select-bordered select-sm"
+											value={priorityFilter}
+											onChange={(event) =>
+												setPriorityFilter(event.target.value)
+											}
+										>
+											<option value="">All priorities</option>
+											{["low", "medium", "high", "urgent"].map((value) => (
+												<option key={value}>{value}</option>
+											))}
+										</select>
+									</div>
+									<span className="text-sm text-base-content/65">
+										{boardTasks.length} of {allBoardTasks.length} tasks
+									</span>
+									{(taskSearch || ownerFilter || priorityFilter) && (
+										<button
+											className="btn btn-ghost btn-sm"
+											onClick={() => {
+												setTaskSearch("");
+												setOwnerFilter("");
+												setPriorityFilter("");
+											}}
+										>
+											Clear filters
+										</button>
+									)}
+								</div>
+							)}
+							<p role="status" className="board-move-status">
+								{moveNotice}
+							</p>
+							{selectedBoard && (
 								<div className="board-columns">
 									{selectedBoard.columns.map((column) => {
 										const columnTasks = boardTasks.filter(
@@ -1665,7 +1882,29 @@ function Projects({
 										);
 										return (
 											<section
-												className="board-column"
+												className={`board-column ${dropColumn === column ? "is-drop-target" : ""}`}
+												onDragOver={(event) => {
+													if (canEdit && dragTaskId && !saving) {
+														event.preventDefault();
+														event.dataTransfer.dropEffect = "move";
+														setDropColumn(column);
+													}
+												}}
+												onDragLeave={(event) => {
+													if (
+														!event.currentTarget.contains(
+															event.relatedTarget as Node,
+														)
+													)
+														setDropColumn("");
+												}}
+												onDrop={(event) => {
+													event.preventDefault();
+													const task = allBoardTasks.find(
+														(task) => task.id === dragTaskId,
+													);
+													if (task) void moveTask(task, column);
+												}}
 												key={`${selectedBoard.id}-${column}`}
 												aria-label={`${column}, ${columnTasks.length} tasks`}
 											>
@@ -1679,14 +1918,36 @@ function Projects({
 															(member) => member.id === task.assigneeId,
 														);
 														return (
-															<article className="task-row" key={task.id}>
+															<article
+																className={`task-row ${dragTaskId === task.id ? "is-dragging" : ""}`}
+																key={task.id}
+																draggable={canEdit && !saving}
+																aria-busy={saving}
+																onDragStart={(event) => {
+																	if (
+																		(event.target as HTMLElement).closest(
+																			"select",
+																		)
+																	) {
+																		event.preventDefault();
+																		return;
+																	}
+																	setDragTaskId(task.id);
+																	event.dataTransfer.effectAllowed = "move";
+																	event.dataTransfer.setData(
+																		"text/plain",
+																		task.id,
+																	);
+																}}
+																onDragEnd={() => {
+																	setDragTaskId("");
+																	setDropColumn("");
+																}}
+															>
 																<button
 																	className="task-main"
-																	onClick={() =>
-																		canEdit && startTask(column, task)
-																	}
-																	disabled={!canEdit}
-																	aria-label={`${canEdit ? "Edit" : "View"} task: ${task.title}`}
+																	onClick={() => setSelectedTaskId(task.id)}
+																	aria-label={`Open task: ${task.title}`}
 																>
 																	<span className="task-title">
 																		{task.title}
@@ -1702,10 +1963,18 @@ function Projects({
 																		>
 																			{task.priority}
 																		</span>
-																		<span>{owner?.name || "Unassigned"}</span>
+																		<span>
+																			{owner?.name ||
+																				(task.assigneeId
+																					? "Assigned teammate"
+																					: "Unassigned")}
+																		</span>
 																	</span>
 																	<span className="task-due">
 																		Due {dateText(task.dueDate)}
+																		<span className="task-comment-count">
+																			{task.commentCount ?? 0} comments
+																		</span>
 																	</span>
 																</button>
 																{canEdit &&
@@ -1724,13 +1993,9 @@ function Projects({
 																			className="select select-bordered select-xs task-move"
 																			aria-label={`Move ${task.title} to column`}
 																			value={column}
+																			disabled={saving}
 																			onChange={(event) =>
-																				void save(() =>
-																					onSaveTask({
-																						...task,
-																						column: event.target.value,
-																					}),
-																				)
+																				void moveTask(task, event.target.value)
 																			}
 																		>
 																			{selectedBoard.columns.map((option) => (
@@ -1777,6 +2042,30 @@ function Projects({
 					onClick={onAdd}
 				/>
 			)}
+			{selectedTask && (
+				<TaskDetails
+					key={selectedTask.id}
+					task={selectedTask}
+					members={availableOwners}
+					columns={
+						boards.find((board) => board.id === selectedTask.boardId)
+							?.columns || []
+					}
+					currentUser={currentUser}
+					canEdit={canEdit}
+					canReadReports={canReadReports}
+					projectName={
+						items.find((project) => project.id === selectedTask.projectId)
+							?.name || "Project"
+					}
+					boardName={
+						boards.find((board) => board.id === selectedTask.boardId)?.name ||
+						"Board"
+					}
+					onClose={() => setSelectedTaskId("")}
+					onSave={onSaveTask}
+				/>
+			)}
 			{taskDraft && (
 				<TaskEditor
 					task={taskDraft}
@@ -1813,6 +2102,7 @@ function TaskEditor({
 	onSave: (task: Task) => void;
 }) {
 	const [value, setValue] = useState(task);
+	const fieldId = useId();
 	return (
 		<div
 			className="modal modal-open"
@@ -1860,9 +2150,12 @@ function TaskEditor({
 						/>
 					</label>
 					<div className="grid gap-4 sm:grid-cols-2">
-						<label className="form-control">
-							<span className="label-text mb-1">Owner</span>
+						<div className="form-control">
+							<label className="label-text mb-1" htmlFor={`${fieldId}-owner`}>
+								Owner
+							</label>
 							<select
+								id={`${fieldId}-owner`}
 								className="select select-bordered"
 								value={value.assigneeId}
 								onChange={(event) =>
@@ -1878,10 +2171,16 @@ function TaskEditor({
 										</option>
 									))}
 							</select>
-						</label>
-						<label className="form-control">
-							<span className="label-text mb-1">Priority</span>
+						</div>
+						<div className="form-control">
+							<label
+								className="label-text mb-1"
+								htmlFor={`${fieldId}-priority`}
+							>
+								Priority
+							</label>
 							<select
+								id={`${fieldId}-priority`}
 								className="select select-bordered"
 								value={value.priority}
 								onChange={(event) =>
@@ -1894,10 +2193,13 @@ function TaskEditor({
 									</option>
 								))}
 							</select>
-						</label>
-						<label className="form-control">
-							<span className="label-text mb-1">Column</span>
+						</div>
+						<div className="form-control">
+							<label className="label-text mb-1" htmlFor={`${fieldId}-column`}>
+								Column
+							</label>
 							<select
+								id={`${fieldId}-column`}
 								className="select select-bordered"
 								value={value.column}
 								onChange={(event) =>
@@ -1908,7 +2210,7 @@ function TaskEditor({
 									<option key={column}>{column}</option>
 								))}
 							</select>
-						</label>
+						</div>
 						<label className="form-control">
 							<span className="label-text mb-1">Due date</span>
 							<input
@@ -1946,12 +2248,16 @@ function TaskEditor({
 function Social({
 	items,
 	connections,
+	demoMode,
+	persistentStorage,
 	canEdit,
 	onEdit,
 	onAdd,
 }: {
 	items: ScheduledPost[];
 	connections: Workspace["connections"];
+	demoMode: boolean;
+	persistentStorage: boolean;
 	canEdit: boolean;
 	onEdit: (item: ScheduledPost) => void;
 	onAdd: () => void;
@@ -1962,11 +2268,17 @@ function Social({
 	);
 	return (
 		<>
-			<div className="alert mb-5 border border-info/20 bg-info/10 text-sm">
+			<div
+				className={`alert mb-5 border text-sm ${persistentStorage ? "border-info/20 bg-info/10" : "border-warning/20 bg-warning/10"}`}
+			>
 				<span>ⓘ</span>
 				<span>
-					Channels and scheduled times are demo records. Posts are never
-					published from this workspace.
+					{demoMode
+						? "Channels and scheduled times are sample records. Posts are never published from this workspace."
+						: "The queue contains office records. Social posting is not available yet."}{" "}
+					{persistentStorage
+						? "Changes are saved in SQLite."
+						: "Changes reset when the server restarts."}
 				</span>
 			</div>
 			<PageTitle
@@ -1974,7 +2286,8 @@ function Social({
 				heading="Social queue"
 				description="Plan content and keep review status clear. Nothing here is published."
 				action={
-					canEdit && (
+					canEdit &&
+					connections.length > 0 && (
 						<button className="btn btn-primary" onClick={onAdd}>
 							＋ Compose post
 						</button>
@@ -1983,10 +2296,15 @@ function Social({
 			/>
 			<section className="card mb-5 border border-base-300 bg-base-100 shadow-sm">
 				<div className="card-body">
-					<h2 className="font-semibold">Demo channels</h2>
+					<h2 className="font-semibold">
+						{demoMode ? "Demo channels" : "Social channels"}
+					</h2>
 					<p className="text-sm text-base-content/60">
-						These entries illustrate the queue. Connecting accounts is not
-						available.
+						{demoMode
+							? "These entries illustrate the queue. Connecting accounts is not available."
+							: connections.length > 0
+								? "Social account connections and posting are not available yet."
+								: "No social channels are connected yet. Account connections are not available."}
 					</p>
 					<div className="mt-2 flex flex-wrap gap-2">
 						{connections.map((connection) => (
@@ -2064,8 +2382,16 @@ function Social({
 			) : (
 				<Empty
 					title="Nothing in the queue"
-					body="Draft a post to plan content for your team. The demo does not publish posts."
-					action={canEdit ? "Compose post" : undefined}
+					body={
+						connections.length === 0
+							? "Connect a social channel before composing a post."
+							: demoMode
+								? "Draft a post to plan content for your team. The demo does not publish posts."
+								: "Draft a post to plan content for your team. Social posting is not available yet."
+					}
+					action={
+						canEdit && connections.length > 0 ? "Compose post" : undefined
+					}
 					onClick={onAdd}
 				/>
 			)}
@@ -2075,6 +2401,8 @@ function Social({
 
 function Settings({
 	data,
+	demoMode,
+	persistentStorage,
 	canManage,
 	theme,
 	onTheme,
@@ -2083,6 +2411,8 @@ function Settings({
 	onSecret,
 }: {
 	data: Workspace;
+	demoMode: boolean;
+	persistentStorage: boolean;
 	canManage: boolean;
 	theme: string;
 	onTheme: (theme: string) => void;
@@ -2099,6 +2429,7 @@ function Settings({
 	const [keyExpiry, setKeyExpiry] = useState(90);
 	const [keyError, setKeyError] = useState("");
 	const [copyError, setCopyError] = useState("");
+	const fieldId = useId();
 	const queryClient = useQueryClient();
 	const keysQuery = useQuery({
 		queryKey: ["agent-keys"],
@@ -2173,9 +2504,15 @@ function Settings({
 									disabled={!canManage}
 								/>
 							</label>
-							<label className="form-control">
-								<span className="label-text mb-2 font-medium">Timezone</span>
+							<div className="form-control">
+								<label
+									className="label-text mb-2 font-medium"
+									htmlFor={`${fieldId}-timezone`}
+								>
+									Timezone
+								</label>
 								<select
+									id={`${fieldId}-timezone`}
 									className="select select-bordered"
 									value={timezone}
 									onChange={(e) => setTimezone(e.target.value)}
@@ -2185,11 +2522,18 @@ function Settings({
 										<option key={zone}>{zone}</option>
 									))}
 								</select>
-							</label>
-							<label className="form-control">
-								<span className="label-text mb-2 font-medium">Color theme</span>
+							</div>
+							<div className="form-control">
+								<label
+									className="label-text mb-2 font-medium"
+									htmlFor={`${fieldId}-theme`}
+								>
+									Color theme
+								</label>
 								<select
+									id={`${fieldId}-theme`}
 									className="select select-bordered"
+									aria-describedby={`${fieldId}-theme-help`}
 									value={theme}
 									onChange={(e) => onTheme(e.target.value)}
 								>
@@ -2199,11 +2543,14 @@ function Settings({
 										</option>
 									))}
 								</select>
-								<span className="label-text-alt mt-1">
+								<span
+									id={`${fieldId}-theme-help`}
+									className="label-text-alt mt-1"
+								>
 									Your theme applies in this browser. The workspace default is
 									saved by an administrator.
 								</span>
-							</label>
+							</div>
 							{canManage && (
 								<div className="card-actions justify-end">
 									<button className="btn btn-primary">
@@ -2241,11 +2588,17 @@ function Settings({
 								? "All modules"
 								: data.currentUser.access.join(", ") || "No business modules"}
 						</p>
-						<div className="alert mt-2 border border-warning/20 bg-warning/10 text-sm">
+						<div
+							className={`alert mt-2 border text-sm ${persistentStorage ? "border-info/20 bg-info/10" : "border-warning/20 bg-warning/10"}`}
+						>
 							<span>ⓘ</span>
 							<span>
-								Workspace changes and sample records reset when the demo server
-								restarts.
+								{demoMode
+									? "This workspace includes sample records."
+									: "This workspace contains office records."}{" "}
+								{persistentStorage
+									? "Changes are saved in SQLite and persist across server restarts."
+									: "Changes reset when the server restarts."}
 							</span>
 						</div>
 					</div>
@@ -2259,11 +2612,22 @@ function Settings({
 							heading="AI access keys"
 							description="Create scoped keys for agents that use the Office Office RPC interface."
 						/>
-						<div className="alert border border-warning/20 bg-warning/10 text-sm">
+						<div
+							className={`alert border text-sm ${persistentStorage ? "border-info/20 bg-info/10" : "border-warning/20 bg-warning/10"}`}
+						>
 							<span>ⓘ</span>
 							<span>
-								Keys work with the <code>/mcp</code> endpoint. This demo keeps
-								key metadata in memory and resets it when the server restarts.
+								{!persistentStorage ? (
+									<>
+										Keys work with the <code>/mcp</code> endpoint. Key metadata
+										resets when the server restarts.
+									</>
+								) : (
+									<>
+										Keys work with the <code>/mcp</code> endpoint. Key metadata
+										is saved in SQLite.
+									</>
+								)}
 							</span>
 						</div>
 						{keyError && (
@@ -2312,6 +2676,8 @@ function Settings({
 										"customers:write",
 										"social:read",
 										"social:write",
+										"reports:read",
+										"reports:write",
 									].map((scope) => (
 										<label
 											className="label cursor-pointer justify-start gap-2"
@@ -2334,9 +2700,15 @@ function Settings({
 									))}
 								</div>
 							</fieldset>
-							<label className="form-control">
-								<span className="label-text mb-1">Expires after</span>
+							<div className="form-control">
+								<label
+									className="label-text mb-1"
+									htmlFor={`${fieldId}-key-expiry`}
+								>
+									Expires after
+								</label>
 								<select
+									id={`${fieldId}-key-expiry`}
 									className="select select-bordered"
 									value={keyExpiry}
 									onChange={(event) => setKeyExpiry(Number(event.target.value))}
@@ -2345,7 +2717,7 @@ function Settings({
 									<option value={30}>30 days</option>
 									<option value={90}>90 days</option>
 								</select>
-							</label>
+							</div>
 							<div className="flex items-end">
 								<button
 									className="btn btn-primary"
@@ -2498,6 +2870,7 @@ function RecordDialog({
 	onSubmit: (value: RecordDraft) => void;
 }) {
 	const [formError, setFormError] = useState("");
+	const fieldId = useId();
 	const isEdit = Boolean(initial);
 	const readString = (key: keyof RecordDraft, fallback = "") => {
 		const candidate = initial?.[key];
@@ -2518,7 +2891,7 @@ function RecordDialog({
 			? initial.access.filter(
 					(entry): entry is string => typeof entry === "string",
 				)
-			: ["customers", "projects"],
+			: ["customers", "projects", "reports"],
 		password: "",
 		customerId: readString("customerId"),
 		summary: readString("summary"),
@@ -2737,13 +3110,19 @@ function RecordDialog({
 				)}
 				<form className="mt-5 grid gap-4 sm:grid-cols-2" onSubmit={submit}>
 					{fields.map((field) => (
-						<label
+						<div
 							key={field.name}
 							className={`form-control ${field.textarea ? "sm:col-span-2" : ""}`}
 						>
-							<span className="label-text mb-2 font-medium">{field.label}</span>
+							<label
+								className="label-text mb-2 font-medium"
+								htmlFor={`${fieldId}-${field.name}`}
+							>
+								{field.label}
+							</label>
 							{field.options ? (
 								<select
+									id={`${fieldId}-${field.name}`}
 									className="select select-bordered"
 									value={values[field.name]}
 									onChange={(event) => update(field.name, event.target.value)}
@@ -2756,19 +3135,21 @@ function RecordDialog({
 								</select>
 							) : field.textarea ? (
 								<textarea
+									id={`${fieldId}-${field.name}`}
 									className="textarea textarea-bordered min-h-28"
 									value={values[field.name]}
 									onChange={(event) => update(field.name, event.target.value)}
 								/>
 							) : (
 								<input
+									id={`${fieldId}-${field.name}`}
 									className="input input-bordered"
 									type={field.type || "text"}
 									value={values[field.name]}
 									onChange={(event) => update(field.name, event.target.value)}
 								/>
 							)}
-						</label>
+						</div>
 					))}
 					{kind === "member" && (
 						<fieldset className="sm:col-span-2">
@@ -2780,26 +3161,31 @@ function RecordDialog({
 								only read selected modules.
 							</p>
 							<div className="flex flex-wrap gap-3">
-								{["team", "customers", "projects", "social", "settings"].map(
-									(module) => (
-										<label className="label cursor-pointer gap-2" key={module}>
-											<input
-												className="checkbox checkbox-primary checkbox-sm"
-												type="checkbox"
-												checked={values.access.includes(module)}
-												onChange={() =>
-													setValues((current) => ({
-														...current,
-														access: current.access.includes(module)
-															? current.access.filter((item) => item !== module)
-															: [...current.access, module],
-													}))
-												}
-											/>
-											<span className="label-text capitalize">{module}</span>
-										</label>
-									),
-								)}
+								{[
+									"team",
+									"customers",
+									"projects",
+									"reports",
+									"social",
+									"settings",
+								].map((module) => (
+									<label className="label cursor-pointer gap-2" key={module}>
+										<input
+											className="checkbox checkbox-primary checkbox-sm"
+											type="checkbox"
+											checked={values.access.includes(module)}
+											onChange={() =>
+												setValues((current) => ({
+													...current,
+													access: current.access.includes(module)
+														? current.access.filter((item) => item !== module)
+														: [...current.access, module],
+												}))
+											}
+										/>
+										<span className="label-text capitalize">{module}</span>
+									</label>
+								))}
 							</div>
 						</fieldset>
 					)}

@@ -10,3 +10,18 @@ node_modules/
 
 /playwright-report/
 /test-results/
+
+# Local SQLite databases and sidecars, including custom development paths.
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite.lock
+*.sqlite3.lock
+*.sqlite-journal
+*.sqlite3-journal
+
+# Local AWS credentials/configuration.
+/.aws

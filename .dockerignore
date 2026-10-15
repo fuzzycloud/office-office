@@ -4,3 +4,9 @@ target
 **/dist
 .env*
 data
+.aws
+playwright-report
+test-results
+*.sqlite
+*.sqlite3
+*.sqlite3-*

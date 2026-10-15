@@ -1,0 +1,10 @@
+# Litestream 0.5+ operator template, not started by the application or image.
+# All variables must be exported for the Litestream process.
+# OFFICE_DATABASE_PATH should be absolute and match the application database.
+dbs:
+  - path: ${OFFICE_DATABASE_PATH}
+    replica:
+      type: s3
+      bucket: ${OFFICE_BACKUP_BUCKET}
+      path: ${OFFICE_BACKUP_PREFIX}
+      region: ${AWS_REGION}

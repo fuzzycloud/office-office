@@ -11,6 +11,13 @@ import {
 	CustomerSchema,
 	BoardSchema,
 	TaskSchema,
+	ListTaskDiscussionRequestSchema,
+	SaveTaskCommentRequestSchema,
+	DeleteTaskCommentRequestSchema,
+	ListReportsRequestSchema,
+	GetReportRequestSchema,
+	SaveReportRequestSchema,
+	ReportSchema,
 	GetSetupStatusRequestSchema,
 	GetWorkspaceRequestSchema,
 	LoginRequestSchema,
@@ -33,6 +40,7 @@ import {
 import type {
 	GetWorkspaceResponse,
 	WorkspaceSettings,
+	Report as GeneratedReport,
 } from "./gen/office/v1/office_pb";
 
 const key = "office-office-session";
@@ -106,6 +114,7 @@ export type Task = {
 	assigneeId: string;
 	priority: string;
 	dueDate: string;
+	commentCount?: number;
 };
 export type AgentKey = {
 	id: string;
@@ -123,6 +132,7 @@ export type ScheduledPost = {
 	status: string;
 	authorId: string;
 };
+export type Report = GeneratedReport;
 export type Workspace = GetWorkspaceResponse & {
 	settings: WorkspaceSettings;
 	currentUser: NonNullable<GetWorkspaceResponse["currentUser"]>;
@@ -135,6 +145,7 @@ export async function bootstrapAdmin(payload: {
 	email: string;
 	password: string;
 	workspaceName?: string;
+	loadDemoData: boolean;
 }) {
 	return client.bootstrapAdmin(
 		create(BootstrapAdminRequestSchema, {
@@ -142,6 +153,7 @@ export async function bootstrapAdmin(payload: {
 			email: payload.email,
 			password: payload.password,
 			workspaceName: payload.workspaceName || "",
+			loadDemoData: payload.loadDemoData,
 		}),
 	);
 }
@@ -193,6 +205,44 @@ export async function saveTask(task: Task) {
 		create(SaveTaskRequestSchema, { task: create(TaskSchema, task) }),
 	);
 }
+export async function listReports(input: {
+	query: string;
+	status: string;
+	projectId?: string;
+	pageSize: number;
+	offset: number;
+}) {
+	return client.listReports(
+		create(ListReportsRequestSchema, {
+			...input,
+			projectId: input.projectId ?? "",
+		}),
+	);
+}
+export async function getReport(id: string) {
+	const response = await client.getReport(
+		create(GetReportRequestSchema, { id }),
+	);
+	if (!response.report)
+		throw new Error("The report response is missing its report.");
+	return response;
+}
+export async function saveReport(
+	report: Omit<Report, "$typeName" | "sources"> & {
+		sources: Array<{ title: string; url: string }>;
+	},
+	expectedRevision: number,
+) {
+	const response = await client.saveReport(
+		create(SaveReportRequestSchema, {
+			report: create(ReportSchema, report),
+			expectedRevision,
+		}),
+	);
+	if (!response.report)
+		throw new Error("The save response is missing its report.");
+	return response.report;
+}
 export async function listAgentKeys() {
 	return client.listAgentKeys(create(ListAgentKeysRequestSchema));
 }
@@ -216,5 +266,28 @@ export async function saveSettings(settings: WorkspaceSettings) {
 		create(SaveSettingsRequestSchema, {
 			settings: create(WorkspaceSettingsSchema, settings),
 		}),
+	);
+}
+
+export async function listTaskDiscussion(taskId: string) {
+	return client.listTaskDiscussion(
+		create(ListTaskDiscussionRequestSchema, { taskId }),
+	);
+}
+export async function saveTaskComment(input: {
+	taskId: string;
+	commentId: string;
+	body: string;
+	expectedRevision: number;
+}) {
+	return client.saveTaskComment(create(SaveTaskCommentRequestSchema, input));
+}
+export async function deleteTaskComment(input: {
+	taskId: string;
+	commentId: string;
+	expectedRevision: number;
+}) {
+	return client.deleteTaskComment(
+		create(DeleteTaskCommentRequestSchema, input),
 	);
 }

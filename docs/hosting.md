@@ -1,31 +1,31 @@
 # Hosting
 
-## Current preview
+## Current development build
 
-The GHCR `edge` image is a preview of the UI-first demo. The application keeps users, roles, settings and records in memory; they reset when the process restarts. It is not ready for public authentication or real customer data. Keep local runs on loopback and do not place it behind a public ingress.
+The application now persists events and authentication in SQLite. Normal startup uses `data/office-office.sqlite3`, configurable with `OFFICE_DATABASE_PATH`, and begins with no sample records. First-admin setup runs once; restarting replays the journal and restores accounts, records, AI-key digests and the JWT signing key.
 
-The demo starts without token, password or provider-secret environment variables. The first screen collects workspace and administrator credentials. The server creates an Argon2 password hash and issues short-lived JWTs using a random key held only for the process lifetime. Restarting clears the workspace and sessions.
+This is not yet a publicly deployed or production-reviewed service. Keep setup on loopback or behind a private ingress. The first visitor to an empty office can claim administrator access. HTTPS, request throttling, password recovery, privacy retention/erasure and a verified operational backup path remain necessary before public customer use.
 
-The demo's sample customers, projects and social channels come from backend RPC seed behavior. They are fictitious, visibly labeled, reset on restart, and never trigger invitations or external publishing. No database, durable key storage, social OAuth or backup service is implemented.
+`OFFICE_DEMO_MODE=true` selects in-memory storage that resets on restart and preselects the optional sample-data checkbox during first-admin registration. Sample records are created by the engine scenario only after opt-in; the same option can populate a persistent SQLite office. Storage mode is independent of `OFFICE_ALLOW_REMOTE=true`, the acknowledgement required for a non-loopback `ADDR`. Neither flag grants permissions or supplies a production security boundary.
 
-GitHub Actions builds and publishes `ghcr.io/fuzzycloud/office-office` after the configured checks. The workflow publishes images; it does not deploy a server. Image publication is not evidence of a production-ready service. See [release management](releases.md).
+## One persistent application instance
 
-## Future durable hosting
+The hosted shape is one application writer and one SQLite volume. Katha handles domain events and rebuildable projections; kathputli serializes commands. SQLite uses WAL with FULL synchronous commits. A process lock rejects another application writer. Do not use a shared network filesystem or run several application instances against the same file.
 
-The planned persistence model uses one SQLite database in WAL mode with a single writer. Katha will hold the event core and kathputli will serialize commands. Litestream is planned for offsite backup, not active-active availability. The deployment must restore and validate a backup before serving traffic and must never replace an existing database during bootstrap.
+The image sets `ADDR=0.0.0.0:8080`, `OFFICE_ALLOW_REMOTE=true` and `OFFICE_DATABASE_PATH=/data/office-office.sqlite3`. It runs as UID/GID 10001. Mount a persistent volume at `/data`, owned by that identity and restricted to mode 0700. Replacing a container without persistent storage discards its office. No Kamal deployment is configured.
 
-Durable authentication and application configuration key material need protected backup and recovery. Provider secrets will be encrypted server-side, with a separate recovery secret for decryption. Deployment credentials, including AWS environment or identity credentials, do not replace that application recovery material. Do not invent environment passwords or tokens for the current demo.
+The database includes private authentication tables and a signing key. Protect the volume with encryption and restricted access. Provider credentials are not implemented. [Storage and recovery](storage.md) covers transaction guarantees, event retention and recovery.
 
-Before opening a public service, implement and review durable identity, key recovery, audit history, authorization, backup restore and social publishing safety. Provider connections and publishing must be scoped and audited. Never forward provider secrets to agents.
+## Offsite backup
+
+[deploy/litestream.yml](../deploy/litestream.yml) is an optional operator template for Litestream 0.5+ S3 replication. The binary is not bundled or launched by this image, and live AWS upload/restore has not been tested. Run a separately managed process with access to the database volume and AWS workload credentials. Set its bucket, prefix and region through environment variables. Monitor replication and exercise the documented restore drill before relying on it.
+
+Litestream protects recovery; it is not active-active availability. Restore to a separate path, validate SQLite and application replay before promotion, and never silently replace an existing database or fall back to first-admin setup after a restore error. Database backups include signing material and password/key hashes. Restoring an earlier backup can undo revocations and password changes.
 
 ## Image publication
 
-The GitHub Actions workflow uses the workflow `GITHUB_TOKEN` and `packages: write` permission. It builds an image; there is no server deployment or Kamal job. Organization settings must permit GitHub Packages and package creation. If the package already exists, grant the repository workflow access. After the first publish, set package visibility to Public only if anonymous pulls are intended. A public source repository does not automatically make its container package public. See [GitHub's container registry documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
+GitHub Actions builds and publishes `ghcr.io/fuzzycloud/office-office` after checks, using `GITHUB_TOKEN` and `packages: write`. The workflow publishes images; it does not deploy a server or configure backup credentials. See [release management](releases.md).
 
-For reproducible image inspection, use a `sha-<full-commit>` tag or image digest. Do not treat any published tag as authorization to expose the current demo publicly.
+Organization settings must allow GitHub Packages and package creation; an existing package must grant this repository workflow access. Set the package's visibility to Public explicitly if anonymous pulls are intended. A public source repository does not automatically make the container public. See [GitHub's container registry documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
 
-## Optional Docker Hub publishing
-
-Docker Hub publishing is not configured. If it is added later, configure repository Actions secrets named `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`, scoped to publishing the selected repository. Never put runtime office passwords, JWT keys or provider credentials in CI secrets for image publication.
-
-The preview image explicitly sets `OFFICE_DEMO_MODE=true` to permit container networking. A direct binary defaults to loopback and rejects a non-loopback `ADDR` unless that flag is explicitly enabled. This is a demo acknowledgement, not a production mode or an authentication boundary.
+Use a `sha-<full-commit>` tag or image digest for reproducible deployment. Docker Hub publishing is not configured; it can later use repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`. Runtime database and AWS secrets do not belong in image-publication CI.

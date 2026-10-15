@@ -45,7 +45,8 @@ async fn bootstrap(app: &Router) -> String {
         None,
         json!({
             "name":"Preview Admin", "email":"admin@example.test",
-            "password":"sample-password-123", "workspaceName":"Preview Office"
+            "password":"sample-password-123", "workspaceName":"Preview Office",
+            "loadDemoData":true
         }),
     )
     .await;
@@ -70,7 +71,20 @@ async fn setup_auth_and_preview_records_through_rpc() {
     let (status, workspace) = rpc(app.clone(), "GetWorkspace", Some(&token), json!({})).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(workspace["demoMode"], true);
-    assert_eq!(workspace["members"][0]["email"], "maya@example.test");
+    let sample_member = workspace["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|member| member["name"] == "Maya Rao (sample)")
+        .unwrap();
+    assert!(
+        sample_member["email"]
+            .as_str()
+            .unwrap()
+            .ends_with("@example.test")
+    );
+    assert_eq!(sample_member["status"], "pending");
+    let connection_id = workspace["connections"][0]["id"].as_str().unwrap();
     assert_eq!(workspace["connections"][0]["demo"], true);
     let (status, customer) = rpc(
         app.clone(),
@@ -91,7 +105,7 @@ async fn setup_auth_and_preview_records_through_rpc() {
     assert_eq!(status, StatusCode::OK, "{project}");
     assert_eq!(project["project"]["status"], "on_hold");
     let (status, post) = rpc(app.clone(), "SavePost", Some(&token), json!({
-        "post": {"connectionId":"demo-social-1", "content":"Sample scheduled post", "status":"queued", "scheduledAt":"2026-12-31T09:00:00Z"}
+        "post": {"connectionId":connection_id, "content":"Sample scheduled post", "status":"queued", "scheduledAt":"2026-12-31T09:00:00Z"}
     })).await;
     assert_eq!(status, StatusCode::OK, "{post}");
     assert_eq!(post["post"]["status"], "queued");
@@ -115,7 +129,7 @@ async fn setup_auth_and_preview_records_through_rpc() {
         "SavePost",
         Some(&token),
         json!({"post":{
-            "connectionId":"demo-social-1", "content":"Would publish", "status":"published"
+            "connectionId":connection_id, "content":"Would publish", "status":"published"
         }}),
     )
     .await;
@@ -167,7 +181,7 @@ async fn concurrent_bootstrap_only_creates_one_admin() {
         b.1["token"].as_str().unwrap()
     };
     let (_, state) = rpc(app, "GetWorkspace", Some(token), json!({})).await;
-    assert_eq!(state["members"].as_array().unwrap().len(), 2); // one seed, one real admin
+    assert_eq!(state["members"].as_array().unwrap().len(), 1);
 }
 
 #[tokio::test]

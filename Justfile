@@ -43,7 +43,6 @@ release-plan level="patch": release-check
 release level="patch": check
     cargo release --workspace {{quote(level)}} --execute
 
-# Browser smoke test requires the production UI and an available local TCP port.
+# Builds the UI/server once, then gives every browser test its own process and database.
 test-e2e:
-    pnpm build
     pnpm test:e2e

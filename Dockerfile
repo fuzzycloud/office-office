@@ -33,11 +33,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo build --locked --release -p office-server
 
 FROM debian:bookworm-slim
-RUN groupadd --gid 10001 office && useradd --uid 10001 --gid office --no-create-home office && mkdir /data && chown office:office /data
+RUN groupadd --gid 10001 office && useradd --uid 10001 --gid office --no-create-home office && mkdir /data && chown office:office /data && chmod 700 /data
 WORKDIR /app
 COPY --from=builder /src/target/release/office-server /usr/local/bin/office-server
 COPY --from=web /src/apps/web/dist /app/apps/web/dist
-ENV ADDR=0.0.0.0:8080 OFFICE_DEMO_MODE=true
+ENV ADDR=0.0.0.0:8080 OFFICE_ALLOW_REMOTE=true OFFICE_DATABASE_PATH=/data/office-office.sqlite3
 USER office
 EXPOSE 8080
 CMD ["office-server"]

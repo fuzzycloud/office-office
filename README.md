@@ -2,15 +2,17 @@
 
 A shared daily office workspace for humans and AI. Office Office is building toward a clear view of targets, strategy, projects, pricing history and progress. It is independent open-source software, inspired by the Hindi sitcom [Office Office](https://en.wikipedia.org/wiki/Office_Office), and is not affiliated with the show or its creators.
 
-Hermes owns conversational channels and agent execution. Office Office owns office records and, as a separate product capability, its future social publishing queue. It does not provide another agent runtime.
+Hermes owns conversational channels and agent execution. Office Office owns office records and its social publishing queue. It does not provide another agent runtime.
 
 ## Current phase
 
-The current phase is a UI-first demonstration. Authentication, users, teams, profiles, role assignments and workspace records live in an in-memory event core using katha, with commands serialized through a kathputli actor mailbox. Data resets whenever the server restarts; the demo does not use katha-sqlx or a durable database. The first screen bootstraps the workspace with its name and the first administrator's name, email and password. The server serializes competing bootstrap requests so only one can win. Subsequent users sign in with email and password. Passwords are stored as Argon2 hashes; signed JWTs use a random key created at runtime and expire after 15 minutes. This runtime key and all demo data disappear on restart.
+The default server stores workspace events and private authentication state in SQLite at `data/office-office.sqlite3`. Katha supplies the event aggregate and replayable events; kathputli serializes commands through one actor. SQLite uses WAL mode and `synchronous=FULL`. One process holds an exclusive lock for a database file. A command's domain events, activity record and authentication state commit in one transaction; the RPC succeeds only after commit, and a failed transaction rolls the staged state back. The in-memory read projection is rebuilt by replaying the event log at startup.
 
-The demo offers `admin`, `manager`, `member` and `viewer` roles. Admins manage teams and settings; managers and members can write in modules they can access; viewers can read only. Module access covers team, customers, projects, social and settings. The server checks the current role and module access on every request. Workspace settings include timezone and the full set of 35 daisyUI themes.
+The initial durable workspace is empty. Bootstrap creates the first administrator using a workspace name, name, email and password. Passwords use Argon2 hashes. AI keys are shown once and only their digests are stored. The JWT signing key and setup state live in private SQLite tables so sessions remain valid across a restart. Roles are `admin`, `manager`, `member` and `viewer`; module access covers team, customers, projects, reports, social and settings. The server checks permissions on every RPC. Workspace settings include timezone and the full set of 35 daisyUI themes.
 
-Sample customers, projects and social channels are seeded by the backend RPC demo path. They are visibly marked as sample data and reset on restart. Demo credentials and sample records are fictitious: the demo does not send posts, invitations, or contact any external service. Social provider connections, durable storage and backup are not implemented.
+On the first-admin screen, optionally select **Start with sample office data**. The server runs an explicit starter scenario through the same typed commands, validation, permissions, actor and events as normal writes. It creates labeled sample teammates, customers, a project with boards and tasks, a research report, and a disconnected social channel with a draft post. The administrator chooses their own password; sample teammates have no shared login credentials. Bootstrap and the complete scenario commit atomically.
+
+This is optional starter content for testing and exploring the app. With normal SQLite storage the samples survive restarts and remain ordinary editable records. `OFFICE_DEMO_MODE=true` instead selects temporary in-memory storage and preselects the sample option on registration; the choice can still be unchecked. No mode sends posts, invitations or provider requests. A non-loopback `ADDR` separately requires `OFFICE_ALLOW_REMOTE=true`; protect the initial setup behind a private ingress.
 
 ## Run locally
 
@@ -22,29 +24,39 @@ just generate
 just server
 ```
 
-In another terminal, run `just web` and open the Vite URL. Choose the workspace and first admin credentials on the bootstrap screen. The local demo starts without passwords, access tokens or provider secrets in environment variables. Keep it on loopback; do not expose the in-memory demo as a public service.
+In another terminal, run `just web` and open the Vite URL. The durable server creates the `data` directory and database as needed. Choose the workspace and first admin credentials on the bootstrap screen. Keep local use on loopback unless you have deliberately configured and protected an ingress.
 
-For a production UI build, use `just build`, then run `target/release/office-server` from the repository root and open http://127.0.0.1:8080. The server currently has no durable database, so restarting it resets users and all records.
+For a container, mount persistent storage at `/data`; the image runs as UID 10001, stores the database at `/data/office-office.sqlite3`, and restricts the directory to owner access. Preserve that volume across restarts. Container networking sets `OFFICE_ALLOW_REMOTE=true`; put the service behind a private ingress and do not expose its bootstrap endpoint publicly.
 
 ## Development
 
-The protobuf service is the shared domain boundary for the browser and agents. Project workspaces support multiple boards with custom columns and tasks, owners, priorities and due dates. The MCP adapter uses the same actor commands and permission checks. Seed data is created through backend RPC behavior, not hardcoded in the frontend. Run `just check` for the repository's full check suite; `just generate` lints protobuf and regenerates the TypeScript client. Do not edit generated clients by hand. `just test-e2e` builds the UI and runs a browser smoke flow for setup, team onboarding, customers, projects, the queue and themes. CI runs this flow and uploads desktop/mobile screenshots.
+The protobuf service is the shared domain boundary for the browser and agents. Project workspaces support multiple boards with custom columns and tasks, owners, priorities and due dates. Task details include comments and a separate activity timeline for humans and agents. Comments support revision-checked edits and event-based soft deletion. See [tasks and discussions](docs/tasks.md). The MCP adapter uses the same actor commands and permission checks. Sample records are created by an explicit engine-command scenario, not by pre-filling projections, direct database inserts or frontend fixtures. Tests can call the typed engine without starting an HTTP server. See [starter data and engine testing](docs/demo.md). Run `just check` for the repository's full check suite; `just generate` lints protobuf and regenerates the TypeScript client. Do not edit generated clients by hand. `just test-e2e` builds the UI and server and runs isolated browser/HTTP scenarios against disposable SQLite offices, including task discussions, reports, permissions, restart persistence and MCP access. See [automated testing](docs/testing.md) for setup, focused runs and failure reports.
+
+The durable adapter uses rusqlite to put event writes and private credential tables in the same SQLite transaction; it does not use `katha-sqlx`. This preserves the one-writer model and atomic commit boundary. It is not a claim of production readiness: retention, export, request throttling, a public authentication perimeter and a verified restore process remain to be completed.
+
+## Research reports
+
+The Reports library holds research pages with findings, sources, topics, reporting periods and optional project/task links. Humans can write them in the UI; agents can list, read and save them through MCP using `reports:read` or `reports:write` scopes. Each recurring investigation can produce a new edition without replacing the previous report. Revision checks prevent stale saves from overwriting another editor. Report events survive restarts in SQLite.
+
+See [research reports](docs/reports.md) for the workflow and agent examples. Hermes still schedules and executes research. Marketing analytics and campaign connectors remain future work; the app does not invent metrics.
 
 ## AI access
 
-Administrators can create named, scoped AI keys in Settings. Copy the secret when it is created; it is shown once, stored only as a hash on the server, and cannot be recovered. Keys expire within 90 days and can be revoked immediately. A key is tied to its creator and cannot exceed that account's current permissions. Keys and all other preview data disappear on restart.
+Administrators can create named, scoped AI keys in Settings. Copy the secret when it is created; it is shown once and only a digest is stored. Keys expire within 90 days and can be revoked immediately. A key is tied to its creator and cannot exceed that account's current permissions. In durable mode, key digests and account state survive restarts in SQLite; in demo mode they reset.
 
-Connect an MCP client such as Hermes to `http://127.0.0.1:8080/mcp` using Streamable HTTP and `Authorization: Bearer <your-key>`. See [MCP setup and tools](docs/mcp.md). The initial tools read scoped workspace records and create or update boards and tasks. They do not manage accounts, issue keys, contact providers or publish posts.
+Connect an MCP client such as Hermes to `http://127.0.0.1:8080/mcp` using Streamable HTTP and `Authorization: Bearer <your-key>`. See [MCP setup and tools](docs/mcp.md). The initial tools read scoped workspace records and create or update boards, tasks and research reports. They do not manage accounts, issue keys, contact providers or publish posts.
 
-## Roadmap
+## Storage and limits
 
-The next persistence design is one SQLite database with WAL and one writer. Katha will hold the event core, kathputli will serialize commands, and rebuildable projections will serve reads. Litestream is planned for offsite backups; it is not high availability and is not implemented yet. Recovery must restore and validate the database before the service accepts traffic. Durable auth/config signing and encryption key material must also have a protected recovery path.
+The database is the source of truth for the event log, password hashes, AI key digests, setup state and JWT signing key. The signing key is private to the database file, so protect and back up the database as a unit. No provider secrets are stored yet. Durable storage does not provide data retention controls, export, rate limiting, audited provider operations or a verified backup restore.
 
-Later work includes durable user and team management, audit history, social provider connections and an idempotent, auditable posting queue. Provider settings will be encrypted server-side. External business connectors such as Zoho remain read-only by default; any narrow write action requires its own permission and audit record. Goals, strategy, pricing history and progress remain part of the product direction.
+See [storage and recovery](docs/storage.md) for the database lifecycle and the [Litestream template](deploy/litestream.yml).
+
+Litestream can be configured separately by an operator for offsite replication; it is not bundled with or started by this application, and this repository does not verify uploaded backups or restoration. It does not provide active-active service or high availability. Restore and validate a copy before pointing the service at it. Never run multiple server processes against the same database.
 
 ## Hosting and releases
 
-The GHCR `edge` image is a preview of the current demo and is not ready for public authentication or durable customer data. There is no deployed service. See [hosting notes](docs/hosting.md) and [release management](docs/releases.md).
+The GHCR `edge` image is a preview, not a public service or a production-ready deployment. No public service is deployed. See [hosting notes](docs/hosting.md) and [release management](docs/releases.md).
 
 ## Decisions and security
 

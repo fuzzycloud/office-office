@@ -1,5 +1,8 @@
 use std::{
     collections::HashMap,
+    path::Path,
+    sync::atomic::{AtomicBool, Ordering},
+    sync::{Arc, Mutex},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -21,16 +24,27 @@ use uuid::Uuid;
 pub mod proto {
     connectrpc::include_generated!();
 }
+mod demo;
+mod storage;
 use proto::office::v1::*;
 
-const MODULES: [&str; 5] = ["team", "customers", "projects", "social", "settings"];
-const SCOPES: [&str; 6] = [
+const MODULES: [&str; 6] = [
+    "team",
+    "customers",
+    "projects",
+    "reports",
+    "social",
+    "settings",
+];
+const SCOPES: [&str; 8] = [
     "projects:read",
     "projects:write",
     "customers:read",
     "customers:write",
     "social:read",
     "social:write",
+    "reports:read",
+    "reports:write",
 ];
 const DEFAULT_COLUMNS: [&str; 4] = ["Todo", "In progress", "Review", "Done"];
 const THEMES: [&str; 35] = [
@@ -124,6 +138,21 @@ fn sha256(value: &str) -> String {
 fn valid_timestamp(value: &str) -> bool {
     DateTime::parse_from_rfc3339(value).is_ok()
 }
+fn valid_http_url(value: &str) -> bool {
+    if value
+        .chars()
+        .any(|ch| ch.is_whitespace() || ch.is_control() || ch == '\\')
+    {
+        return false;
+    }
+    let Ok(parsed) = url::Url::parse(value) else {
+        return false;
+    };
+    matches!(parsed.scheme(), "http" | "https")
+        && parsed.host().is_some()
+        && parsed.username().is_empty()
+        && parsed.password().is_none()
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 struct Claims {
@@ -136,66 +165,117 @@ struct Claims {
 
 #[derive(Default, Clone)]
 struct State {
+    demo: Option<DemoInitialized>,
     settings: WorkspaceSettings,
     members: Vec<Member>,
     customers: Vec<Customer>,
     projects: Vec<Project>,
     boards: Vec<Board>,
     tasks: Vec<Task>,
+    comments: Vec<TaskComment>,
+    task_activity: Vec<TaskActivity>,
+    reports: Vec<Report>,
     agent_keys: Vec<AgentKey>,
     connections: Vec<SocialConnection>,
     posts: Vec<ScheduledPost>,
     activity: Vec<Activity>,
 }
+#[derive(Clone, Serialize, Deserialize)]
+struct DemoInitialized {
+    scenario: String,
+    version: u32,
+}
 // Events contain only public workspace records. Credentials and signing keys live off-log.
 #[derive(Clone)]
 enum Event {
+    DemoInitialized(DemoInitialized),
     Member(Member),
     Customer(Customer),
     Project(Project),
     Board(Board),
     Task(Task),
+    TaskComment(TaskComment),
+    TaskActivity(TaskActivity),
+    Report(Report),
     AgentKey(AgentKey),
+    Connection(SocialConnection),
     Post(ScheduledPost),
     Settings(WorkspaceSettings),
     Activity(Activity),
 }
 #[derive(Clone)]
 enum Edit {
+    DemoInitialized(DemoInitialized),
     Member(Member),
     Customer(Customer),
     Project(Project),
     Board(Board),
     Task(Task),
+    TaskComment(TaskComment),
+    Report(Report),
     AgentKey(AgentKey),
+    Connection(SocialConnection),
     Post(ScheduledPost),
     Settings(WorkspaceSettings),
 }
 struct Projection;
 impl Aggregate<State, Edit, Event> for Projection {
     fn init(&self) -> State {
-        seed()
+        State {
+            settings: WorkspaceSettings {
+                default_theme: "light".into(),
+                timezone: "Asia/Kolkata".into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        }
     }
     fn execute(&self, _state: &State, command: &Edit) -> anyhow::Result<Vec<Event>> {
         Ok(vec![match command {
+            Edit::DemoInitialized(v) => Event::DemoInitialized(v.clone()),
             Edit::Member(v) => Event::Member(v.clone()),
             Edit::Customer(v) => Event::Customer(v.clone()),
             Edit::Project(v) => Event::Project(v.clone()),
             Edit::Board(v) => Event::Board(v.clone()),
             Edit::Task(v) => Event::Task(v.clone()),
+            Edit::TaskComment(v) => Event::TaskComment(v.clone()),
+            Edit::Report(v) => Event::Report(v.clone()),
             Edit::AgentKey(v) => Event::AgentKey(v.clone()),
+            Edit::Connection(v) => Event::Connection(v.clone()),
             Edit::Post(v) => Event::Post(v.clone()),
             Edit::Settings(v) => Event::Settings(v.clone()),
         }])
     }
     fn apply(&self, mut state: State, event: &Event) -> State {
         match event {
+            Event::DemoInitialized(v) => state.demo = Some(v.clone()),
             Event::Member(v) => upsert(&mut state.members, v.clone(), |x| &x.id),
             Event::Customer(v) => upsert(&mut state.customers, v.clone(), |x| &x.id),
             Event::Project(v) => upsert(&mut state.projects, v.clone(), |x| &x.id),
             Event::Board(v) => upsert(&mut state.boards, v.clone(), |x| &x.id),
-            Event::Task(v) => upsert(&mut state.tasks, v.clone(), |x| &x.id),
+            Event::Task(v) => {
+                let mut task = v.clone();
+                task.comment_count = state
+                    .comments
+                    .iter()
+                    .filter(|c| c.task_id == task.id && !c.deleted)
+                    .count() as u32;
+                upsert(&mut state.tasks, task, |x| &x.id);
+            }
+            Event::TaskComment(v) => {
+                upsert(&mut state.comments, v.clone(), |x| &x.id);
+                if let Some(task) = state.tasks.iter_mut().find(|t| t.id == v.task_id) {
+                    task.comment_count = state
+                        .comments
+                        .iter()
+                        .filter(|c| c.task_id == v.task_id && !c.deleted)
+                        .count() as u32;
+                }
+            }
+            Event::TaskActivity(v) => state.task_activity.insert(0, v.clone()),
+            Event::Report(v) => upsert(&mut state.reports, v.clone(), |x| &x.id),
             Event::AgentKey(v) => upsert(&mut state.agent_keys, v.clone(), |x| &x.id),
+            Event::Connection(v) => upsert(&mut state.connections, v.clone(), |x| &x.id),
             Event::Post(v) => upsert(&mut state.posts, v.clone(), |x| &x.id),
             Event::Settings(v) => state.settings = v.clone(),
             Event::Activity(v) => state.activity.insert(0, v.clone()),
@@ -210,86 +290,59 @@ fn upsert<T>(items: &mut Vec<T>, value: T, key: impl Fn(&T) -> &String) {
         items.push(value);
     }
 }
-fn seed() -> State {
-    State {
-        settings: WorkspaceSettings {
-            workspace_name: "Office Office Preview".into(),
-            default_theme: "light".into(),
-            timezone: "Asia/Kolkata".into(),
-            ..Default::default()
-        },
-        members: vec![Member {
-            id: "demo-member-1".into(),
-            name: "Maya Rao (sample)".into(),
-            email: "maya@example.test".into(),
-            job_title: "Operations Lead".into(),
-            department: "Operations".into(),
-            role: "manager".into(),
-            status: "pending".into(),
-            access: vec!["customers".into(), "projects".into(), "social".into()],
-            ..Default::default()
-        }],
-        customers: vec![Customer {
-            id: "demo-customer-1".into(),
-            name: "Asha Mehta".into(),
-            company: "Example Studio".into(),
-            email: "asha@example.test".into(),
-            status: "active".into(),
-            owner_id: "demo-member-1".into(),
-            notes: "Sample customer — preview data".into(),
-            ..Default::default()
-        }],
-        projects: vec![Project {
-            id: "demo-project-1".into(),
-            name: "Sample launch".into(),
-            customer_id: "demo-customer-1".into(),
-            owner_id: "demo-member-1".into(),
-            status: "active".into(),
-            summary: "Sample project for the preview".into(),
-            target_date: "2026-12-01".into(),
-            ..Default::default()
-        }],
-        boards: vec![Board {
-            id: "demo-board-1".into(),
-            project_id: "demo-project-1".into(),
-            name: "Sample launch board (sample)".into(),
-            columns: DEFAULT_COLUMNS.iter().map(|v| (*v).into()).collect(),
-            ..Default::default()
-        }],
-        tasks: vec![Task {
-            id: "demo-task-1".into(),
-            project_id: "demo-project-1".into(),
-            board_id: "demo-board-1".into(),
-            column: "Todo".into(),
-            title: "Sample task — plan launch".into(),
-            description: "Sample task for the preview".into(),
-            assignee_id: "demo-member-1".into(),
-            priority: "medium".into(),
-            ..Default::default()
-        }],
-        agent_keys: vec![],
-        connections: vec![SocialConnection {
-            id: "demo-social-1".into(),
-            platform: "LinkedIn".into(),
-            name: "Sample channel (disconnected)".into(),
-            status: "disconnected".into(),
-            demo: true,
-            ..Default::default()
-        }],
-        posts: vec![ScheduledPost {
-            id: "demo-post-1".into(),
-            connection_id: "demo-social-1".into(),
-            content: "Sample draft — this will never be published automatically.".into(),
-            scheduled_at: "2026-12-01T09:00:00Z".into(),
-            status: "draft".into(),
-            author_id: "demo-member-1".into(),
-            ..Default::default()
-        }],
-        activity: vec![],
-    }
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
+pub enum EngineCommand {
+    SaveMember(SaveMemberRequest),
+    SaveCustomer(SaveCustomerRequest),
+    SaveProject(SaveProjectRequest),
+    SaveBoard(SaveBoardRequest),
+    SaveTask(SaveTaskRequest),
+    SaveTaskComment(SaveTaskCommentRequest),
+    DeleteTaskComment(DeleteTaskCommentRequest),
+    SaveReport(SaveReportRequest),
+    SavePost(SavePostRequest),
+    SaveSettings(SaveSettingsRequest),
+    CreateSampleSocialChannel { platform: String, name: String },
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum EngineOutcome {
+    Member(SaveMemberResponse),
+    Customer(SaveCustomerResponse),
+    Project(SaveProjectResponse),
+    Board(SaveBoardResponse),
+    Task(SaveTaskResponse),
+    TaskComment(SaveTaskCommentResponse),
+    DeletedTaskComment(DeleteTaskCommentResponse),
+    Report(SaveReportResponse),
+    Post(SavePostResponse),
+    Settings(SaveSettingsResponse),
+    SampleSocialChannel(SocialConnection),
 }
 
 enum Command {
+    TaskDiscussion(
+        String,
+        String,
+        oneshot::Sender<Result<ListTaskDiscussionResponse, ConnectError>>,
+    ),
+    AgentTaskDiscussion(
+        String,
+        String,
+        oneshot::Sender<Result<ListTaskDiscussionResponse, ConnectError>>,
+    ),
+    AgentComment(
+        String,
+        SaveTaskCommentRequest,
+        oneshot::Sender<Result<TaskComment, ConnectError>>,
+    ),
+    AgentDeleteComment(
+        String,
+        DeleteTaskCommentRequest,
+        oneshot::Sender<Result<TaskComment, ConnectError>>,
+    ),
+    Close(oneshot::Sender<anyhow::Result<()>>),
     Status(oneshot::Sender<Result<GetSetupStatusResponse, ConnectError>>),
     Bootstrap(
         BootstrapAdminRequest,
@@ -303,30 +356,20 @@ enum Command {
         String,
         oneshot::Sender<Result<GetWorkspaceResponse, ConnectError>>,
     ),
-    Member(
+    Execute(
         String,
-        SaveMemberRequest,
-        oneshot::Sender<Result<SaveMemberResponse, ConnectError>>,
+        EngineCommand,
+        oneshot::Sender<Result<EngineOutcome, ConnectError>>,
     ),
-    Customer(
+    ListReports(
         String,
-        SaveCustomerRequest,
-        oneshot::Sender<Result<SaveCustomerResponse, ConnectError>>,
+        ListReportsRequest,
+        oneshot::Sender<Result<ListReportsResponse, ConnectError>>,
     ),
-    Project(
+    GetReport(
         String,
-        SaveProjectRequest,
-        oneshot::Sender<Result<SaveProjectResponse, ConnectError>>,
-    ),
-    Board(
-        String,
-        SaveBoardRequest,
-        oneshot::Sender<Result<SaveBoardResponse, ConnectError>>,
-    ),
-    Task(
-        String,
-        SaveTaskRequest,
-        oneshot::Sender<Result<SaveTaskResponse, ConnectError>>,
+        GetReportRequest,
+        oneshot::Sender<Result<GetReportResponse, ConnectError>>,
     ),
     ListAgentKeys(
         String,
@@ -349,15 +392,20 @@ enum Command {
     AgentValidate(String, oneshot::Sender<Result<(), ConnectError>>),
     AgentBoard(String, Board, oneshot::Sender<Result<Board, ConnectError>>),
     AgentTask(String, Task, oneshot::Sender<Result<Task, ConnectError>>),
-    Post(
+    AgentListReports(
         String,
-        SavePostRequest,
-        oneshot::Sender<Result<SavePostResponse, ConnectError>>,
+        ListReportsRequest,
+        oneshot::Sender<Result<ListReportsResponse, ConnectError>>,
     ),
-    Settings(
+    AgentGetReport(
         String,
-        SaveSettingsRequest,
-        oneshot::Sender<Result<SaveSettingsResponse, ConnectError>>,
+        String,
+        oneshot::Sender<Result<Report, ConnectError>>,
+    ),
+    AgentSaveReport(
+        String,
+        SaveReportRequest,
+        oneshot::Sender<Result<Report, ConnectError>>,
     ),
 }
 struct WorkspaceActor {
@@ -367,8 +415,239 @@ struct WorkspaceActor {
     agent_secrets: HashMap<String, (String, String)>,
     key: Vec<u8>,
     setup: bool,
+    storage: Option<Arc<Mutex<storage::Storage>>>,
+    closed: bool,
+}
+struct ActorSnapshot {
+    state: State,
+    log_len: usize,
+    passwords: HashMap<String, String>,
+    agent_secrets: HashMap<String, (String, String)>,
+    setup: bool,
 }
 impl WorkspaceActor {
+    fn validate_replayed_state(&self) -> anyhow::Result<()> {
+        use anyhow::ensure;
+        use std::collections::HashSet;
+
+        if !self.setup {
+            return Ok(());
+        }
+        ensure!(
+            THEMES.contains(&self.state.settings.default_theme.as_str())
+                && !self.state.settings.timezone.is_empty(),
+            "invalid workspace settings"
+        );
+        let mut ids = HashSet::new();
+        let mut emails = HashSet::new();
+        for member in &self.state.members {
+            ensure!(
+                ids.insert(&member.id) && emails.insert(&member.email),
+                "duplicate member identity"
+            );
+            ensure!(
+                email(&member.email).is_ok()
+                    && ["admin", "manager", "member", "viewer"].contains(&member.role.as_str()),
+                "invalid member"
+            );
+            ensure!(
+                ["active", "inactive", "pending"].contains(&member.status.as_str())
+                    && member.access.iter().all(|a| MODULES.contains(&a.as_str())),
+                "invalid member access or status"
+            );
+            ensure!(
+                member.status != "active" || self.passwords.contains_key(&member.id),
+                "active member has no password credential"
+            );
+        }
+        ids.clear();
+        for customer in &self.state.customers {
+            ensure!(
+                ids.insert(&customer.id)
+                    && ["lead", "active", "inactive"].contains(&customer.status.as_str()),
+                "invalid customer"
+            );
+            ensure!(
+                customer.owner_id.is_empty()
+                    || self.state.members.iter().any(|m| m.id == customer.owner_id),
+                "customer owner missing"
+            );
+        }
+        ids.clear();
+        for project in &self.state.projects {
+            ensure!(
+                ids.insert(&project.id)
+                    && ["planning", "active", "on_hold", "completed", "archived"]
+                        .contains(&project.status.as_str()),
+                "invalid project"
+            );
+            ensure!(
+                project.customer_id.is_empty()
+                    || self
+                        .state
+                        .customers
+                        .iter()
+                        .any(|c| c.id == project.customer_id),
+                "project customer missing"
+            );
+            ensure!(
+                project.owner_id.is_empty()
+                    || self.state.members.iter().any(|m| m.id == project.owner_id),
+                "project owner missing"
+            );
+        }
+        ids.clear();
+        for board in &self.state.boards {
+            ensure!(
+                ids.insert(&board.id)
+                    && self.state.projects.iter().any(|p| p.id == board.project_id),
+                "invalid board project"
+            );
+            ensure!(
+                (1..=20).contains(&board.columns.len())
+                    && board.columns.iter().all(|c| !c.trim().is_empty()),
+                "invalid board columns"
+            );
+            let columns: HashSet<_> = board.columns.iter().collect();
+            ensure!(
+                columns.len() == board.columns.len(),
+                "duplicate board column"
+            );
+        }
+        ids.clear();
+        for task in &self.state.tasks {
+            ensure!(ids.insert(&task.id), "duplicate task id");
+            let board = self.state.boards.iter().find(|b| b.id == task.board_id);
+            ensure!(
+                board.is_some_and(
+                    |b| b.project_id == task.project_id && b.columns.contains(&task.column)
+                ),
+                "invalid task board or column"
+            );
+            ensure!(
+                task.assignee_id.is_empty()
+                    || self.state.members.iter().any(|m| m.id == task.assignee_id),
+                "task assignee missing"
+            );
+        }
+        ids.clear();
+        for comment in &self.state.comments {
+            ensure!(ids.insert(&comment.id), "duplicate comment id");
+            ensure!(
+                ["human", "agent"].contains(&comment.actor_kind.as_str())
+                    && !comment.author_name.is_empty()
+                    && comment.body.len() <= 10000
+                    && (comment.deleted || !comment.body.trim().is_empty()),
+                "invalid comment fields"
+            );
+            ensure!(
+                self.state.tasks.iter().any(|t| t.id == comment.task_id),
+                "comment task missing"
+            );
+            ensure!(
+                comment.revision > 0
+                    && comment.created_at > 0
+                    && comment.updated_at >= comment.created_at
+                    && (!comment.deleted || comment.body.is_empty()),
+                "invalid comment revision or tombstone"
+            );
+            let author_exists = if comment.actor_kind == "human" {
+                self.state.members.iter().any(|m| m.id == comment.author_id)
+            } else {
+                comment
+                    .author_id
+                    .strip_prefix("agent:")
+                    .is_some_and(|id| self.state.agent_keys.iter().any(|k| k.id == id))
+            };
+            ensure!(author_exists, "comment author missing");
+        }
+        ids.clear();
+        for activity in &self.state.task_activity {
+            ensure!(
+                ids.insert(&activity.id)
+                    && activity.occurred_at > 0
+                    && !activity.actor_name.is_empty()
+                    && ["human", "agent"].contains(&activity.actor_kind.as_str()),
+                "invalid task activity"
+            );
+            let author_exists = if activity.actor_kind == "human" {
+                self.state.members.iter().any(|m| m.id == activity.actor_id)
+            } else {
+                activity
+                    .actor_id
+                    .strip_prefix("agent:")
+                    .is_some_and(|id| self.state.agent_keys.iter().any(|k| k.id == id))
+            };
+            ensure!(author_exists, "task activity actor missing");
+            ensure!(
+                self.state.tasks.iter().any(|t| t.id == activity.task_id),
+                "activity task missing"
+            );
+        }
+        ids.clear();
+        for report in &self.state.reports {
+            ensure!(ids.insert(&report.id), "duplicate report id");
+            ensure!(self.validate_report(report).is_ok(), "invalid report");
+            ensure!(
+                report.revision > 0
+                    && report.created_at > 0
+                    && report.updated_at >= report.created_at,
+                "invalid report revision or timestamps"
+            );
+            ensure!(
+                self.state.members.iter().any(|m| m.id == report.author_id),
+                "report author missing"
+            );
+        }
+        ids.clear();
+        for key in &self.state.agent_keys {
+            ensure!(
+                ids.insert(&key.id) && key.scopes.iter().all(|s| SCOPES.contains(&s.as_str())),
+                "invalid agent key"
+            );
+        }
+        ids.clear();
+        if let Some(marker) = &self.state.demo {
+            ensure!(
+                marker.scenario == "office-preview" && marker.version == 1,
+                "invalid demo scenario"
+            );
+        }
+        for connection in &self.state.connections {
+            ensure!(
+                ids.insert(&connection.id)
+                    && self.state.demo.is_some()
+                    && connection.demo
+                    && connection.status == "disconnected"
+                    && !connection.id.is_empty()
+                    && !connection.name.is_empty(),
+                "invalid sample social connection"
+            );
+        }
+        ids.clear();
+        for post in &self.state.posts {
+            ensure!(
+                ids.insert(&post.id)
+                    && ["draft", "queued", "needs_review"].contains(&post.status.as_str()),
+                "invalid social post"
+            );
+            ensure!(
+                self.state
+                    .connections
+                    .iter()
+                    .any(|c| c.id == post.connection_id),
+                "social connection missing"
+            );
+        }
+        ids.clear();
+        for activity in &self.state.activity {
+            ensure!(
+                ids.insert(&activity.id) && valid_timestamp(&activity.occurred_at),
+                "invalid activity"
+            );
+        }
+        Ok(())
+    }
     fn new() -> Self {
         let mut key = vec![0u8; 32];
         rand::rngs::OsRng.fill_bytes(&mut key);
@@ -379,17 +658,76 @@ impl WorkspaceActor {
             agent_secrets: HashMap::new(),
             key,
             setup: false,
+            storage: None,
+            closed: false,
         }
+    }
+    fn snapshot(&self) -> ActorSnapshot {
+        ActorSnapshot {
+            state: self.state.clone(),
+            log_len: self.log.len(),
+            passwords: self.passwords.clone(),
+            agent_secrets: self.agent_secrets.clone(),
+            setup: self.setup,
+        }
+    }
+    async fn persist<R>(
+        &mut self,
+        before: ActorSnapshot,
+        result: Result<R, ConnectError>,
+    ) -> Result<R, ConnectError> {
+        if result.is_err() || self.closed {
+            self.state = before.state;
+            self.passwords = before.passwords;
+            self.agent_secrets = before.agent_secrets;
+            self.setup = before.setup;
+            self.log.truncate(before.log_len);
+            return if self.closed {
+                Err(ConnectError::internal("workspace closed"))
+            } else {
+                result
+            };
+        }
+        if let Some(storage) = &self.storage {
+            let storage = Arc::clone(storage);
+            let events = self.log[before.log_len..].to_vec();
+            let passwords = self.passwords.clone();
+            let agent_secrets = self.agent_secrets.clone();
+            let setup = self.setup;
+            let saved = tokio::task::spawn_blocking(move || {
+                storage
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("storage lock poisoned"))?
+                    .append(&events, &passwords, &agent_secrets, setup)
+            })
+            .await;
+            if !matches!(saved, Ok(Ok(()))) {
+                tracing::error!("durable transaction failed: {:?}", saved);
+                self.state = before.state;
+                self.passwords = before.passwords;
+                self.agent_secrets = before.agent_secrets;
+                self.setup = before.setup;
+                self.log.truncate(before.log_len);
+                return Err(ConnectError::internal("workspace save failed"));
+            }
+            self.log.clear();
+        }
+        result
     }
     fn commit(&mut self, edit: Edit, actor: &str, summary: &str) {
         for event in Projection.execute(&self.state, &edit).expect("valid edit") {
             let name = match &event {
+                Event::DemoInitialized(_) => "demo_initialized",
                 Event::Member(_) => "member_saved",
                 Event::Customer(_) => "customer_saved",
                 Event::Project(_) => "project_saved",
                 Event::Board(_) => "board_saved",
                 Event::Task(_) => "task_saved",
+                Event::TaskComment(_) => "task_comment_saved",
+                Event::TaskActivity(_) => "task_activity_recorded",
+                Event::Report(_) => "report_saved",
                 Event::AgentKey(_) => "agent_key_saved",
+                Event::Connection(_) => "connection_saved",
                 Event::Post(_) => "post_saved",
                 Event::Settings(_) => "settings_saved",
                 Event::Activity(_) => "activity_recorded",
@@ -421,6 +759,156 @@ impl WorkspaceActor {
             metadata: None,
         });
         self.state = Projection.apply(std::mem::take(&mut self.state), &event);
+    }
+    fn record_task_activity(&mut self, task_id: &str, actor: &Member, kind: &str, summary: &str) {
+        let event = Event::TaskActivity(TaskActivity {
+            id: id(),
+            task_id: task_id.into(),
+            kind: kind.into(),
+            summary: summary.into(),
+            actor_id: actor.id.clone(),
+            actor_name: actor.name.clone(),
+            actor_kind: Self::actor_kind(actor).into(),
+            occurred_at: now(),
+            ..Default::default()
+        });
+        self.log.push(EventWrite {
+            id: Uuid::new_v4(),
+            correlation_id: None,
+            causation_id: None,
+            name: "task_activity_recorded".into(),
+            data: event.clone(),
+            metadata: None,
+        });
+        self.state = Projection.apply(std::mem::take(&mut self.state), &event);
+    }
+    fn actor_kind(actor: &Member) -> &'static str {
+        if actor.id.starts_with("agent:") {
+            "agent"
+        } else {
+            "human"
+        }
+    }
+    fn discussion_as(
+        &self,
+        actor: &Member,
+        task_id: &str,
+    ) -> Result<ListTaskDiscussionResponse, ConnectError> {
+        Self::permit(actor, "projects", false)?;
+        if !self.state.tasks.iter().any(|t| t.id == task_id) {
+            return Err(ConnectError::not_found("task not found"));
+        }
+        Ok(ListTaskDiscussionResponse {
+            comments: self
+                .state
+                .comments
+                .iter()
+                .filter(|c| c.task_id == task_id)
+                .cloned()
+                .collect(),
+            activity: self
+                .state
+                .task_activity
+                .iter()
+                .filter(|a| a.task_id == task_id)
+                .cloned()
+                .collect(),
+            ..Default::default()
+        })
+    }
+    fn save_comment_as(
+        &mut self,
+        actor: &Member,
+        request: SaveTaskCommentRequest,
+        deleting: bool,
+    ) -> Result<TaskComment, ConnectError> {
+        Self::permit(actor, "projects", true)?;
+        if !self.state.tasks.iter().any(|t| t.id == request.task_id) {
+            return Err(ConnectError::not_found("task not found"));
+        }
+        if !deleting {
+            required(&request.body, "comment body", 10000)?;
+        }
+        let mut comment;
+        let kind;
+        if request.comment_id.is_empty() {
+            if deleting {
+                return Err(bad("comment id required"));
+            }
+            if request.expected_revision != 0 {
+                return Err(ConnectError::aborted("comment revision conflict"));
+            }
+            comment = TaskComment {
+                id: id(),
+                task_id: request.task_id.clone(),
+                author_id: actor.id.clone(),
+                author_name: actor.name.clone(),
+                actor_kind: Self::actor_kind(actor).into(),
+                created_at: now(),
+                revision: 1,
+                ..Default::default()
+            };
+            kind = "comment_added";
+        } else {
+            comment = self
+                .state
+                .comments
+                .iter()
+                .find(|c| c.id == request.comment_id && c.task_id == request.task_id)
+                .cloned()
+                .ok_or_else(|| ConnectError::not_found("comment not found"))?;
+            if comment.author_id != actor.id
+                && !(actor.role == "admin" && Self::actor_kind(actor) == "human")
+            {
+                return Err(denied());
+            }
+            if comment.revision != request.expected_revision || comment.deleted {
+                return Err(ConnectError::aborted("comment revision conflict"));
+            }
+            comment.revision = comment
+                .revision
+                .checked_add(1)
+                .ok_or_else(|| bad("comment revision limit"))?;
+            kind = if deleting {
+                "comment_deleted"
+            } else {
+                "comment_edited"
+            };
+        }
+        comment.body = if deleting {
+            String::new()
+        } else {
+            request.body.trim().into()
+        };
+        comment.deleted = deleting;
+        comment.updated_at = now().max(comment.created_at);
+        self.commit(
+            Edit::TaskComment(comment.clone()),
+            &actor.name,
+            "Task comment updated",
+        );
+        self.record_task_activity(
+            &request.task_id,
+            actor,
+            kind,
+            match kind {
+                "comment_added" => "Comment added",
+                "comment_edited" => "Comment edited",
+                _ => "Comment deleted",
+            },
+        );
+        Ok(comment)
+    }
+    fn comment_agent(&self, secret: &str, write: bool) -> Result<Member, ConnectError> {
+        let mut actor = if write {
+            self.agent_identity(secret, "projects:write")?
+        } else {
+            self.agent_identity(secret, "projects:read")
+                .or_else(|_| self.agent_identity(secret, "projects:write"))?
+        };
+        let (key, _) = self.agent_owner(secret)?;
+        actor.id = format!("agent:{}", key.id);
+        Ok(actor)
     }
     fn claims(&self, member: &Member) -> Result<(String, i64), ConnectError> {
         let expiry = now() + 900;
@@ -471,7 +959,8 @@ impl WorkspaceActor {
     fn workspace(&self, user: Member) -> GetWorkspaceResponse {
         let can = |module: &str| user.role == "admin" || user.access.iter().any(|v| v == module);
         GetWorkspaceResponse {
-            demo_mode: true,
+            demo_mode: self.state.demo.is_some(),
+            persistent_storage: self.storage.is_some(),
             settings: Some(self.state.settings.clone()).into(),
             current_user: Some(user.clone()).into(),
             members: if can("team") {
@@ -581,6 +1070,17 @@ impl WorkspaceActor {
             "Workspace settings saved",
         );
         let (token, expires_at) = self.claims(&member)?;
+        if request.load_demo_data {
+            self.commit(
+                Edit::DemoInitialized(DemoInitialized {
+                    scenario: "office-preview".into(),
+                    version: 1,
+                }),
+                &member.name,
+                "Sample workspace initialized",
+            );
+            demo::register(self, &token).await?;
+        }
         Ok(BootstrapAdminResponse {
             token,
             user: Some(member).into(),
@@ -842,12 +1342,262 @@ impl WorkspaceActor {
         }
         if task.id.is_empty() {
             task.id = id();
-        } else if !self.state.tasks.iter().any(|v| v.id == task.id) {
-            return Err(bad("unknown task id"));
+        } else {
+            let old = self
+                .state
+                .tasks
+                .iter()
+                .find(|v| v.id == task.id)
+                .ok_or_else(|| bad("unknown task id"))?;
+            if old.project_id != task.project_id
+                && self
+                    .state
+                    .reports
+                    .iter()
+                    .any(|report| report.task_id == task.id)
+            {
+                return Err(bad("task is linked to a report and cannot change projects"));
+            }
         }
         task.title = task.title.trim().into();
+        task.comment_count = self
+            .state
+            .comments
+            .iter()
+            .filter(|c| c.task_id == task.id && !c.deleted)
+            .count() as u32;
+        let previous = self.state.tasks.iter().find(|t| t.id == task.id).cloned();
         self.commit(Edit::Task(task.clone()), &actor.name, "Project task saved");
+        match previous {
+            None => self.record_task_activity(&task.id, actor, "task_created", "Task created"),
+            Some(old) => {
+                if old.board_id != task.board_id
+                    || old.column != task.column
+                    || old.project_id != task.project_id
+                {
+                    let summary = if old.board_id != task.board_id {
+                        let old_board = self
+                            .state
+                            .boards
+                            .iter()
+                            .find(|b| b.id == old.board_id)
+                            .map(|b| b.name.as_str())
+                            .unwrap_or("Previous board");
+                        let new_board = self
+                            .state
+                            .boards
+                            .iter()
+                            .find(|b| b.id == task.board_id)
+                            .map(|b| b.name.as_str())
+                            .unwrap_or("New board");
+                        format!(
+                            "Task moved: {old_board} / {} → {new_board} / {}",
+                            old.column, task.column
+                        )
+                    } else {
+                        format!("Task moved: {} → {}", old.column, task.column)
+                    };
+                    self.record_task_activity(&task.id, actor, "task_moved", &summary);
+                }
+                if old.assignee_id != task.assignee_id {
+                    let name = self
+                        .state
+                        .members
+                        .iter()
+                        .find(|m| m.id == task.assignee_id)
+                        .map(|m| m.name.as_str())
+                        .unwrap_or("Unassigned");
+                    self.record_task_activity(
+                        &task.id,
+                        actor,
+                        "task_assigned",
+                        &format!("Task assignee changed to {name}"),
+                    );
+                }
+                let mut fields = Vec::new();
+                if old.title != task.title {
+                    fields.push("title");
+                }
+                if old.description != task.description {
+                    fields.push("description");
+                }
+                if old.priority != task.priority {
+                    fields.push("priority");
+                }
+                if old.due_date != task.due_date {
+                    fields.push("due date");
+                }
+                if !fields.is_empty() {
+                    self.record_task_activity(
+                        &task.id,
+                        actor,
+                        "task_updated",
+                        &format!("Task {} updated", fields.join(", ")),
+                    );
+                }
+            }
+        }
         Ok(task)
+    }
+    fn validate_report(&self, report: &Report) -> Result<(), ConnectError> {
+        required(&report.title, "report title", 160)?;
+        if report.summary.len() > 2000 || report.body.len() > 200_000 {
+            return Err(bad("report summary or body too long"));
+        }
+        if report.topic.len() > 120 || report.period.len() > 80 {
+            return Err(bad("report topic or period too long"));
+        }
+        allowed(
+            &report.kind,
+            &["research", "competitor_review"],
+            "report kind",
+        )?;
+        allowed(&report.status, &["draft", "published"], "report status")?;
+        if report.status == "published" && report.body.trim().is_empty() {
+            return Err(bad("published report body required"));
+        }
+        if !report.project_id.is_empty()
+            && !self
+                .state
+                .projects
+                .iter()
+                .any(|p| p.id == report.project_id)
+        {
+            return Err(bad("unknown report project"));
+        }
+        if !report.task_id.is_empty()
+            && !self
+                .state
+                .tasks
+                .iter()
+                .any(|t| t.id == report.task_id && t.project_id == report.project_id)
+        {
+            return Err(bad("report task must belong to project"));
+        }
+        if report.sources.len() > 30 {
+            return Err(bad("too many report sources"));
+        }
+        for source in &report.sources {
+            required(&source.title, "source title", 200)?;
+            if source.url.len() > 2048 {
+                return Err(bad("source URL too long"));
+            }
+            if !valid_http_url(&source.url) {
+                return Err(bad("source URL must be absolute HTTP or HTTPS"));
+            }
+        }
+        Ok(())
+    }
+    fn list_reports_as(
+        &self,
+        actor: &Member,
+        request: ListReportsRequest,
+    ) -> Result<ListReportsResponse, ConnectError> {
+        Self::permit(actor, "reports", false)?;
+        if request.query.len() > 200 {
+            return Err(bad("report query too long"));
+        }
+        if !request.status.is_empty() {
+            allowed(&request.status, &["draft", "published"], "report status")?;
+        }
+        let query = request.query.trim().to_lowercase();
+        let mut reports: Vec<_> = self
+            .state
+            .reports
+            .iter()
+            .filter(|report| {
+                (request.status.is_empty() || report.status == request.status)
+                    && (request.project_id.is_empty() || report.project_id == request.project_id)
+                    && (query.is_empty()
+                        || report.title.to_lowercase().contains(&query)
+                        || report.summary.to_lowercase().contains(&query)
+                        || report.topic.to_lowercase().contains(&query)
+                        || report.period.to_lowercase().contains(&query))
+            })
+            .cloned()
+            .collect();
+        reports.sort_by(|a, b| {
+            b.updated_at
+                .cmp(&a.updated_at)
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        let total_count = reports.len() as u32;
+        let page_size = if request.page_size == 0 {
+            20
+        } else {
+            request.page_size.min(100)
+        } as usize;
+        let offset = request.offset as usize;
+        let reports: Vec<_> = reports
+            .into_iter()
+            .skip(offset)
+            .take(page_size)
+            .map(|mut report| {
+                report.body.clear();
+                report
+            })
+            .collect();
+        let next_offset = if offset.saturating_add(reports.len()) < total_count as usize {
+            offset.saturating_add(reports.len()) as u32
+        } else {
+            0
+        };
+        Ok(ListReportsResponse {
+            reports,
+            total_count,
+            next_offset,
+            ..Default::default()
+        })
+    }
+    fn get_report_as(&self, actor: &Member, id: &str) -> Result<Report, ConnectError> {
+        Self::permit(actor, "reports", false)?;
+        self.state
+            .reports
+            .iter()
+            .find(|r| r.id == id)
+            .cloned()
+            .ok_or_else(|| ConnectError::not_found("report not found"))
+    }
+    fn save_report_as(
+        &mut self,
+        actor: &Member,
+        request: SaveReportRequest,
+    ) -> Result<Report, ConnectError> {
+        Self::permit(actor, "reports", true)?;
+        let mut report = request.report.ok_or_else(|| bad("report required"))?;
+        self.validate_report(&report)?;
+        if report.id.is_empty() {
+            if request.expected_revision != 0 {
+                return Err(ConnectError::aborted("report revision conflict"));
+            }
+            report.id = id();
+            report.author_id = actor.id.clone();
+            report.author_name = actor.name.clone();
+            report.created_at = now();
+            report.revision = 1;
+        } else {
+            let old = self
+                .state
+                .reports
+                .iter()
+                .find(|r| r.id == report.id)
+                .ok_or_else(|| ConnectError::not_found("report not found"))?;
+            if request.expected_revision != old.revision {
+                return Err(ConnectError::aborted("report revision conflict"));
+            }
+            report.author_id = old.author_id.clone();
+            report.author_name = old.author_name.clone();
+            report.created_at = old.created_at;
+            report.revision = old
+                .revision
+                .checked_add(1)
+                .ok_or_else(|| bad("report revision limit"))?;
+        }
+        report.title = report.title.trim().into();
+        report.updated_at = now();
+        report.updated_by = actor.name.clone();
+        self.commit(Edit::Report(report.clone()), &actor.name, "Report saved");
+        Ok(report)
     }
     fn admin(&self, token: &str) -> Result<Member, ConnectError> {
         let user = self.user(token)?;
@@ -1069,22 +1819,136 @@ impl WorkspaceActor {
             ..Default::default()
         })
     }
+    async fn execute_core(
+        &mut self,
+        token: &str,
+        command: EngineCommand,
+    ) -> Result<EngineOutcome, ConnectError> {
+        let token = token.to_owned();
+        match command {
+            EngineCommand::SaveMember(v) => {
+                self.save_member(token, v).await.map(EngineOutcome::Member)
+            }
+            EngineCommand::SaveCustomer(v) => {
+                self.save_customer(token, v).map(EngineOutcome::Customer)
+            }
+            EngineCommand::SaveProject(v) => {
+                self.save_project(token, v).map(EngineOutcome::Project)
+            }
+            EngineCommand::SaveBoard(v) => self
+                .user(&token)
+                .and_then(|actor| {
+                    self.save_board_as(&actor, v.board.ok_or_else(|| bad("board required"))?)
+                })
+                .map(|board| {
+                    EngineOutcome::Board(SaveBoardResponse {
+                        board: Some(board).into(),
+                        ..Default::default()
+                    })
+                }),
+            EngineCommand::SaveTask(v) => self
+                .user(&token)
+                .and_then(|actor| {
+                    self.save_task_as(&actor, v.task.ok_or_else(|| bad("task required"))?)
+                })
+                .map(|task| {
+                    EngineOutcome::Task(SaveTaskResponse {
+                        task: Some(task).into(),
+                        ..Default::default()
+                    })
+                }),
+            EngineCommand::SaveTaskComment(v) => self
+                .user(&token)
+                .and_then(|actor| self.save_comment_as(&actor, v, false))
+                .map(|comment| {
+                    EngineOutcome::TaskComment(SaveTaskCommentResponse {
+                        comment: Some(comment).into(),
+                        ..Default::default()
+                    })
+                }),
+            EngineCommand::DeleteTaskComment(v) => self
+                .user(&token)
+                .and_then(|actor| {
+                    self.save_comment_as(
+                        &actor,
+                        SaveTaskCommentRequest {
+                            task_id: v.task_id,
+                            comment_id: v.comment_id,
+                            expected_revision: v.expected_revision,
+                            ..Default::default()
+                        },
+                        true,
+                    )
+                })
+                .map(|comment| {
+                    EngineOutcome::DeletedTaskComment(DeleteTaskCommentResponse {
+                        comment: Some(comment).into(),
+                        ..Default::default()
+                    })
+                }),
+            EngineCommand::SaveReport(v) => self
+                .user(&token)
+                .and_then(|actor| self.save_report_as(&actor, v))
+                .map(|report| {
+                    EngineOutcome::Report(SaveReportResponse {
+                        report: Some(report).into(),
+                        ..Default::default()
+                    })
+                }),
+            EngineCommand::SavePost(v) => self.save_post(token, v).map(EngineOutcome::Post),
+            EngineCommand::SaveSettings(v) => {
+                self.save_settings(token, v).map(EngineOutcome::Settings)
+            }
+            EngineCommand::CreateSampleSocialChannel { platform, name } => {
+                let actor = self.admin(&token)?;
+                if self.state.demo.is_none() {
+                    return Err(denied());
+                }
+                required(&platform, "platform", 80)?;
+                required(&name, "channel name", 120)?;
+                let channel = SocialConnection {
+                    id: id(),
+                    platform: platform.trim().into(),
+                    name: name.trim().into(),
+                    status: "disconnected".into(),
+                    demo: true,
+                    ..Default::default()
+                };
+                self.commit(
+                    Edit::Connection(channel.clone()),
+                    &actor.name,
+                    "Sample social channel created",
+                );
+                Ok(EngineOutcome::SampleSocialChannel(channel))
+            }
+        }
+    }
 }
 #[async_trait::async_trait]
 impl Actor for WorkspaceActor {
     type Msg = Command;
     async fn handle(&mut self, message: Command) {
         match message {
+            Command::Close(tx) => {
+                self.closed = true;
+                let storage = self.storage.take();
+                let result = tokio::task::spawn_blocking(move || drop(storage))
+                    .await
+                    .map_err(|error| anyhow::anyhow!("storage close failed: {error}"));
+                let _ = tx.send(result);
+            }
             Command::Status(tx) => {
                 let _ = tx.send(Ok(GetSetupStatusResponse {
                     needs_setup: !self.setup,
-                    demo_mode: true,
+                    demo_mode: self.state.demo.is_some() || (!self.setup && self.storage.is_none()),
+                    persistent_storage: self.storage.is_some(),
                     ..Default::default()
                 }));
             }
             Command::Bootstrap(v, tx) => {
+                let before = self.snapshot();
                 let result = self.bootstrap(v).await;
-                let _ = tx.send(result);
+                let _ = tx.send(self.persist(before, result).await);
             }
             Command::Login(v, tx) => {
                 let result = self.login(v).await;
@@ -1094,38 +1958,58 @@ impl Actor for WorkspaceActor {
                 let result = self.user(&t).map(|u| self.workspace(u));
                 let _ = tx.send(result);
             }
-            Command::Member(t, v, tx) => {
-                let result = self.save_member(t, v).await;
-                let _ = tx.send(result);
+            Command::Execute(t, v, tx) => {
+                let before = self.snapshot();
+                let result = self.execute_core(&t, v).await;
+                let _ = tx.send(self.persist(before, result).await);
             }
-            Command::Customer(t, v, tx) => {
-                let result = self.save_customer(t, v);
-                let _ = tx.send(result);
+            Command::TaskDiscussion(t, id, tx) => {
+                let _ = tx.send(
+                    self.user(&t)
+                        .and_then(|actor| self.discussion_as(&actor, &id)),
+                );
             }
-            Command::Project(t, v, tx) => {
-                let result = self.save_project(t, v);
-                let _ = tx.send(result);
+            Command::AgentTaskDiscussion(t, id, tx) => {
+                let _ = tx.send(
+                    self.comment_agent(&t, false)
+                        .and_then(|actor| self.discussion_as(&actor, &id)),
+                );
             }
-            Command::Board(t, v, tx) => {
+            Command::AgentComment(t, request, tx) => {
+                let before = self.snapshot();
+                let result = self
+                    .comment_agent(&t, true)
+                    .and_then(|actor| self.save_comment_as(&actor, request, false));
+                let _ = tx.send(self.persist(before, result).await);
+            }
+            Command::AgentDeleteComment(t, request, tx) => {
+                let before = self.snapshot();
+                let result = self.comment_agent(&t, true).and_then(|actor| {
+                    self.save_comment_as(
+                        &actor,
+                        SaveTaskCommentRequest {
+                            task_id: request.task_id,
+                            comment_id: request.comment_id,
+                            expected_revision: request.expected_revision,
+                            ..Default::default()
+                        },
+                        true,
+                    )
+                });
+                let _ = tx.send(self.persist(before, result).await);
+            }
+            Command::ListReports(t, v, tx) => {
                 let result = self
                     .user(&t)
-                    .and_then(|actor| {
-                        self.save_board_as(&actor, v.board.ok_or_else(|| bad("board required"))?)
-                    })
-                    .map(|board| SaveBoardResponse {
-                        board: Some(board).into(),
-                        ..Default::default()
-                    });
+                    .and_then(|actor| self.list_reports_as(&actor, v));
                 let _ = tx.send(result);
             }
-            Command::Task(t, v, tx) => {
+            Command::GetReport(t, v, tx) => {
                 let result = self
                     .user(&t)
-                    .and_then(|actor| {
-                        self.save_task_as(&actor, v.task.ok_or_else(|| bad("task required"))?)
-                    })
-                    .map(|task| SaveTaskResponse {
-                        task: Some(task).into(),
+                    .and_then(|actor| self.get_report_as(&actor, &v.id))
+                    .map(|report| GetReportResponse {
+                        report: Some(report).into(),
                         ..Default::default()
                     });
                 let _ = tx.send(result);
@@ -1134,10 +2018,14 @@ impl Actor for WorkspaceActor {
                 let _ = tx.send(self.list_agent_keys(&t));
             }
             Command::CreateAgentKey(t, v, tx) => {
-                let _ = tx.send(self.create_agent_key(&t, v));
+                let before = self.snapshot();
+                let result = self.create_agent_key(&t, v);
+                let _ = tx.send(self.persist(before, result).await);
             }
             Command::RevokeAgentKey(t, v, tx) => {
-                let _ = tx.send(self.revoke_agent_key(&t, v));
+                let before = self.snapshot();
+                let result = self.revoke_agent_key(&t, v);
+                let _ = tx.send(self.persist(before, result).await);
             }
             Command::AgentWorkspace(secret, tx) => {
                 let _ = tx.send(self.agent_workspace(&secret));
@@ -1146,24 +2034,39 @@ impl Actor for WorkspaceActor {
                 let _ = tx.send(self.agent_validate_key(&secret));
             }
             Command::AgentBoard(secret, board, tx) => {
+                let before = self.snapshot();
                 let result = self
                     .agent_identity(&secret, "projects:write")
                     .and_then(|actor| self.save_board_as(&actor, board));
-                let _ = tx.send(result);
+                let _ = tx.send(self.persist(before, result).await);
             }
             Command::AgentTask(secret, task, tx) => {
+                let before = self.snapshot();
                 let result = self
-                    .agent_identity(&secret, "projects:write")
+                    .comment_agent(&secret, true)
                     .and_then(|actor| self.save_task_as(&actor, task));
+                let _ = tx.send(self.persist(before, result).await);
+            }
+            Command::AgentListReports(secret, v, tx) => {
+                let result = self
+                    .agent_identity(&secret, "reports:read")
+                    .or_else(|_| self.agent_identity(&secret, "reports:write"))
+                    .and_then(|actor| self.list_reports_as(&actor, v));
                 let _ = tx.send(result);
             }
-            Command::Post(t, v, tx) => {
-                let result = self.save_post(t, v);
+            Command::AgentGetReport(secret, id, tx) => {
+                let result = self
+                    .agent_identity(&secret, "reports:read")
+                    .or_else(|_| self.agent_identity(&secret, "reports:write"))
+                    .and_then(|actor| self.get_report_as(&actor, &id));
                 let _ = tx.send(result);
             }
-            Command::Settings(t, v, tx) => {
-                let result = self.save_settings(t, v);
-                let _ = tx.send(result);
+            Command::AgentSaveReport(secret, v, tx) => {
+                let before = self.snapshot();
+                let result = self
+                    .agent_identity(&secret, "reports:write")
+                    .and_then(|actor| self.save_report_as(&actor, v));
+                let _ = tx.send(self.persist(before, result).await);
             }
         }
     }
@@ -1171,6 +2074,7 @@ impl Actor for WorkspaceActor {
 
 pub struct OfficePreviewService {
     actor: ActorRef<Command>,
+    closed: AtomicBool,
 }
 impl Default for OfficePreviewService {
     fn default() -> Self {
@@ -1181,16 +2085,113 @@ impl OfficePreviewService {
     pub fn new() -> Self {
         Self {
             actor: spawn(WorkspaceActor::new(), 128),
+            closed: AtomicBool::new(false),
         }
+    }
+    pub async fn open(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let path = path.as_ref().to_path_buf();
+        let (storage, loaded) =
+            tokio::task::spawn_blocking(move || storage::Storage::open(&path)).await??;
+        let mut actor = WorkspaceActor::new();
+        actor.state = State {
+            settings: WorkspaceSettings {
+                default_theme: "light".into(),
+                timezone: "Asia/Kolkata".into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        for event in &loaded.events {
+            actor.state = Projection.apply(std::mem::take(&mut actor.state), event);
+        }
+        actor.passwords = loaded.passwords;
+        actor.agent_secrets = loaded.agent_secrets;
+        actor.key = loaded.signing_key;
+        actor.setup = loaded.setup;
+        if !actor.setup
+            && (!loaded.events.is_empty()
+                || !actor.passwords.is_empty()
+                || !actor.agent_secrets.is_empty())
+        {
+            anyhow::bail!("uninitialized database contains workspace data");
+        }
+        if actor.setup
+            != actor.state.members.iter().any(|m| {
+                m.role == "admin" && m.status == "active" && actor.passwords.contains_key(&m.id)
+            })
+        {
+            anyhow::bail!("durable setup state does not match administrator credentials");
+        }
+        if actor.setup && actor.state.settings.workspace_name.is_empty() {
+            anyhow::bail!("durable workspace settings missing");
+        }
+        for id in actor.passwords.keys() {
+            if !actor.state.members.iter().any(|m| &m.id == id) {
+                anyhow::bail!("password credential has no member");
+            }
+        }
+        for (id, (_, owner)) in &actor.agent_secrets {
+            if !actor.state.members.iter().any(|m| &m.id == owner)
+                || !actor
+                    .state
+                    .agent_keys
+                    .iter()
+                    .any(|k| &k.id == id && !k.revoked)
+            {
+                anyhow::bail!("agent credential has no active key or owner");
+            }
+        }
+        if actor
+            .state
+            .agent_keys
+            .iter()
+            .any(|key| !key.revoked && !actor.agent_secrets.contains_key(&key.id))
+        {
+            anyhow::bail!("active agent key has no credential");
+        }
+        actor.validate_replayed_state()?;
+        actor.storage = Some(Arc::new(Mutex::new(storage)));
+        Ok(Self {
+            actor: spawn(actor, 128),
+            closed: AtomicBool::new(false),
+        })
+    }
+    pub async fn close(&self) -> anyhow::Result<()> {
+        self.closed.store(true, Ordering::Release);
+        self.actor.ask(Command::Close).await??;
+        Ok(())
     }
     async fn ask<R>(
         &self,
         make: impl FnOnce(oneshot::Sender<Result<R, ConnectError>>) -> Command,
     ) -> Result<R, ConnectError> {
+        if self.closed.load(Ordering::Acquire) {
+            return Err(ConnectError::internal("workspace closed"));
+        }
         self.actor
             .ask(make)
             .await
             .map_err(|_| ConnectError::internal("workspace unavailable"))?
+    }
+    pub async fn bootstrap(
+        &self,
+        request: BootstrapAdminRequest,
+    ) -> Result<BootstrapAdminResponse, ConnectError> {
+        self.ask(|tx| Command::Bootstrap(request, tx)).await
+    }
+    pub async fn authenticate(&self, request: LoginRequest) -> Result<LoginResponse, ConnectError> {
+        self.ask(|tx| Command::Login(request, tx)).await
+    }
+    pub async fn workspace(&self, token: &str) -> Result<GetWorkspaceResponse, ConnectError> {
+        self.ask(|tx| Command::Workspace(token.into(), tx)).await
+    }
+    pub async fn execute(
+        &self,
+        token: &str,
+        command: EngineCommand,
+    ) -> Result<EngineOutcome, ConnectError> {
+        self.ask(|tx| Command::Execute(token.into(), command, tx))
+            .await
     }
     pub async fn agent_validate_key(&self, secret: &str) -> Result<(), ConnectError> {
         self.ask(|tx| Command::AgentValidate(secret.into(), tx))
@@ -1211,8 +2212,60 @@ impl OfficePreviewService {
         self.ask(|tx| Command::AgentBoard(secret.into(), board, tx))
             .await
     }
+    pub async fn task_discussion(
+        &self,
+        token: &str,
+        task_id: &str,
+    ) -> Result<ListTaskDiscussionResponse, ConnectError> {
+        self.ask(|tx| Command::TaskDiscussion(token.into(), task_id.into(), tx))
+            .await
+    }
+    pub async fn agent_task_discussion(
+        &self,
+        secret: &str,
+        task_id: &str,
+    ) -> Result<ListTaskDiscussionResponse, ConnectError> {
+        self.ask(|tx| Command::AgentTaskDiscussion(secret.into(), task_id.into(), tx))
+            .await
+    }
+    pub async fn agent_save_task_comment(
+        &self,
+        secret: &str,
+        request: SaveTaskCommentRequest,
+    ) -> Result<TaskComment, ConnectError> {
+        self.ask(|tx| Command::AgentComment(secret.into(), request, tx))
+            .await
+    }
+    pub async fn agent_delete_task_comment(
+        &self,
+        secret: &str,
+        request: DeleteTaskCommentRequest,
+    ) -> Result<TaskComment, ConnectError> {
+        self.ask(|tx| Command::AgentDeleteComment(secret.into(), request, tx))
+            .await
+    }
     pub async fn agent_save_task(&self, secret: &str, task: Task) -> Result<Task, ConnectError> {
         self.ask(|tx| Command::AgentTask(secret.into(), task, tx))
+            .await
+    }
+    pub async fn agent_list_reports(
+        &self,
+        secret: &str,
+        request: ListReportsRequest,
+    ) -> Result<ListReportsResponse, ConnectError> {
+        self.ask(|tx| Command::AgentListReports(secret.into(), request, tx))
+            .await
+    }
+    pub async fn agent_get_report(&self, secret: &str, id: &str) -> Result<Report, ConnectError> {
+        self.ask(|tx| Command::AgentGetReport(secret.into(), id.into(), tx))
+            .await
+    }
+    pub async fn agent_save_report(
+        &self,
+        secret: &str,
+        request: SaveReportRequest,
+    ) -> Result<Report, ConnectError> {
+        self.ask(|tx| Command::AgentSaveReport(secret.into(), request, tx))
             .await
     }
 }
@@ -1237,20 +2290,14 @@ impl OfficeService for OfficePreviewService {
         _ctx: RequestContext,
         req: ServiceRequest<'_, BootstrapAdminRequest>,
     ) -> ServiceResult<impl connectrpc::Encodable<BootstrapAdminResponse> + Send + use<'a>> {
-        Response::ok(
-            self.ask(|tx| Command::Bootstrap(req.to_owned_message(), tx))
-                .await?,
-        )
+        Response::ok(self.bootstrap(req.to_owned_message()).await?)
     }
     async fn login<'a>(
         &'a self,
         _ctx: RequestContext,
         req: ServiceRequest<'_, LoginRequest>,
     ) -> ServiceResult<impl connectrpc::Encodable<LoginResponse> + Send + use<'a>> {
-        Response::ok(
-            self.ask(|tx| Command::Login(req.to_owned_message(), tx))
-                .await?,
-        )
+        Response::ok(self.authenticate(req.to_owned_message()).await?)
     }
     async fn get_workspace<'a>(
         &'a self,
@@ -1258,7 +2305,7 @@ impl OfficeService for OfficePreviewService {
         _req: ServiceRequest<'_, GetWorkspaceRequest>,
     ) -> ServiceResult<impl connectrpc::Encodable<GetWorkspaceResponse> + Send + use<'a>> {
         let token = bearer(&ctx)?;
-        Response::ok(self.ask(|tx| Command::Workspace(token, tx)).await?)
+        Response::ok(self.workspace(&token).await?)
     }
     async fn save_member<'a>(
         &'a self,
@@ -1266,10 +2313,13 @@ impl OfficeService for OfficePreviewService {
         req: ServiceRequest<'_, SaveMemberRequest>,
     ) -> ServiceResult<impl connectrpc::Encodable<SaveMemberResponse> + Send + use<'a>> {
         let token = bearer(&ctx)?;
-        Response::ok(
-            self.ask(|tx| Command::Member(token, req.to_owned_message(), tx))
-                .await?,
-        )
+        let EngineOutcome::Member(result) = self
+            .execute(&token, EngineCommand::SaveMember(req.to_owned_message()))
+            .await?
+        else {
+            unreachable!()
+        };
+        Response::ok(result)
     }
     async fn save_customer<'a>(
         &'a self,
@@ -1277,10 +2327,13 @@ impl OfficeService for OfficePreviewService {
         req: ServiceRequest<'_, SaveCustomerRequest>,
     ) -> ServiceResult<impl connectrpc::Encodable<SaveCustomerResponse> + Send + use<'a>> {
         let token = bearer(&ctx)?;
-        Response::ok(
-            self.ask(|tx| Command::Customer(token, req.to_owned_message(), tx))
-                .await?,
-        )
+        let EngineOutcome::Customer(result) = self
+            .execute(&token, EngineCommand::SaveCustomer(req.to_owned_message()))
+            .await?
+        else {
+            unreachable!()
+        };
+        Response::ok(result)
     }
     async fn save_project<'a>(
         &'a self,
@@ -1288,10 +2341,13 @@ impl OfficeService for OfficePreviewService {
         req: ServiceRequest<'_, SaveProjectRequest>,
     ) -> ServiceResult<impl connectrpc::Encodable<SaveProjectResponse> + Send + use<'a>> {
         let token = bearer(&ctx)?;
-        Response::ok(
-            self.ask(|tx| Command::Project(token, req.to_owned_message(), tx))
-                .await?,
-        )
+        let EngineOutcome::Project(result) = self
+            .execute(&token, EngineCommand::SaveProject(req.to_owned_message()))
+            .await?
+        else {
+            unreachable!()
+        };
+        Response::ok(result)
     }
     async fn save_board<'a>(
         &'a self,
@@ -1299,10 +2355,13 @@ impl OfficeService for OfficePreviewService {
         req: ServiceRequest<'_, SaveBoardRequest>,
     ) -> ServiceResult<impl connectrpc::Encodable<SaveBoardResponse> + Send + use<'a>> {
         let token = bearer(&ctx)?;
-        Response::ok(
-            self.ask(|tx| Command::Board(token, req.to_owned_message(), tx))
-                .await?,
-        )
+        let EngineOutcome::Board(result) = self
+            .execute(&token, EngineCommand::SaveBoard(req.to_owned_message()))
+            .await?
+        else {
+            unreachable!()
+        };
+        Response::ok(result)
     }
     async fn save_task<'a>(
         &'a self,
@@ -1310,10 +2369,92 @@ impl OfficeService for OfficePreviewService {
         req: ServiceRequest<'_, SaveTaskRequest>,
     ) -> ServiceResult<impl connectrpc::Encodable<SaveTaskResponse> + Send + use<'a>> {
         let token = bearer(&ctx)?;
+        let EngineOutcome::Task(result) = self
+            .execute(&token, EngineCommand::SaveTask(req.to_owned_message()))
+            .await?
+        else {
+            unreachable!()
+        };
+        Response::ok(result)
+    }
+    async fn list_task_discussion<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, ListTaskDiscussionRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<ListTaskDiscussionResponse> + Send + use<'a>>
+    {
         Response::ok(
-            self.ask(|tx| Command::Task(token, req.to_owned_message(), tx))
+            self.task_discussion(&bearer(&ctx)?, &req.to_owned_message().task_id)
                 .await?,
         )
+    }
+    async fn save_task_comment<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, SaveTaskCommentRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<SaveTaskCommentResponse> + Send + use<'a>> {
+        let EngineOutcome::TaskComment(result) = self
+            .execute(
+                &bearer(&ctx)?,
+                EngineCommand::SaveTaskComment(req.to_owned_message()),
+            )
+            .await?
+        else {
+            unreachable!()
+        };
+        Response::ok(result)
+    }
+    async fn delete_task_comment<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, DeleteTaskCommentRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<DeleteTaskCommentResponse> + Send + use<'a>> {
+        let EngineOutcome::DeletedTaskComment(result) = self
+            .execute(
+                &bearer(&ctx)?,
+                EngineCommand::DeleteTaskComment(req.to_owned_message()),
+            )
+            .await?
+        else {
+            unreachable!()
+        };
+        Response::ok(result)
+    }
+    async fn list_reports<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, ListReportsRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<ListReportsResponse> + Send + use<'a>> {
+        let token = bearer(&ctx)?;
+        Response::ok(
+            self.ask(|tx| Command::ListReports(token, req.to_owned_message(), tx))
+                .await?,
+        )
+    }
+    async fn get_report<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, GetReportRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<GetReportResponse> + Send + use<'a>> {
+        let token = bearer(&ctx)?;
+        Response::ok(
+            self.ask(|tx| Command::GetReport(token, req.to_owned_message(), tx))
+                .await?,
+        )
+    }
+    async fn save_report<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, SaveReportRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<SaveReportResponse> + Send + use<'a>> {
+        let token = bearer(&ctx)?;
+        let EngineOutcome::Report(result) = self
+            .execute(&token, EngineCommand::SaveReport(req.to_owned_message()))
+            .await?
+        else {
+            unreachable!()
+        };
+        Response::ok(result)
     }
     async fn list_agent_keys<'a>(
         &'a self,
@@ -1351,10 +2492,13 @@ impl OfficeService for OfficePreviewService {
         req: ServiceRequest<'_, SavePostRequest>,
     ) -> ServiceResult<impl connectrpc::Encodable<SavePostResponse> + Send + use<'a>> {
         let token = bearer(&ctx)?;
-        Response::ok(
-            self.ask(|tx| Command::Post(token, req.to_owned_message(), tx))
-                .await?,
-        )
+        let EngineOutcome::Post(result) = self
+            .execute(&token, EngineCommand::SavePost(req.to_owned_message()))
+            .await?
+        else {
+            unreachable!()
+        };
+        Response::ok(result)
     }
     async fn save_settings<'a>(
         &'a self,
@@ -1362,16 +2506,110 @@ impl OfficeService for OfficePreviewService {
         req: ServiceRequest<'_, SaveSettingsRequest>,
     ) -> ServiceResult<impl connectrpc::Encodable<SaveSettingsResponse> + Send + use<'a>> {
         let token = bearer(&ctx)?;
-        Response::ok(
-            self.ask(|tx| Command::Settings(token, req.to_owned_message(), tx))
-                .await?,
-        )
+        let EngineOutcome::Settings(result) = self
+            .execute(&token, EngineCommand::SaveSettings(req.to_owned_message()))
+            .await?
+        else {
+            unreachable!()
+        };
+        Response::ok(result)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    async fn initialized_durable_database(path: &Path) {
+        let (storage, loaded) = storage::Storage::open(path).unwrap();
+        let mut actor = WorkspaceActor::new();
+        actor.state = State {
+            settings: WorkspaceSettings {
+                default_theme: "light".into(),
+                timezone: "Asia/Kolkata".into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        actor.key = loaded.signing_key;
+        actor.storage = Some(Arc::new(Mutex::new(storage)));
+        let before = actor.snapshot();
+        let response = actor
+            .bootstrap(BootstrapAdminRequest {
+                name: "Admin".into(),
+                email: "admin@example.test".into(),
+                password: "sample-password-123".into(),
+                workspace_name: "Office".into(),
+                ..Default::default()
+            })
+            .await;
+        actor.persist(before, response).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn initialized_database_rejects_valid_json_empty_record_and_missing_credentials() {
+        for fault in ["record", "password"] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("office.sqlite3");
+            initialized_durable_database(&path).await;
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            if fault == "record" {
+                let sequence: i64 = conn
+                    .query_row("SELECT MAX(sequence) + 1 FROM events", [], |r| r.get(0))
+                    .unwrap();
+                conn.execute("INSERT INTO events(sequence, event_id, event_type, event_version, occurred_at, payload) VALUES(?1, ?2, 'customer', 1, ?3, '{}')",
+                    rusqlite::params![sequence, id(), now()]).unwrap();
+            } else {
+                conn.execute("DELETE FROM passwords", []).unwrap();
+            }
+            drop(conn);
+            assert!(
+                OfficePreviewService::open(&path).await.is_err(),
+                "accepted {fault}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn failed_sql_commit_restores_projection_and_credentials() {
+        for fault in ["settings", "passwords"] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("office.sqlite3");
+            let (storage, loaded) = storage::Storage::open(&path).unwrap();
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            let trigger = if fault == "settings" {
+                "CREATE TRIGGER fail_events BEFORE INSERT ON events WHEN NEW.event_type = 'settings' BEGIN SELECT RAISE(ABORT, 'forced failure'); END;"
+            } else {
+                "CREATE TRIGGER fail_passwords BEFORE INSERT ON passwords BEGIN SELECT RAISE(ABORT, 'forced failure'); END;"
+            };
+            conn.execute_batch(trigger).unwrap();
+            drop(conn);
+            let mut actor = WorkspaceActor::new();
+            actor.state = State::default();
+            actor.key = loaded.signing_key;
+            actor.storage = Some(Arc::new(Mutex::new(storage)));
+            let before = actor.snapshot();
+            let result = actor
+                .bootstrap(BootstrapAdminRequest {
+                    name: "Admin".into(),
+                    email: "admin@example.test".into(),
+                    password: "sample-password-123".into(),
+                    workspace_name: "Office".into(),
+                    ..Default::default()
+                })
+                .await;
+            assert!(actor.persist(before, result).await.is_err(), "{fault}");
+            assert!(!actor.setup);
+            assert!(actor.state.members.is_empty());
+            assert!(actor.passwords.is_empty());
+            assert!(actor.log.is_empty());
+            drop(actor);
+            let (_, loaded) = storage::Storage::open(&path).unwrap();
+            assert!(loaded.events.is_empty(), "{fault}");
+            assert!(!loaded.setup);
+            assert!(loaded.passwords.is_empty());
+        }
+    }
 
     #[tokio::test]
     async fn public_events_replay_state_without_credentials() {
