@@ -46,4 +46,4 @@ Hermes owns Telegram, Slack, WhatsApp/Evolution and other conversational channel
 
 ## Hosting and product conventions
 
-GHCR `edge` is a preview image and there is no deployed public service. See [hosting](hosting.md) for the deployment boundary. The UI uses React and Vite; the service uses Rust, Axum and ConnectRPC. The protobuf contract is in `proto/office/v1/office.proto`; `just generate` regenerates clients. Use pnpm for frontend work and follow the root `AGENTS.md` for focused checks. Never hand-edit generated clients.
+GHCR images are published only for version tags and remain previews; the public repository does not configure an operator-specific deployment. See [hosting](hosting.md) for the deployment boundary. The UI uses React and Vite; the service uses Rust, Axum and ConnectRPC. The protobuf contract is in `proto/office/v1/office.proto`; `just generate` regenerates clients. Use pnpm for frontend work and follow the root `AGENTS.md` for focused checks. Never hand-edit generated clients.

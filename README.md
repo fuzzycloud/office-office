@@ -56,7 +56,7 @@ Litestream can be configured separately by an operator for offsite replication; 
 
 ## Hosting and releases
 
-The GHCR `edge` image is a preview, not a public service or a production-ready deployment. No public service is deployed. See [hosting notes](docs/hosting.md) and [release management](docs/releases.md).
+Version-tagged GHCR images are previews, not a production-ready deployment. No public service is deployed. See [hosting notes](docs/hosting.md) and [release management](docs/releases.md).
 
 ## Decisions and security
 

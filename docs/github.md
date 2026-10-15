@@ -15,4 +15,4 @@ git push -u origin main
 
 The README already exists, so do not append another heading. `.gitignore` excludes credentials, runtime board data, build outputs and dependencies. Review staged files before committing.
 
-GitHub Actions checks the scaffold and publishes the image to GHCR on main. After the first successful image publication, change package visibility to Public if anonymous pulls are intended. No Kamal or server deploy is configured.
+GitHub Actions runs checks and E2E tests for main/PR changes; version tags publish release images to GHCR after the same checks pass. After the first successful image publication, change package visibility to Public if anonymous pulls are intended. Operator-specific server deployment is intentionally kept outside this repository.

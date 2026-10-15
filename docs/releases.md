@@ -27,7 +27,7 @@ The release recipe runs `just check` and then `cargo release --workspace patch -
 
 ## Published artifacts
 
-Pushing `main` or a `v*` tag starts the image workflow after the required checks pass. The GHCR image is `ghcr.io/fuzzycloud/office-office`; the workflow uses the repository-provided `GITHUB_TOKEN` with `packages: write`, so no package token secret is required. It publishes an `edge` tag for `main`, a `sha-<full-commit>` tag, and a semantic version tag for a release. A stable release also receives `latest`; a prerelease version does not. The workflow creates a GitHub Release with generated notes after the version-tag image push succeeds.
+Branch pushes and pull requests run checks and E2E tests with the debug Rust server. Only a `v*` tag starts the release image workflow, after the same required checks pass. The GHCR image is `ghcr.io/fuzzycloud/office-office`; the workflow uses the repository-provided `GITHUB_TOKEN` with `packages: write`, so no package token secret is required. It publishes a `sha-<full-commit>` tag and a semantic version tag for each release. Branch pushes do not build or publish container images. A stable release also receives `latest`; a prerelease version does not. The workflow creates a GitHub Release with generated notes after the version-tag image push succeeds.
 
 The image workflow builds and publishes an image only. It does not deploy a server or receive runtime office credentials. See [hosting](hosting.md) for pulling and running the image.
 

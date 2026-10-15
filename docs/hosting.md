@@ -12,7 +12,7 @@ This is not yet a publicly deployed or production-reviewed service. Keep setup o
 
 The hosted shape is one application writer and one SQLite volume. Katha handles domain events and rebuildable projections; kathputli serializes commands. SQLite uses WAL with FULL synchronous commits. A process lock rejects another application writer. Do not use a shared network filesystem or run several application instances against the same file.
 
-The image sets `ADDR=0.0.0.0:8080`, `OFFICE_ALLOW_REMOTE=true` and `OFFICE_DATABASE_PATH=/data/office-office.sqlite3`. It runs as UID/GID 10001. Mount a persistent volume at `/data`, owned by that identity and restricted to mode 0700. Replacing a container without persistent storage discards its office. No Kamal deployment is configured.
+The image sets `ADDR=0.0.0.0:8080`, `OFFICE_ALLOW_REMOTE=true` and `OFFICE_DATABASE_PATH=/data/office-office.sqlite3`. It runs as UID/GID 10001. Mount a persistent volume at `/data`, owned by that identity and restricted to mode 0700. Replacing a container without persistent storage discards its office. Operator-specific deployment configuration is intentionally kept outside this repository.
 
 The database includes private authentication tables and a signing key. Protect the volume with encryption and restricted access. Provider credentials are not implemented. [Storage and recovery](storage.md) covers transaction guarantees, event retention and recovery.
 
