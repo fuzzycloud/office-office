@@ -35,17 +35,51 @@ struct OfficeMcp {
     secret: String,
 }
 
-pub fn router(service: Arc<OfficePreviewService>) -> Router {
+pub fn config(extra_hosts: Option<&str>) -> Result<StreamableHttpServerConfig, String> {
+    let mut config = StreamableHttpServerConfig::default()
+        .with_legacy_session_mode(false)
+        .with_json_response(true)
+        .with_max_request_body_bytes(1024 * 1024);
+    if let Some(hosts) = extra_hosts {
+        for host in hosts.split(',').map(str::trim) {
+            let authority = host
+                .parse::<axum::http::uri::Authority>()
+                .map_err(|_| "OFFICE_MCP_ALLOWED_HOSTS must contain comma-separated hostnames or host:port authorities")?;
+            let port = authority
+                .as_str()
+                .strip_prefix(authority.host())
+                .unwrap_or("");
+            if host.contains(['@', '*'])
+                || (!port.is_empty()
+                    && port
+                        .strip_prefix(':')
+                        .and_then(|value| value.parse::<u16>().ok())
+                        .is_none())
+            {
+                return Err("OFFICE_MCP_ALLOWED_HOSTS must contain explicit hosts with valid optional ports; URLs, credentials and wildcards are unsupported".into());
+            }
+            config.allowed_hosts.push(host.to_owned());
+        }
+    }
+    Ok(config)
+}
+
+pub fn router(service: Arc<OfficePreviewService>, config: StreamableHttpServerConfig) -> Router {
     Router::new().route(
         "/mcp",
         any(move |request: Request<Body>| {
             let service = service.clone();
-            async move { handle(service, request).await }
+            let config = config.clone();
+            async move { handle(service, request, config).await }
         }),
     )
 }
 
-async fn handle(service: Arc<OfficePreviewService>, request: Request<Body>) -> Response {
+async fn handle(
+    service: Arc<OfficePreviewService>,
+    request: Request<Body>,
+    config: StreamableHttpServerConfig,
+) -> Response {
     // Browser origins are intentionally unsupported for this agent endpoint.
     if request.headers().contains_key(header::ORIGIN) {
         return (StatusCode::FORBIDDEN, "MCP requests must not send Origin").into_response();
@@ -77,10 +111,6 @@ async fn handle(service: Arc<OfficePreviewService>, request: Request<Body>) -> R
         service,
         secret: secret.to_owned(),
     };
-    let config = StreamableHttpServerConfig::default()
-        .with_legacy_session_mode(false)
-        .with_json_response(true)
-        .with_max_request_body_bytes(1024 * 1024);
     let transport = StreamableHttpService::new(
         move || {
             Ok(OfficeMcp {
@@ -539,7 +569,11 @@ mod tests {
     use tower::ServiceExt;
 
     fn app(service: Arc<OfficePreviewService>) -> Router {
-        router(service.clone()).nest_service(
+        app_with_hosts(service, None)
+    }
+
+    fn app_with_hosts(service: Arc<OfficePreviewService>, hosts: Option<&str>) -> Router {
+        router(service.clone(), config(hosts).unwrap()).nest_service(
             "/rpc",
             service.register(ConnectRouter::new()).into_axum_service(),
         )
@@ -569,10 +603,20 @@ mod tests {
         origin: Option<&str>,
         payload: Value,
     ) -> (StatusCode, Value) {
+        mcp_at_host(app, token, origin, "127.0.0.1:8080", payload).await
+    }
+
+    async fn mcp_at_host(
+        app: &Router,
+        token: Option<&str>,
+        origin: Option<&str>,
+        host: &str,
+        payload: Value,
+    ) -> (StatusCode, Value) {
         let mut request = Request::builder()
             .method("POST")
             .uri("/mcp")
-            .header("host", "127.0.0.1:8080")
+            .header("host", host)
             .header("content-type", "application/json")
             .header("accept", "application/json, text/event-stream");
         if let Some(token) = token {
@@ -725,6 +769,100 @@ mod tests {
         let (status, body) = mcp(&app, Some(&secret), None, init).await;
         assert_eq!(status, StatusCode::OK, "{body}");
         assert_eq!(body["result"]["serverInfo"]["name"], "office-office");
+    }
+
+    #[test]
+    fn validates_configured_hosts_without_disabling_loopback_protection() {
+        let configured = config(Some(" office.example.test , api.example.test:8443 ")).unwrap();
+        assert!(configured.allowed_hosts.contains(&"127.0.0.1".to_owned()));
+        assert!(
+            configured
+                .allowed_hosts
+                .contains(&"office.example.test".to_owned())
+        );
+        for invalid in [
+            "",
+            " ",
+            "*",
+            "https://office.example.test",
+            "user@office.example.test",
+            "office.example.test,",
+            "office.example.test:99999",
+        ] {
+            assert!(
+                config(Some(invalid)).is_err(),
+                "accepted invalid host: {invalid}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn permits_configured_public_host_but_rejects_unlisted_hosts_and_origins() {
+        let app = app_with_hosts(
+            Arc::new(OfficePreviewService::new()),
+            Some("office.example.test:443"),
+        );
+        let (_, secret, _) = key(&app, &["projects:read"]).await;
+        let init = json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}});
+        for host in ["office.example.test:443", "127.0.0.1:8080"] {
+            let (status, body) = mcp_at_host(&app, Some(&secret), None, host, init.clone()).await;
+            assert_eq!(status, StatusCode::OK, "{host}: {body}");
+        }
+        for host in [
+            "evil.test",
+            "office.example.test:444",
+            "sub.office.example.test:443",
+        ] {
+            assert_eq!(
+                mcp_at_host(&app, Some(&secret), None, host, init.clone())
+                    .await
+                    .0,
+                StatusCode::FORBIDDEN,
+                "{host}"
+            );
+        }
+        assert_eq!(
+            mcp_at_host(
+                &app,
+                Some(&secret),
+                Some("https://office.example.test"),
+                "office.example.test:443",
+                init.clone()
+            )
+            .await
+            .0,
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            mcp_at_host(
+                &app,
+                Some("oo_invalid"),
+                None,
+                "office.example.test:443",
+                init
+            )
+            .await
+            .0,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[tokio::test]
+    async fn default_config_rejects_public_host_with_valid_key() {
+        let app = app(Arc::new(OfficePreviewService::new()));
+        let (_, secret, _) = key(&app, &["projects:read"]).await;
+        assert_eq!(
+            mcp_at_host(
+                &app,
+                Some(&secret),
+                None,
+                "office.example.test",
+                json!({"jsonrpc":"2.0","id":1,"method":"tools/list"})
+            )
+            .await
+            .0,
+            StatusCode::FORBIDDEN
+        );
     }
 
     #[tokio::test]

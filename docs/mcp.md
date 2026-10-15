@@ -26,6 +26,10 @@ For clients that support remote MCP configuration in this form:
 
 Exact configuration varies by client. Use the backend port, not the Vite development port. MCP rejects browser `Origin` headers; native clients should omit that header. Keep local use on loopback or put remote access behind a private ingress with transport protection. `OFFICE_ALLOW_REMOTE=true` only acknowledges non-loopback binding; it is not a public authentication perimeter.
 
+For a deployment behind a reverse proxy, set `OFFICE_MCP_ALLOWED_HOSTS=office.example.com` to allow the hostname clients use. Multiple explicit hosts may be comma-separated; an optional port restricts that entry to the specified port, for example `office.example.com:443`. Supply hostnames, not URLs or wildcards. Loopback hosts remain allowed. Invalid configuration fails startup instead of disabling host validation. Without this setting, MCP accepts only loopback hosts and authenticated remote requests receive `403 Forbidden: Host header is not allowed`.
+
+The reverse proxy must preserve the HTTP `Host` (or HTTP/2 authority) for the public hostname. Forwarded-host headers are not a substitute for this allowlist. Configuring an allowed host does not bypass bearer-key checks, module scopes, revocation or the browser-Origin restriction.
+
 ## Tools
 
 | Tool | Purpose | Scope |

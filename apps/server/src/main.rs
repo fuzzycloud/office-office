@@ -27,9 +27,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         OfficePreviewService::open(path).await?
     });
     let connect = service.clone().register(ConnectRouter::new());
+    let mcp_config = mcp::config(std::env::var("OFFICE_MCP_ALLOWED_HOSTS").ok().as_deref())?;
     let app = Router::new()
         .route("/healthz", get(|| async { "ok" }))
-        .merge(mcp::router(service.clone()))
+        .merge(mcp::router(service.clone(), mcp_config))
         .nest_service("/rpc", connect.into_axum_service())
         .fallback_service(
             ServeDir::new("apps/web/dist")
