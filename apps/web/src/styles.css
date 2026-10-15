@@ -20,6 +20,20 @@ body {
 	margin: 0;
 }
 
+.drawer-content {
+	min-width: 0;
+}
+
+.navbar > .flex-1 {
+	min-width: 0;
+}
+
+@media (max-width: 480px) {
+	.navbar .badge {
+		display: none;
+	}
+}
+
 button,
 input,
 select,
@@ -242,6 +256,11 @@ textarea {
 	background: transparent;
 	color: var(--color-base-content);
 	text-align: left;
+}
+
+/* Keep absolute screen-reader labels inside each card's scroll container. */
+.task-row {
+	position: relative;
 }
 .task-main:disabled {
 	cursor: default;

@@ -596,26 +596,32 @@ export default function Reports({
 												))}
 										</select>
 									</div>
-									<label className="form-control">
-										<span className="label-text">Short summary</span>
+									<div className="form-control">
+										<label className="label-text" htmlFor="report-summary">
+											Short summary
+										</label>
 										<textarea
+											id="report-summary"
 											className="textarea textarea-bordered min-h-20"
 											value={draft.summary}
 											onChange={(event) =>
 												update("summary", event.target.value)
 											}
 										/>
-									</label>
+									</div>
 								</div>
-								<label className="form-control">
-									<span className="label-text">Report content</span>
+								<div className="form-control">
+									<label className="label-text" htmlFor="report-content">
+										Report content
+									</label>
 									<textarea
+										id="report-content"
 										className="textarea textarea-bordered report-body-input"
 										value={draft.body}
 										onChange={(event) => update("body", event.target.value)}
 										placeholder="Write in plain text or Markdown. Use headings with #, ## or ### and bullets with - ."
 									/>
-								</label>
+								</div>
 								<div className="report-sources-editor">
 									<h4>Sources</h4>
 									{draft.sources.map((source, index) => (

@@ -53,9 +53,25 @@ test("sample board counts, search, owner and priority filters; drag and accessib
 			exact: true,
 		}),
 	});
-	await card.dragTo(
-		page.getByRole("region", { name: "Done, 1 tasks", exact: true }),
-	);
+	// Initiate native dragging before scrolling to the destination below the
+	// viewport; dragTo scrolls first and can move the card away from the pointer.
+	await card.scrollIntoViewIfNeeded();
+	const source = await card.boundingBox();
+	expect(source).not.toBeNull();
+	if (!source) throw new Error("Task card has no bounds");
+	await page.mouse.move(source.x + 20, source.y + 20);
+	await page.mouse.down();
+	await page.mouse.move(source.x + 35, source.y + 25, { steps: 5 });
+	const destination = page.getByRole("region", {
+		name: "Done, 1 tasks",
+		exact: true,
+	});
+	await destination.scrollIntoViewIfNeeded();
+	const target = await destination.boundingBox();
+	expect(target).not.toBeNull();
+	if (!target) throw new Error("Destination column has no bounds");
+	await page.mouse.move(target.x + 20, target.y + 20, { steps: 5 });
+	await page.mouse.up();
 	await expect(
 		page.getByLabel(`Move ${taskTitle} to column`, { exact: true }),
 	).toHaveValue("Done");

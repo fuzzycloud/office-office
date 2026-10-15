@@ -44,3 +44,7 @@ These tests exercise typed commands, permissions, revisions, event replay, trans
 ## Coverage boundaries
 
 Passing scenario counts do not measure statement or branch coverage. The browser suite currently targets Chromium, including a 390px layout; this is not evidence of Safari, Firefox or physical-device compatibility. Invalid-session recovery is covered through the browser, while genuine JWT expiry is checked by the Rust suite. Large datasets, response-loss after commit, backup restore and external publishing are not covered by these scenarios. A full CI run must pass before treating browser behavior as verified.
+
+## Verified run — 2026-10-15
+
+The complete Chromium suite passed all 19 scenarios against isolated real servers after host networking and browser execution were enabled. This includes mobile width and keyboard checks, native drag-and-drop, report editing, concurrency, session recovery and SQLite restart persistence. Runtime failures exposed populated-textarea label associations and mobile accessibility-label overflow; both were fixed rather than bypassed. The drag test now initiates a native drag before scrolling to its destination. The invalid-session test checks the HTTP status before the app's intentional navigation, avoiding a race reading an old response body.

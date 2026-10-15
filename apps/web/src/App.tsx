@@ -2138,9 +2138,15 @@ function TaskEditor({
 							required
 						/>
 					</label>
-					<label className="form-control">
-						<span className="label-text mb-1">Description</span>
+					<div className="form-control">
+						<label
+							className="label-text mb-1"
+							htmlFor={`${fieldId}-description`}
+						>
+							Description
+						</label>
 						<textarea
+							id={`${fieldId}-description`}
 							className="textarea textarea-bordered"
 							value={value.description}
 							onChange={(event) =>
@@ -2148,7 +2154,7 @@ function TaskEditor({
 							}
 							rows={3}
 						/>
-					</label>
+					</div>
 					<div className="grid gap-4 sm:grid-cols-2">
 						<div className="form-control">
 							<label className="label-text mb-1" htmlFor={`${fieldId}-owner`}>

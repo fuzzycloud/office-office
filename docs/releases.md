@@ -4,7 +4,7 @@ The repository uses `cargo-release` 1.1.2 to manage version bumps, commits, tags
 
 ## Version policy
 
-The manifests are prepared for `0.2.0`. A version bump in the working tree is not a published release; publication requires a committed version, its matching tag and successful image/release workflows. Before `1.0.0`, use patch releases for fixes and minor releases for features or breaking changes. Treat `1.0.0` as a deliberate stability milestone; after it, breaking changes require a major version bump.
+A version bump in the working tree is not a published release; publication requires a committed version, its matching tag and successful image/release workflows. Existing tags are never moved to repair a failed release; fixes receive a new patch version. Before `1.0.0`, use patch releases for fixes and minor releases for features or breaking changes. Treat `1.0.0` as a deliberate stability milestone; after it, breaking changes require a major version bump.
 
 ## Preview and release
 

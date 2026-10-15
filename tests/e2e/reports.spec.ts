@@ -225,7 +225,7 @@ test("report module and viewer permissions apply to navigation, editor and direc
 	await openReports(page, office.url, viewer.token);
 	await page.getByRole("button", { name: new RegExp(report.title) }).click();
 	await expect(
-		page.getByRole("heading", { name: report.title, exact: true }),
+		page.getByRole("heading", { name: report.title, exact: true, level: 3 }),
 	).toBeVisible();
 	await expect(page.getByRole("button", { name: /New report/ })).toHaveCount(0);
 	await expect(

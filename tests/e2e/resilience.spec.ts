@@ -18,7 +18,7 @@ test("a real invalid-session response returns to sign in and a fresh login recov
 			response.status() === 401,
 	);
 	await page.reload();
-	expect((await (await rejected).json()).code).toBe("unauthenticated");
+	expect((await rejected).status()).toBe(401);
 	await expect(
 		page.getByRole("heading", { name: "Sign in", exact: true }),
 	).toBeVisible();

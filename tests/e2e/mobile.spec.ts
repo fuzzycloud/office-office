@@ -16,6 +16,7 @@ async function expectNoPageOverflow(page: Page) {
 		width: document.documentElement.scrollWidth,
 		viewport: document.documentElement.clientWidth,
 	}));
+
 	expect(
 		width,
 		"The page must fit the viewport without horizontal scrolling",

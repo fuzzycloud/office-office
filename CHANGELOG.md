@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.2.0 — pending publication
+## 0.2.1
+
+- Fix accessible labels for populated task descriptions and research editor textareas.
+- Contain off-screen task labels and simplify the narrow navbar so mobile pages fit the viewport.
+- Initiate native drag before scrolling in browser automation; disambiguate research headings and avoid the navigation/response-body race during authentication recovery.
+- Verify all 19 E2E scenarios successfully against real servers and Chromium.
+
+## 0.2.0
 
 - Persist workspace events and private authentication state in SQLite, with atomic command commits, restart replay and a single writer lock. Include an optional Litestream configuration template.
 - Create optional sample offices through typed engine commands during first-admin registration, using fictional customers, projects, tasks, research and disconnected social drafts.

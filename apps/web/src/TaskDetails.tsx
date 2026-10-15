@@ -209,16 +209,22 @@ export default function TaskDetails({
 											maxLength={200}
 										/>
 									</label>
-									<label className="form-control">
-										<span className="label-text mb-1">Description</span>
+									<div className="form-control">
+										<label
+											className="label-text mb-1"
+											htmlFor={`${id}-description`}
+										>
+											Description
+										</label>
 										<textarea
+											id={`${id}-description`}
 											className="textarea textarea-bordered min-h-48 w-full"
 											value={draft.description}
 											onChange={(event) =>
 												change("description", event.target.value)
 											}
 										/>
-									</label>
+									</div>
 									<div className="task-property-edit">
 										<div className="form-control">
 											<label
