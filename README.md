@@ -52,9 +52,13 @@ curl http://127.0.0.1:8080/rpc/office.v1.OfficeService/GetBoard \
 
 `just check` runs Rust formatting, Clippy, tests, frontend checking and the production UI build. `just generate` lints protobuf and regenerates the TypeScript client. Dependencies follow the current pi_dx reference where applicable.
 
+## Releases
+
+Releases use `cargo-release` to keep the Rust workspace and web package versions aligned. See [release management](docs/releases.md) for the version policy, preview and release commands, and image tags.
+
 ## Hosting
 
-Build with `docker build -t office-office .`. Supply two distinct credentials at runtime, mount `/data` as a persistent volume, and terminate HTTPS at your ingress. See [hosting](docs/hosting.md). GitHub Actions publishes `ghcr.io/fuzzycloud/office-office` after checks pass. Set the package visibility to public after its first publication. Server deployment and Kamal are deferred.
+Build with `docker build -t office-office .`. Supply two distinct credentials at runtime, mount `/data` as a persistent volume, and terminate HTTPS at your ingress. See [hosting](docs/hosting.md). GitHub Actions publishes `ghcr.io/fuzzycloud/office-office` after checks pass. Server deployment and Kamal are deferred.
 
 ## Roadmap
 

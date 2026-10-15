@@ -18,6 +18,13 @@ jobs:
           cache: pnpm
       - uses: bufbuild/buf-setup-action@v1
       - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Check shared product version
+        run: python3 scripts/check-versions.py
+      - name: Check release tag matches product version
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 scripts/check-versions.py --tag "$RELEASE_TAG"
       - run: pnpm install --frozen-lockfile
       - run: buf lint && pnpm generate
       - run: git diff --exit-code -- apps/web/src/gen

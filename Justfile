@@ -17,6 +17,7 @@ web:
     pnpm dev
 
 check:
+    python3 scripts/check-versions.py
     cargo fmt --all -- --check
     cargo clippy -p office-server --all-targets -- -D warnings
     cargo test -p office-server
@@ -26,3 +27,18 @@ check:
 build:
     pnpm build
     cargo build -p office-server --release
+
+# Install the pinned release tool; this does not release the application.
+release-install:
+    cargo install cargo-release --version 1.1.2 --locked
+
+release-check:
+    python3 scripts/check-versions.py
+
+# cargo-release is a dry run unless --execute is supplied.
+release-plan level="patch": release-check
+    cargo release --workspace {{quote(level)}}
+
+# Requires a clean main checkout; cargo-release asks before committing/tagging/pushing.
+release level="patch": check
+    cargo release --workspace {{quote(level)}} --execute

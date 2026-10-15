@@ -1,0 +1,18 @@
+# One product version; CI publishes the container, never crates.io.
+allow-branch = ["main"]
+publish = false
+shared-version = true
+consolidate-commits = true
+tag = true
+tag-name = "v{{version}}"
+tag-message = "Office Office v{{version}}"
+pre-release-commit-message = "chore: release v{{version}}"
+push = true
+push-remote = "origin"
+
+# Paths are relative to the released crate (apps/server).
+pre-release-replacements = [
+  { file = "../../package.json", search = '"version": "[^"]+"', replace = '"version": "{{version}}"', exactly = 1, prerelease = true },
+  { file = "../web/package.json", search = '"version": "[^"]+"', replace = '"version": "{{version}}"', exactly = 1, prerelease = true },
+]
+pre-release-hook = ["python3", "../../scripts/check-versions.py"]

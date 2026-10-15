@@ -20,7 +20,7 @@ Hermes owns Telegram, Slack, WhatsApp/Evolution and other channel operations. Of
 
 ## Hosted path
 
-Start with one container, one persistent volume and HTTPS ingress. The Dockerfile builds React and Rust using a pinned cargo-chef planner/cook/build pipeline; the server serves both from the same origin. GitHub Actions builds and publishes to GHCR on main and version tags after checks pass. Servers pull the image; Kamal is explicitly deferred. No deployment has been performed. Individual identity, workspace isolation, backup/restore verification and multi-user conflict control remain prerequisites for a public multi-user service.
+Start with one container, one persistent volume and HTTPS ingress. The Dockerfile builds React and Rust using a pinned cargo-chef planner/cook/build pipeline; the server serves both from the same origin. GitHub Actions builds and publishes to GHCR on main and version tags after checks pass. Servers pull the image; Kamal is explicitly deferred. Cargo-release manages one product version across Rust and the frontend manifests, commits and pushes a matching vVERSION tag, and tag CI validates that match before publishing a versioned image and GitHub release notes. Main builds publish an edge image; latest advances only for stable release tags. No deployment has been performed. Individual identity, workspace isolation, backup/restore verification and multi-user conflict control remain prerequisites for a public multi-user service.
 
 ## Sources of conventions
 

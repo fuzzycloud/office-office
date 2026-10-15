@@ -1,6 +1,6 @@
 # Hosting the starter
 
-Build: `docker build -t office-office .`
+Build locally with `docker build -t office-office .`:
 
 ```sh
 docker run --rm -p 127.0.0.1:8080:8080 \
@@ -14,8 +14,20 @@ The image is a single-instance bootstrap. Keep a persistent volume; otherwise re
 
 Do not horizontally scale file persistence. Before opening a multi-user service, implement individual accounts, workspace isolation, audit events and revision-safe writes with PostgreSQL. The application does not yet implement those capabilities.
 
-## Public image
+## GitHub image publishing
 
-GitHub Actions checks the code, builds with cargo-chef and pushes to `ghcr.io/fuzzycloud/office-office` on main, version tags or manual dispatch. After first publication, set the GHCR package visibility to public; a public source repository does not automatically make its image public. No SSH deployment runs in CI. Kamal is deferred.
+The GitHub Actions workflow checks the code and publishes `ghcr.io/fuzzycloud/office-office` on pushes to `main`, version tags, and manual dispatch. It builds an image only; there is no server deployment or Kamal job. Release tags and image tags are described in [release management](releases.md).
 
-Pull with `docker pull ghcr.io/fuzzycloud/office-office:latest`, then run it using the same credentials and volume options above. For a reproducible deployment, select the `sha-<full-commit>` tag or image digest instead of latest.
+GHCR authentication uses the workflow's `GITHUB_TOKEN` and `packages: write` permission. No additional GHCR secret is needed. For the first publication, confirm that repository Actions are enabled and permitted to run the workflow's referenced actions. The organization must allow GitHub Packages and package creation. If the package already exists, grant the repository's Actions workflow access to it. After the first successful publish, set package visibility to Public if anonymous pulls are intended; a public source repository does not make its container package public automatically. See [GitHub's container registry documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
+
+Pull a published image with:
+
+```sh
+docker pull ghcr.io/fuzzycloud/office-office:latest
+```
+
+For reproducible deployments, use the `sha-<full-commit>` tag or an image digest. Supply the two runtime credentials and persistent volume as shown above.
+
+## Optional Docker Hub publishing
+
+Docker Hub publishing is not configured. If it is added later, configure repository Actions secrets named `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`. The username should own or have publish access to the intended Docker Hub namespace, and the token should be a Docker Hub access token with the permissions needed to push. The image workflow should log in to Docker Hub using those secrets and publish an explicitly chosen namespace and repository. Never place runtime office tokens or provider credentials in CI secrets for image publication.
