@@ -784,7 +784,7 @@ mod tests {
         let id = report["id"].as_str().unwrap().to_owned();
         assert_eq!(report["revision"], 1);
         assert_eq!(report["authorName"], "Admin (AI: MCP test)");
-        let (_, listed) = mcp(&app, Some(&secret), None, json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"office_list_reports","arguments":{"query":"competitor","page_size":1}}})).await;
+        let (_, listed) = mcp(&app, Some(&secret), None, json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"office_list_reports","arguments":{"query":"Weekly competitor review","page_size":1}}})).await;
         assert_eq!(listed["result"]["isError"], false, "{listed}");
         let list = &listed["result"]["structuredContent"]["reports"];
         assert_eq!(list[0]["id"], id);
