@@ -13,12 +13,13 @@ import Reports from "./Reports";
 import TaskDetails from "./TaskDetails";
 import {
 	bootstrapAdmin,
-	createAgentKey,
+	listRoles,
 	getSetupStatus,
 	getWorkspace,
 	listAgentKeys,
 	login,
 	revokeAgentKey,
+	rotateAgentKey,
 	saveBoard,
 	saveCustomer,
 	saveMember,
@@ -41,6 +42,7 @@ type Page =
 	| "customers"
 	| "projects"
 	| "reports"
+	| "roles"
 	| "social"
 	| "settings";
 type RecordDraft = {
@@ -55,7 +57,6 @@ type RecordDraft = {
 	department: string;
 	role: string;
 	kind: string;
-	access: string[];
 	password: string;
 	customerId: string;
 	summary: string;
@@ -77,6 +78,7 @@ const nav: { id: Page; label: string; icon: string }[] = [
 	{ id: "customers", label: "Customers", icon: "◎" },
 	{ id: "projects", label: "Projects", icon: "▤" },
 	{ id: "reports", label: "Reports", icon: "⌕" },
+	{ id: "roles", label: "Roles & permissions", icon: "♙" },
 	{ id: "social", label: "Social queue", icon: "◷" },
 	{ id: "settings", label: "Settings", icon: "⚙" },
 ];
@@ -125,6 +127,7 @@ const title: Record<Page, string> = {
 	customers: "Customers",
 	projects: "Projects",
 	reports: "Reports",
+	roles: "Roles & permissions",
 	social: "Social queue",
 	settings: "Settings",
 };
@@ -202,13 +205,13 @@ export default function App() {
 	const me = data?.currentUser;
 	const canManageTeam = me?.role === "admin";
 	const canWrite = (area: string) =>
-		me?.role === "admin" ||
-		(me?.role !== "viewer" && !!me?.access.includes(area));
+		!!data?.permissions.includes(`${area}:write`);
 	const canView = (area: Page) =>
 		area === "overview" ||
 		area === "settings" ||
-		me?.role === "admin" ||
-		!!me?.access.includes(area);
+		area === "roles" ||
+		(area === "team" && me?.role === "admin") ||
+		!!data?.permissions.includes(`${area}:read`);
 	const navigate = (next: Page) => {
 		if (canView(next)) {
 			setPage(next);
@@ -250,7 +253,12 @@ export default function App() {
 			if (payload.kind === "post") return savePost(payload.value);
 			return saveSettings(payload.value);
 		},
-		onSuccess: refresh,
+		onSuccess: (result) => {
+			if (result && "secret" in result && result.secret) {
+				setSecretToReveal(result.secret);
+			}
+			refresh();
+		},
 	});
 
 	if (setup.isPending)
@@ -343,7 +351,7 @@ export default function App() {
 					role: draft.role,
 					kind: draft.kind || "human",
 					status: draft.status,
-					access: draft.access,
+					access: [],
 					password: draft.password,
 				},
 			});
@@ -529,6 +537,7 @@ export default function App() {
 								onAdd={() => edit("member")}
 							/>
 						)}
+						{page === "roles" && <RolesPage />}
 						{page === "customers" && (
 							<Customers
 								items={data.customers}
@@ -594,7 +603,6 @@ export default function App() {
 								theme={theme}
 								onTheme={updateTheme}
 								onSave={(value) => mutation.mutate({ kind: "settings", value })}
-								secretToReveal={secretToReveal}
 								onSecret={(secret) => setSecretToReveal(secret)}
 							/>
 						)}
@@ -696,6 +704,84 @@ export default function App() {
 					onSubmit={(value) => saveRecord(dialog, value)}
 				/>
 			)}
+			{secretToReveal && (
+				<SecretReveal
+					secret={secretToReveal}
+					onClose={() => setSecretToReveal("")}
+				/>
+			)}
+		</div>
+	);
+}
+
+function SecretReveal({
+	secret,
+	onClose,
+}: {
+	secret: string;
+	onClose: () => void;
+}) {
+	const [copyError, setCopyError] = useState("");
+	return (
+		<div
+			className="modal modal-open"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="created-key-title"
+		>
+			<div className="modal-box max-w-2xl">
+				<h2 id="created-key-title" className="text-xl font-semibold">
+					Copy your new key
+				</h2>
+				<p className="mt-2 text-sm text-base-content/70">
+					This secret is shown once. Store it in your agent’s secret manager
+					before closing this window.
+				</p>
+				<div className="secret-field">
+					<code>{secret}</code>
+					<button
+						className="btn btn-secondary btn-sm"
+						autoFocus
+						onClick={async () => {
+							setCopyError("");
+							try {
+								await navigator.clipboard.writeText(secret);
+							} catch {
+								setCopyError(
+									"Clipboard access failed. Select and copy the key above.",
+								);
+							}
+						}}
+					>
+						Copy key
+					</button>
+				</div>
+				{copyError && (
+					<p role="alert" className="mt-2 text-sm text-error">
+						{copyError}
+					</p>
+				)}
+				<div className="alert mt-4 border border-info/20 bg-info/10 text-sm">
+					<span>⌁</span>
+					<span>
+						Use this key as the bearer credential for your MCP client. Access
+						follows the AI user’s role. Do not put the key in browser storage or
+						source control.
+					</span>
+				</div>
+				<div className="modal-action">
+					<button className="btn btn-primary" onClick={onClose}>
+						Done
+					</button>
+				</div>
+			</div>
+			<button
+				className="modal-backdrop"
+				onClick={onClose}
+				aria-label="Close key dialog"
+			>
+				Close
+			</button>
 		</div>
 	);
 }
@@ -1202,7 +1288,7 @@ function Team({
 			<PageTitle
 				eyebrow="People"
 				heading="People who make the work happen"
-				description="Roles and module access for this workspace."
+				description="People and AI users in this workspace."
 				action={
 					canEdit && (
 						<button className="btn btn-primary" onClick={onAdd}>
@@ -1224,7 +1310,6 @@ function Team({
 							<th>Role</th>
 							<th>Department</th>
 							<th>Status</th>
-							<th>Access</th>
 							{canEdit && (
 								<th>
 									<span className="sr-only">Actions</span>
@@ -1266,18 +1351,6 @@ function Team({
 											: person.status}
 									</span>
 								</td>
-								<td>
-									<div className="flex max-w-52 flex-wrap gap-1">
-										{person.access.map((x) => (
-											<span
-												className="badge badge-outline badge-sm capitalize"
-												key={x}
-											>
-												{x}
-											</span>
-										))}
-									</div>
-								</td>
 								{canEdit && (
 									<td>
 										<button
@@ -1293,6 +1366,74 @@ function Team({
 					</tbody>
 				</table>
 			</div>
+		</>
+	);
+}
+
+function RolesPage() {
+	const roles = useQuery({
+		queryKey: ["roles"],
+		queryFn: listRoles,
+		retry: false,
+	});
+	return (
+		<>
+			<PageTitle
+				eyebrow="Workspace access"
+				heading="Roles & permissions"
+				description="Roles are fixed presets. Humans and AI users share the same permissions, and AI keys inherit their user’s role."
+			/>
+			{roles.isPending && (
+				<div className="py-4">
+					<span
+						className="loading loading-spinner"
+						aria-label="Loading roles"
+					/>
+				</div>
+			)}
+			{roles.isError && (
+				<div role="alert" className="alert alert-error">
+					Could not load roles: {roles.error.message}
+				</div>
+			)}
+			{roles.data && (
+				<div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+					<table className="table">
+						<caption className="sr-only">
+							Permissions assigned to each fixed role
+						</caption>
+						<thead>
+							<tr>
+								<th>Role</th>
+								<th>Description</th>
+								<th>Permissions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{roles.data.roles.map((role) => (
+								<tr key={role.id}>
+									<th scope="row" className="capitalize">
+										{role.name}
+									</th>
+									<td>{role.description}</td>
+									<td>
+										<div className="flex max-w-xl flex-wrap gap-1">
+											{role.permissions.map((permission) => (
+												<span
+													className="badge badge-outline badge-sm"
+													key={permission}
+												>
+													{permission}
+												</span>
+											))}
+										</div>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			)}
 		</>
 	);
 }
@@ -2422,7 +2563,6 @@ function Settings({
 	theme,
 	onTheme,
 	onSave,
-	secretToReveal,
 	onSecret,
 }: {
 	data: Workspace;
@@ -2433,19 +2573,13 @@ function Settings({
 	theme: string;
 	onTheme: (theme: string) => void;
 	onSave: (settings: Workspace["settings"]) => void;
-	secretToReveal: string;
 	onSecret: (secret: string) => void;
 }) {
 	const [workspaceName, setWorkspaceName] = useState(
 		data.settings.workspaceName,
 	);
 	const [timezone, setTimezone] = useState(data.settings.timezone);
-	const [keyName, setKeyName] = useState("");
-	const [keyMemberId, setKeyMemberId] = useState("");
-	const [keyScopes, setKeyScopes] = useState<string[]>(["projects:read"]);
-	const [keyExpiry, setKeyExpiry] = useState(90);
 	const [keyError, setKeyError] = useState("");
-	const [copyError, setCopyError] = useState("");
 	const fieldId = useId();
 	const queryClient = useQueryClient();
 	const keysQuery = useQuery({
@@ -2454,20 +2588,13 @@ function Settings({
 		enabled: canManage,
 		retry: false,
 	});
-	const createKeyMutation = useMutation({
-		mutationFn: async (input: {
-			name: string;
-			scopes: string[];
-			expiresInDays: number;
-			memberId: string;
-		}) => {
-			const result = await createAgentKey(input);
+	const rotateKeyMutation = useMutation({
+		mutationFn: rotateAgentKey,
+		onSuccess: (result, memberId) => {
 			onSecret(result.secret);
-			return result.key;
-		},
-		onSuccess: () => {
-			setKeyName("");
-			void queryClient.invalidateQueries({ queryKey: ["agent-keys"] });
+			if (memberId !== data.currentUser.id) {
+				void queryClient.invalidateQueries({ queryKey: ["agent-keys"] });
+			}
 		},
 		onError: (error) => setKeyError(error.message),
 	});
@@ -2604,7 +2731,7 @@ function Settings({
 							Your access:{" "}
 							{data.currentUser.role === "admin"
 								? "All modules"
-								: data.currentUser.access.join(", ") || "No business modules"}
+								: data.permissions.join(", ") || "No business modules"}
 						</p>
 						<div
 							className={`alert mt-2 border text-sm ${persistentStorage ? "border-info/20 bg-info/10" : "border-warning/20 bg-warning/10"}`}
@@ -2628,7 +2755,7 @@ function Settings({
 						<PageTitle
 							eyebrow="Agent access"
 							heading="AI access keys"
-							description="Create a scoped login key for an AI user."
+							description="AI users receive a key when created. Rotate a key here if it needs replacing."
 						/>
 						<div
 							className={`alert border text-sm ${persistentStorage ? "border-info/20 bg-info/10" : "border-warning/20 bg-warning/10"}`}
@@ -2637,14 +2764,15 @@ function Settings({
 							<span>
 								{!persistentStorage ? (
 									<>
-										Keys exchange for a short-lived bearer token used with the{" "}
-										<code>/mcp</code> endpoint. Metadata resets when the server
-										restarts.
+										Use each key as the bearer credential for your MCP client.
+										Access follows the AI user’s role. Metadata resets when the
+										server restarts.
 									</>
 								) : (
 									<>
-										Keys exchange for a short-lived bearer token used with the{" "}
-										<code>/mcp</code> endpoint. Metadata is saved in SQLite.
+										Use each key as the bearer credential for your MCP client.
+										Access follows the AI user’s role. Metadata is saved in
+										SQLite.
 									</>
 								)}
 							</span>
@@ -2660,128 +2788,38 @@ function Settings({
 								</button>
 							</div>
 						)}
-						<form
-							className="key-create-form"
-							onSubmit={(event) => {
-								event.preventDefault();
-								setKeyError("");
-								createKeyMutation.mutate({
-									name: keyName.trim(),
-									scopes: keyScopes,
-									expiresInDays: keyExpiry,
-									memberId: keyMemberId,
-								});
-							}}
-						>
-							<label className="form-control">
-								<span className="label-text mb-1">AI user</span>
-								<select
-									aria-label="AI user"
-									className="select select-bordered"
-									value={keyMemberId}
-									onChange={(event) => setKeyMemberId(event.target.value)}
-									required
-								>
-									<option value="">Choose an active AI user</option>
-									{members
-										.filter(
-											(member) =>
-												member.kind === "agent" && member.status === "active",
-										)
-										.map((member) => (
-											<option key={member.id} value={member.id}>
-												{member.name}
-											</option>
-										))}
-								</select>
-							</label>
-							<label className="form-control">
-								<span className="label-text mb-1">Key name</span>
-								<input
-									className="input input-bordered"
-									value={keyName}
-									onChange={(event) => setKeyName(event.target.value)}
-									placeholder="e.g. Reporting assistant"
-									required
-									maxLength={80}
-								/>
-							</label>
-							<fieldset className="form-control">
-								<legend className="label-text mb-2 font-medium">
-									Allowed access
-								</legend>
-								<div className="scope-list">
-									{[
-										"projects:read",
-										"projects:write",
-										"customers:read",
-										"customers:write",
-										"social:read",
-										"social:write",
-										"reports:read",
-										"reports:write",
-									].map((scope) => (
-										<label
-											className="label cursor-pointer justify-start gap-2"
-											key={scope}
-										>
-											<input
-												type="checkbox"
-												className="checkbox checkbox-sm"
-												checked={keyScopes.includes(scope)}
-												onChange={(event) =>
-													setKeyScopes((current) =>
-														event.target.checked
-															? [...current, scope]
-															: current.filter((item) => item !== scope),
-													)
-												}
-											/>
-											<span>{scope}</span>
-										</label>
-									))}
-								</div>
-							</fieldset>
-							<div className="form-control">
-								<label
-									className="label-text mb-1"
-									htmlFor={`${fieldId}-key-expiry`}
-								>
-									Expires after
-								</label>
-								<select
-									id={`${fieldId}-key-expiry`}
-									className="select select-bordered"
-									value={keyExpiry}
-									onChange={(event) => setKeyExpiry(Number(event.target.value))}
-								>
-									<option value={7}>7 days</option>
-									<option value={30}>30 days</option>
-									<option value={90}>90 days</option>
-								</select>
-							</div>
-							<div className="flex items-end">
-								<button
-									className="btn btn-primary"
-									disabled={
-										createKeyMutation.isPending ||
-										!keyScopes.length ||
-										!keyMemberId ||
-										!members.some(
-											(member) =>
-												member.id === keyMemberId &&
-												member.kind === "agent" &&
-												member.status === "active",
-										)
-									}
-								>
-									{createKeyMutation.isPending && (
-										<span className="loading loading-spinner loading-sm" />
-									)}
-									Create key
-								</button>
-							</div>
-						</form>
+						<div className="grid gap-2">
+							{members
+								.filter((member) => member.kind === "agent")
+								.map((member) => (
+									<div className="key-row" key={member.id}>
+										<div>
+											<b>{member.name}</b>
+											<p>
+												Role: <span className="capitalize">{member.role}</span>
+											</p>
+											<small>{member.status}</small>
+										</div>
+										{member.status === "active" && (
+											<button
+												className="btn btn-outline btn-sm"
+												disabled={rotateKeyMutation.isPending}
+												onClick={() => {
+													setKeyError("");
+													rotateKeyMutation.mutate(member.id);
+												}}
+											>
+												Rotate key
+											</button>
+										)}
+									</div>
+								))}
+							{!members.some((member) => member.kind === "agent") && (
+								<p className="text-sm text-base-content/60">
+									Create an AI user in Team to issue its first key.
+								</p>
+							)}
+						</div>
 						{keysQuery.isPending && (
 							<div className="py-4">
 								<span
@@ -2817,22 +2855,24 @@ function Settings({
 													{members.find((member) => member.id === key.memberId)
 														?.name || "Unknown AI user"}
 												</p>
-												<p>{key.scopes.join(", ") || "No access"}</p>
 												<small>
 													{key.revoked
 														? "Revoked"
-														: `Expires ${new Date(Number(key.expiresAt) * 1000).toLocaleDateString()}`}
+														: Number(key.expiresAt) * 1000 <= Date.now()
+															? "Expired"
+															: `Active · expires ${new Date(Number(key.expiresAt) * 1000).toLocaleDateString()}`}
 												</small>
 											</div>
-											{!key.revoked && (
-												<button
-													className="btn btn-outline btn-error btn-sm"
-													disabled={revokeKeyMutation.isPending}
-													onClick={() => revokeKeyMutation.mutate(key.id)}
-												>
-													Revoke
-												</button>
-											)}
+											{!key.revoked &&
+												Number(key.expiresAt) * 1000 > Date.now() && (
+													<button
+														className="btn btn-outline btn-error btn-sm"
+														disabled={revokeKeyMutation.isPending}
+														onClick={() => revokeKeyMutation.mutate(key.id)}
+													>
+														Revoke
+													</button>
+												)}
 										</article>
 									))
 								)}
@@ -2840,77 +2880,6 @@ function Settings({
 						)}
 					</div>
 				</section>
-			)}
-			{secretToReveal && (
-				<div
-					className="modal modal-open"
-					role="dialog"
-					aria-modal="true"
-					aria-labelledby="created-key-title"
-				>
-					<div className="modal-box max-w-2xl">
-						<h2 id="created-key-title" className="text-xl font-semibold">
-							Copy your new key
-						</h2>
-						<p className="mt-2 text-sm text-base-content/70">
-							This secret is shown once. Store it in your agent’s secret manager
-							before closing this window.
-						</p>
-						<div className="secret-field">
-							<code>{secretToReveal}</code>
-							<button
-								className="btn btn-secondary btn-sm"
-								onClick={async () => {
-									setCopyError("");
-									try {
-										await navigator.clipboard.writeText(secretToReveal);
-									} catch {
-										setCopyError(
-											"Clipboard access failed. Select and copy the key above.",
-										);
-									}
-								}}
-							>
-								Copy key
-							</button>
-						</div>
-						{copyError && (
-							<p role="alert" className="mt-2 text-sm text-error">
-								{copyError}
-							</p>
-						)}
-						<div className="alert mt-4 border border-info/20 bg-info/10 text-sm">
-							<span>⌁</span>
-							<span>
-								Exchange this key with <code>ExchangeAgentKey</code> for a
-								short-lived bearer token, then use that token with{" "}
-								<code>/mcp</code>. Do not put the key in browser storage or
-								source control.
-							</span>
-						</div>
-						<div className="modal-action">
-							<button
-								className="btn btn-primary"
-								onClick={() => {
-									setCopyError("");
-									onSecret("");
-								}}
-							>
-								Done
-							</button>
-						</div>
-					</div>
-					<button
-						className="modal-backdrop"
-						onClick={() => {
-							setCopyError("");
-							onSecret("");
-						}}
-						aria-label="Close key dialog"
-					>
-						Close
-					</button>
-				</div>
 			)}
 		</div>
 	);
@@ -2952,11 +2921,6 @@ function RecordDialog({
 		department: readString("department"),
 		role: readString("role", "member"),
 		kind: readString("kind", "human"),
-		access: Array.isArray(initial?.access)
-			? initial.access.filter(
-					(entry): entry is string => typeof entry === "string",
-				)
-			: ["customers", "projects", "reports"],
 		password: "",
 		customerId: readString("customerId"),
 		summary: readString("summary"),
@@ -2966,7 +2930,7 @@ function RecordDialog({
 		scheduledAt: readString("scheduledAt").slice(0, 16),
 		authorId: readString("authorId", data.currentUser.id),
 	}));
-	type TextField = Exclude<keyof RecordDraft, "id" | "access" | "password">;
+	type TextField = Exclude<keyof RecordDraft, "id" | "password">;
 	type FieldConfig = {
 		name: TextField;
 		label: string;
@@ -3178,7 +3142,7 @@ function RecordDialog({
 				<p className="mt-2 text-sm text-base-content/60">
 					{kind === "member"
 						? values.kind === "agent"
-							? "AI users authenticate with a member-bound key issued in Settings."
+							? "Saving an AI user creates a member-bound key. Copy its secret now; it is shown once."
 							: "Adding someone records them here; it does not send an invitation."
 						: kind === "post"
 							? "This saves a queue record only. It will not publish to a channel."
@@ -3265,44 +3229,6 @@ function RecordDialog({
 							)}
 						</div>
 					))}
-					{kind === "member" && (
-						<fieldset className="sm:col-span-2">
-							<legend className="label-text mb-2 font-medium">
-								Module access
-							</legend>
-							<p className="mb-3 text-sm text-base-content/65">
-								Role limits apply: administrators have full access; viewers can
-								only read selected modules.
-							</p>
-							<div className="flex flex-wrap gap-3">
-								{[
-									"team",
-									"customers",
-									"projects",
-									"reports",
-									"social",
-									"settings",
-								].map((module) => (
-									<label className="label cursor-pointer gap-2" key={module}>
-										<input
-											className="checkbox checkbox-primary checkbox-sm"
-											type="checkbox"
-											checked={values.access.includes(module)}
-											onChange={() =>
-												setValues((current) => ({
-													...current,
-													access: current.access.includes(module)
-														? current.access.filter((item) => item !== module)
-														: [...current.access, module],
-												}))
-											}
-										/>
-										<span className="label-text capitalize">{module}</span>
-									</label>
-								))}
-							</div>
-						</fieldset>
-					)}
 					{kind === "member" && values.kind !== "agent" && (
 						<label className="form-control sm:col-span-2">
 							<span className="label-text mb-2 font-medium">

@@ -99,7 +99,7 @@ fn parse_event(kind: &str, json: &str) -> Result<Event> {
             !v.id.is_empty() && !v.task_id.is_empty() && !v.actor_id.is_empty() && v.occurred_at > 0
         }
         Event::Report(v) => !v.id.is_empty() && !v.title.is_empty() && v.revision > 0,
-        Event::AgentKey(v) => !v.id.is_empty() && !v.name.is_empty() && !v.scopes.is_empty(),
+        Event::AgentKey(v) => !v.id.is_empty() && !v.name.is_empty(),
         Event::Connection(v) => {
             !v.id.is_empty() && !v.name.is_empty() && v.demo && v.status == "disconnected"
         }

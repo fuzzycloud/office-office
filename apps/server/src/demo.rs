@@ -26,12 +26,6 @@ pub(super) async fn register(actor: &mut WorkspaceActor, token: &str) -> Result<
                     department: "Sample operations".into(),
                     role: "manager".into(),
                     status: "pending".into(),
-                    access: vec![
-                        "customers".into(),
-                        "projects".into(),
-                        "reports".into(),
-                        "social".into(),
-                    ],
                     ..Default::default()
                 })
                 .into(),
@@ -55,7 +49,6 @@ pub(super) async fn register(actor: &mut WorkspaceActor, token: &str) -> Result<
                     department: "Sample research".into(),
                     role: "member".into(),
                     status: "pending".into(),
-                    access: vec!["customers".into(), "projects".into(), "reports".into()],
                     ..Default::default()
                 })
                 .into(),

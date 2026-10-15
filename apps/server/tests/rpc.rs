@@ -185,7 +185,7 @@ async fn concurrent_bootstrap_only_creates_one_admin() {
 }
 
 #[tokio::test]
-async fn current_role_and_module_access_are_checked_after_jwt_issue() {
+async fn current_role_permissions_are_checked_after_jwt_issue() {
     let app = app();
     let admin = bootstrap(&app).await;
     let (status, member) = rpc(app.clone(), "SaveMember", Some(&admin), json!({
@@ -204,7 +204,13 @@ async fn current_role_and_module_access_are_checked_after_jwt_issue() {
     let worker = login["token"].as_str().unwrap();
     let (_, workspace) = rpc(app.clone(), "GetWorkspace", Some(worker), json!({})).await;
     assert!(!workspace["customers"].as_array().unwrap().is_empty());
-    assert!(workspace["projects"].as_array().is_none_or(Vec::is_empty));
+    assert!(!workspace["projects"].as_array().unwrap().is_empty());
+    assert!(
+        workspace["permissions"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("projects:write"))
+    );
     assert_eq!(
         rpc(
             app.clone(),
@@ -214,14 +220,20 @@ async fn current_role_and_module_access_are_checked_after_jwt_issue() {
         )
         .await
         .0,
-        StatusCode::FORBIDDEN
+        StatusCode::OK
     );
     let (status, _) = rpc(app.clone(), "SaveMember", Some(&admin), json!({
         "member":{"id":member_id,"name":"Worker","email":"worker@example.test","role":"viewer","status":"active","access":[]}
     })).await;
     assert_eq!(status, StatusCode::OK);
     let (_, workspace) = rpc(app.clone(), "GetWorkspace", Some(worker), json!({})).await;
-    assert!(workspace["customers"].as_array().is_none_or(Vec::is_empty));
+    assert!(!workspace["customers"].as_array().unwrap().is_empty());
+    assert!(
+        !workspace["permissions"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("projects:write"))
+    );
     assert_eq!(
         rpc(
             app.clone(),
@@ -267,5 +279,132 @@ async fn tampered_jwt_is_rejected() {
     assert_eq!(
         rpc(app, "GetWorkspace", Some(&tampered), json!({})).await.0,
         StatusCode::UNAUTHORIZED
+    );
+}
+
+#[tokio::test]
+async fn fixed_roles_auto_keys_rotation_and_ai_admins() {
+    let app = app();
+    let admin = bootstrap(&app).await;
+    assert_eq!(
+        rpc(app.clone(), "ListRoles", None, json!({})).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    let (status, roles) = rpc(app.clone(), "ListRoles", Some(&admin), json!({})).await;
+    assert_eq!(status, StatusCode::OK);
+    let roles = roles["roles"].as_array().unwrap();
+    assert_eq!(roles.len(), 4);
+    for (role, writes) in [
+        (
+            "admin",
+            vec![
+                "team",
+                "customers",
+                "projects",
+                "reports",
+                "social",
+                "settings",
+            ],
+        ),
+        (
+            "manager",
+            vec!["customers", "projects", "reports", "social"],
+        ),
+        ("member", vec!["projects", "reports"]),
+        ("viewer", vec![]),
+    ] {
+        let permissions = roles.iter().find(|item| item["id"] == role).unwrap()["permissions"]
+            .as_array()
+            .unwrap();
+        for module in [
+            "team",
+            "customers",
+            "projects",
+            "reports",
+            "social",
+            "settings",
+        ] {
+            assert!(permissions.contains(&json!(format!("{module}:read"))));
+            assert_eq!(
+                permissions.contains(&json!(format!("{module}:write"))),
+                writes.contains(&module)
+            );
+        }
+    }
+    let (_, created) = rpc(app.clone(), "SaveMember", Some(&admin), json!({"member":{"name":"AI Admin", "kind":"agent", "role":"admin", "status":"active", "access":[]}})).await;
+    let member_id = created["member"]["id"].as_str().unwrap();
+    let secret = created["secret"].as_str().unwrap();
+    assert!(secret.starts_with("oo_"));
+    assert_eq!(created["agentKey"]["memberId"], member_id);
+    assert!(
+        created["agentKey"]["scopes"]
+            .as_array()
+            .is_none_or(Vec::is_empty)
+    );
+    let (_, exchanged) = rpc(app.clone(), "ExchangeAgentKey", None, json!({"key":secret})).await;
+    let ai_token = exchanged["token"].as_str().unwrap();
+    let (_, child) = rpc(
+        app.clone(),
+        "SaveMember",
+        Some(ai_token),
+        json!({"member":{"name":"Child AI", "kind":"agent", "role":"member", "status":"active"}}),
+    )
+    .await;
+    assert!(child["secret"].as_str().unwrap().starts_with("oo_"));
+    let (_, updated) = rpc(app.clone(), "SaveMember", Some(ai_token), json!({"member":{"id":member_id, "name":"AI Admin", "kind":"agent", "role":"admin", "status":"active"}})).await;
+    assert!(updated["secret"].as_str().is_none_or(str::is_empty));
+    let (status, rotated) = rpc(
+        app.clone(),
+        "RotateAgentKey",
+        Some(&admin),
+        json!({"memberId":member_id}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{rotated}");
+    assert_ne!(rotated["secret"], created["secret"]);
+    assert_eq!(
+        rpc(app.clone(), "GetWorkspace", Some(ai_token), json!({}))
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        rpc(app.clone(), "ExchangeAgentKey", None, json!({"key":secret}))
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    let (_, new_exchange) = rpc(
+        app.clone(),
+        "ExchangeAgentKey",
+        None,
+        json!({"key":rotated["secret"]}),
+    )
+    .await;
+    let new_ai_token = new_exchange["token"].as_str().unwrap();
+    assert_eq!(
+        rpc(app.clone(), "ListAgentKeys", Some(new_ai_token), json!({}))
+            .await
+            .0,
+        StatusCode::OK
+    );
+    let (_, child_exchange) = rpc(
+        app.clone(),
+        "ExchangeAgentKey",
+        None,
+        json!({"key":child["secret"]}),
+    )
+    .await;
+    let child_token = child_exchange["token"].as_str().unwrap();
+    assert_eq!(
+        rpc(
+            app.clone(),
+            "RotateAgentKey",
+            Some(child_token),
+            json!({"memberId":member_id})
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
     );
 }

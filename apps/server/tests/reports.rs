@@ -50,7 +50,7 @@ async fn ok(app: &Router, method: &str, token: Option<&str>, body: Value) -> Val
 }
 
 #[tokio::test]
-async fn reports_are_versioned_scoped_and_replayed() {
+async fn reports_are_versioned_role_authorized_and_replayed() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("reports.sqlite3");
     let service = Arc::new(OfficePreviewService::open(&path).await.unwrap());
@@ -128,7 +128,7 @@ async fn reports_are_versioned_scoped_and_replayed() {
         rpc(&router, "ListReports", Some(excluded_token), json!({}))
             .await
             .0,
-        StatusCode::FORBIDDEN
+        StatusCode::OK
     );
     assert_eq!(
         rpc(
@@ -139,7 +139,7 @@ async fn reports_are_versioned_scoped_and_replayed() {
         )
         .await
         .0,
-        StatusCode::FORBIDDEN
+        StatusCode::OK
     );
     let agent = ok(&router, "SaveMember", Some(token), json!({"member":{"name":"Analyst agent", "kind":"agent", "role":"member", "status":"active", "access":["reports"]}})).await;
     let key = ok(
@@ -300,6 +300,6 @@ async fn reports_are_versioned_scoped_and_replayed() {
     );
     assert!(reopened["report"]["createdAt"].is_string());
     assert_eq!(viewer["member"]["role"], "viewer");
-    assert_eq!(excluded["member"]["access"][0], "projects");
+    assert_eq!(excluded["member"]["access"][0], "team");
     service.close().await.unwrap();
 }

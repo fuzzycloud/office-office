@@ -46,6 +46,43 @@ const SCOPES: [&str; 8] = [
     "reports:read",
     "reports:write",
 ];
+const ROLES: [(&str, &str, &str); 4] = [
+    ("admin", "Admin", "Full workspace access"),
+    (
+        "manager",
+        "Manager",
+        "Manage customers, projects, reports and social",
+    ),
+    ("member", "Member", "Work on projects and reports"),
+    ("viewer", "Viewer", "Read workspace records"),
+];
+fn role_permissions(role: &str) -> Vec<String> {
+    MODULES
+        .iter()
+        .flat_map(|module| {
+            let mut permissions = vec![format!("{module}:read")];
+            if role == "admin"
+                || role == "manager"
+                    && matches!(*module, "customers" | "projects" | "reports" | "social")
+                || role == "member" && matches!(*module, "projects" | "reports")
+            {
+                permissions.push(format!("{module}:write"));
+            }
+            permissions
+        })
+        .collect()
+}
+fn role_access(role: &str) -> Vec<String> {
+    MODULES
+        .iter()
+        .filter(|module| role_permissions(role).contains(&format!("{module}:read")))
+        .map(|module| (*module).into())
+        .collect()
+}
+fn display_member(mut member: Member) -> Member {
+    member.access = role_access(&member.role);
+    member
+}
 const DEFAULT_COLUMNS: [&str; 4] = ["Todo", "In progress", "Review", "Done"];
 const THEMES: [&str; 35] = [
     "light",
@@ -163,14 +200,11 @@ struct Claims {
     exp: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     key_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    key_scopes: Option<Vec<String>>,
 }
 
 #[derive(Clone)]
 struct Principal {
     member: Member,
-    key_scopes: Option<Vec<String>>,
 }
 
 impl std::ops::Deref for Principal {
@@ -377,6 +411,10 @@ enum Command {
         String,
         oneshot::Sender<Result<GetWorkspaceResponse, ConnectError>>,
     ),
+    ListRoles(
+        String,
+        oneshot::Sender<Result<ListRolesResponse, ConnectError>>,
+    ),
     Execute(
         String,
         EngineCommand,
@@ -405,6 +443,11 @@ enum Command {
         String,
         RevokeAgentKeyRequest,
         oneshot::Sender<Result<RevokeAgentKeyResponse, ConnectError>>,
+    ),
+    RotateAgentKey(
+        String,
+        RotateAgentKeyRequest,
+        oneshot::Sender<Result<RotateAgentKeyResponse, ConnectError>>,
     ),
     AgentWorkspace(
         String,
@@ -884,9 +927,7 @@ impl WorkspaceActor {
                 .find(|c| c.id == request.comment_id && c.task_id == request.task_id)
                 .cloned()
                 .ok_or_else(|| ConnectError::not_found("comment not found"))?;
-            if comment.author_id != actor.id
-                && !(actor.role == "admin" && Self::actor_kind(actor) == "human")
-            {
+            if comment.author_id != actor.id && actor.role != "admin" {
                 return Err(denied());
             }
             if comment.revision != request.expected_revision || comment.deleted {
@@ -944,7 +985,6 @@ impl WorkspaceActor {
             iat: now() as usize,
             exp: expiry as usize,
             key_id: credential.map(|key| key.id.clone()),
-            key_scopes: credential.map(|key| key.scopes.clone()),
         };
         let token = encode(
             &Header::new(Algorithm::HS256),
@@ -969,14 +1009,11 @@ impl WorkspaceActor {
             .find(|m| m.id == claims.sub && m.status == "active")
             .cloned()
             .ok_or_else(|| ConnectError::unauthenticated("account inactive"))?;
-        let key_scopes = if let Some(key_id) = claims.key_id {
-            let issued_scopes = claims
-                .key_scopes
-                .ok_or_else(|| ConnectError::unauthenticated("invalid agent session"))?;
+        if let Some(key_id) = claims.key_id {
             if member.kind != "agent" {
                 return Err(ConnectError::unauthenticated("invalid principal"));
             }
-            let key = self
+            let _key = self
                 .state
                 .agent_keys
                 .iter()
@@ -995,41 +1032,19 @@ impl WorkspaceActor {
             if owner != &member.id {
                 return Err(ConnectError::unauthenticated("invalid key binding"));
             }
-            Some(
-                key.scopes
-                    .iter()
-                    .filter(|scope| issued_scopes.contains(scope))
-                    .cloned()
-                    .collect(),
-            )
         } else {
-            if claims.key_scopes.is_some()
-                || member.kind == "agent"
-                || !self.passwords.contains_key(&member.id)
-            {
+            if member.kind == "agent" || !self.passwords.contains_key(&member.id) {
                 return Err(ConnectError::unauthenticated("invalid human session"));
             }
-            None
-        };
-        Ok(Principal { member, key_scopes })
+        }
+        Ok(Principal { member })
     }
     fn permit(user: &Principal, module: &str, mutate: bool) -> Result<(), ConnectError> {
-        if let Some(scopes) = &user.key_scopes {
-            let allowed = scopes.iter().any(|scope| {
-                scope == &format!("{module}:write") || !mutate && scope == &format!("{module}:read")
-            });
-            if !allowed {
-                return Err(denied());
-            }
-        }
-        if user.role != "admin" && !user.access.iter().any(|v| v == module)
-            || (mutate && user.role == "viewer")
-            || (mutate && matches!(module, "team" | "settings") && user.role != "admin")
-        {
-            Err(denied())
-        } else {
-            Ok(())
-        }
+        let permission = format!("{module}:{}", if mutate { "write" } else { "read" });
+        role_permissions(&user.role)
+            .contains(&permission)
+            .then_some(())
+            .ok_or_else(denied)
     }
     fn active_human_admins(&self) -> usize {
         self.state
@@ -1048,14 +1063,19 @@ impl WorkspaceActor {
         GetWorkspaceResponse {
             demo_mode: self.state.demo.is_some(),
             persistent_storage: self.storage.is_some(),
-            settings: if user.key_scopes.is_none() || can("settings") {
+            settings: if can("settings") {
                 Some(self.state.settings.clone()).into()
             } else {
                 None.into()
             },
-            current_user: Some(user.member.clone()).into(),
+            current_user: Some(display_member(user.member.clone())).into(),
             members: if can("team") {
-                self.state.members.clone()
+                self.state
+                    .members
+                    .iter()
+                    .cloned()
+                    .map(display_member)
+                    .collect()
             } else {
                 vec![]
             },
@@ -1094,6 +1114,7 @@ impl WorkspaceActor {
             } else {
                 vec![]
             },
+            permissions: role_permissions(&user.role),
             ..Default::default()
         }
     }
@@ -1175,7 +1196,7 @@ impl WorkspaceActor {
         }
         Ok(BootstrapAdminResponse {
             token,
-            user: Some(member).into(),
+            user: Some(display_member(member)).into(),
             expires_at,
             ..Default::default()
         })
@@ -1201,7 +1222,7 @@ impl WorkspaceActor {
         let (token, expires_at) = self.claims(member, None)?;
         Ok(LoginResponse {
             token,
-            user: Some(member.clone()).into(),
+            user: Some(display_member(member.clone())).into(),
             expires_at,
             ..Default::default()
         })
@@ -1226,9 +1247,9 @@ impl WorkspaceActor {
         };
         allowed(&m.role, &["admin", "manager", "member", "viewer"], "role")?;
         allowed(&m.status, &["active", "inactive", "pending"], "status")?;
-        if m.access.iter().any(|v| !MODULES.contains(&v.as_str())) {
-            return Err(bad("invalid module access"));
-        }
+        // Legacy clients may still send access; the role is the sole authority.
+        m.access = role_access(&m.role);
+        let new_agent = m.id.is_empty() && m.kind == "agent";
         if m.id.is_empty() {
             m.id = id();
         } else if let Some(old) = self.state.members.iter().find(|v| v.id == m.id) {
@@ -1277,8 +1298,16 @@ impl WorkspaceActor {
             m.status = "pending".into();
         }
         self.commit(Edit::Member(m.clone()), &actor.name, "Team member saved");
+        let (agent_key, secret) = if new_agent {
+            let (key, secret) = self.issue_agent_key(&actor, &m, &m.name, 90);
+            (Some(key), secret)
+        } else {
+            (None, String::new())
+        };
         Ok(SaveMemberResponse {
             member: Some(m).into(),
+            agent_key: agent_key.into(),
+            secret,
             ..Default::default()
         })
     }
@@ -1712,9 +1741,7 @@ impl WorkspaceActor {
     }
     fn admin(&self, token: &str) -> Result<Principal, ConnectError> {
         let user = self.user(token)?;
-        if user.role != "admin" || user.key_scopes.is_some() {
-            return Err(denied());
-        }
+        Self::permit(&user, "team", true)?;
         Ok(user)
     }
     fn list_agent_keys(&self, token: &str) -> Result<ListAgentKeysResponse, ConnectError> {
@@ -1730,31 +1757,41 @@ impl WorkspaceActor {
         request: CreateAgentKeyRequest,
     ) -> Result<CreateAgentKeyResponse, ConnectError> {
         let actor = self.admin(token)?;
-        required(&request.name, "key name", 120)?;
         let member = self
             .state
             .members
             .iter()
             .find(|m| m.id == request.member_id && m.kind == "agent" && m.status == "active")
             .ok_or_else(|| bad("active agent member required"))?;
-        if !(1..=90).contains(&request.expires_in_days) {
+        let days = if request.expires_in_days == 0 {
+            90
+        } else {
+            request.expires_in_days
+        };
+        if !(1..=90).contains(&days) {
             return Err(bad("expiry must be 1 to 90 days"));
         }
-        if request.scopes.is_empty() || request.scopes.len() > SCOPES.len() {
-            return Err(bad("scopes required"));
-        }
-        let mut seen = std::collections::HashSet::new();
-        for scope in &request.scopes {
-            if !SCOPES.contains(&scope.as_str()) || !seen.insert(scope.as_str()) {
-                return Err(bad("invalid or duplicate scope"));
-            }
-            let (module, action) = scope.split_once(':').expect("allowed scope");
-            let target = Principal {
-                member: member.clone(),
-                key_scopes: None,
-            };
-            Self::permit(&target, module, action == "write")?;
-        }
+        let name = if request.name.trim().is_empty() {
+            member.name.clone()
+        } else {
+            request.name.trim().into()
+        };
+        required(&name, "key name", 120)?;
+        let member = member.clone();
+        let (key, secret) = self.issue_agent_key(&actor, &member, &name, days);
+        Ok(CreateAgentKeyResponse {
+            key: Some(key).into(),
+            secret,
+            ..Default::default()
+        })
+    }
+    fn issue_agent_key(
+        &mut self,
+        actor: &Principal,
+        member: &Member,
+        name: &str,
+        days: i32,
+    ) -> (AgentKey, String) {
         let mut bytes = [0u8; 32];
         rand::rngs::OsRng.fill_bytes(&mut bytes);
         let secret = format!(
@@ -1766,10 +1803,10 @@ impl WorkspaceActor {
         );
         let key = AgentKey {
             id: id(),
-            name: request.name.trim().into(),
-            scopes: request.scopes,
+            name: name.into(),
+            scopes: vec![],
             created_at: now(),
-            expires_at: now() + i64::from(request.expires_in_days) * 86_400,
+            expires_at: now() + i64::from(days) * 86_400,
             revoked: false,
             member_id: member.id.clone(),
             issued_by: actor.id.clone(),
@@ -1782,7 +1819,35 @@ impl WorkspaceActor {
             &actor.name,
             "Agent key created",
         );
-        Ok(CreateAgentKeyResponse {
+        (key, secret)
+    }
+    fn rotate_agent_key(
+        &mut self,
+        token: &str,
+        request: RotateAgentKeyRequest,
+    ) -> Result<RotateAgentKeyResponse, ConnectError> {
+        let actor = self.admin(token)?;
+        let member = self
+            .state
+            .members
+            .iter()
+            .find(|m| m.id == request.member_id && m.kind == "agent")
+            .cloned()
+            .ok_or_else(|| bad("agent member required"))?;
+        let previous: Vec<_> = self
+            .state
+            .agent_keys
+            .iter()
+            .filter(|key| key.member_id == member.id && !key.revoked)
+            .cloned()
+            .collect();
+        for mut key in previous {
+            key.revoked = true;
+            self.agent_secrets.remove(&key.id);
+            self.commit(Edit::AgentKey(key), &actor.name, "Agent key rotated");
+        }
+        let (key, secret) = self.issue_agent_key(&actor, &member, &member.name, 90);
+        Ok(RotateAgentKeyResponse {
             key: Some(key).into(),
             secret,
             ..Default::default()
@@ -1854,7 +1919,7 @@ impl WorkspaceActor {
         let (token, expires_at) = self.claims(&actor, Some(key))?;
         Ok(ExchangeAgentKeyResponse {
             token,
-            user: Some(actor).into(),
+            user: Some(display_member(actor)).into(),
             expires_at,
             ..Default::default()
         })
@@ -1870,26 +1935,7 @@ impl WorkspaceActor {
     }
     fn agent_workspace(&self, token: &str) -> Result<GetWorkspaceResponse, ConnectError> {
         let actor = self.user(token)?;
-        let visible = ["projects", "customers", "social"]
-            .map(|module| Self::permit(&actor, module, false).is_ok());
-        let mut response = self.workspace(actor);
-        response.settings = None.into();
-        response.current_user = None.into();
-        response.members.clear();
-        response.activity.clear();
-        if !visible[0] {
-            response.projects.clear();
-            response.boards.clear();
-            response.tasks.clear();
-        }
-        if !visible[1] {
-            response.customers.clear();
-        }
-        if !visible[2] {
-            response.connections.clear();
-            response.posts.clear();
-        }
-        Ok(response)
+        Ok(self.workspace(actor))
     }
     fn save_post(
         &mut self,
@@ -2092,6 +2138,22 @@ impl Actor for WorkspaceActor {
                 let result = self.user(&t).map(|u| self.workspace(u));
                 let _ = tx.send(result);
             }
+            Command::ListRoles(t, tx) => {
+                let result = self.user(&t).map(|_| ListRolesResponse {
+                    roles: ROLES
+                        .iter()
+                        .map(|(id, name, description)| Role {
+                            id: (*id).into(),
+                            name: (*name).into(),
+                            description: (*description).into(),
+                            permissions: role_permissions(id),
+                            ..Default::default()
+                        })
+                        .collect(),
+                    ..Default::default()
+                });
+                let _ = tx.send(result);
+            }
             Command::Execute(t, v, tx) => {
                 let before = self.snapshot();
                 let result = self.execute_core(&t, v).await;
@@ -2159,6 +2221,11 @@ impl Actor for WorkspaceActor {
             Command::RevokeAgentKey(t, v, tx) => {
                 let before = self.snapshot();
                 let result = self.revoke_agent_key(&t, v);
+                let _ = tx.send(self.persist(before, result).await);
+            }
+            Command::RotateAgentKey(t, v, tx) => {
+                let before = self.snapshot();
+                let result = self.rotate_agent_key(&t, v);
                 let _ = tx.send(self.persist(before, result).await);
             }
             Command::AgentWorkspace(secret, tx) => {
@@ -2251,7 +2318,10 @@ impl OfficePreviewService {
         }
         if actor.setup
             != actor.state.members.iter().any(|m| {
-                m.role == "admin" && m.status == "active" && actor.passwords.contains_key(&m.id)
+                m.kind != "agent"
+                    && m.role == "admin"
+                    && m.status == "active"
+                    && actor.passwords.contains_key(&m.id)
             })
         {
             anyhow::bail!("durable setup state does not match administrator credentials");
@@ -2325,6 +2395,26 @@ impl OfficePreviewService {
     }
     pub async fn workspace(&self, token: &str) -> Result<GetWorkspaceResponse, ConnectError> {
         self.ask(|tx| Command::Workspace(token.into(), tx)).await
+    }
+    pub async fn list_roles(&self, token: &str) -> Result<ListRolesResponse, ConnectError> {
+        self.ask(|tx| Command::ListRoles(token.into(), tx)).await
+    }
+    pub async fn rotate_agent_key(
+        &self,
+        token: &str,
+        member_id: &str,
+    ) -> Result<RotateAgentKeyResponse, ConnectError> {
+        self.ask(|tx| {
+            Command::RotateAgentKey(
+                token.into(),
+                RotateAgentKeyRequest {
+                    member_id: member_id.into(),
+                    ..Default::default()
+                },
+                tx,
+            )
+        })
+        .await
     }
     pub async fn execute(
         &self,
@@ -2454,6 +2544,14 @@ impl OfficeService for OfficePreviewService {
     ) -> ServiceResult<impl connectrpc::Encodable<GetWorkspaceResponse> + Send + use<'a>> {
         let token = bearer(&ctx)?;
         Response::ok(self.workspace(&token).await?)
+    }
+    async fn list_roles<'a>(
+        &'a self,
+        ctx: RequestContext,
+        _req: ServiceRequest<'_, ListRolesRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<ListRolesResponse> + Send + use<'a>> {
+        let token = bearer(&ctx)?;
+        Response::ok(self.list_roles(&token).await?)
     }
     async fn save_member<'a>(
         &'a self,
@@ -2631,6 +2729,17 @@ impl OfficeService for OfficePreviewService {
         let token = bearer(&ctx)?;
         Response::ok(
             self.ask(|tx| Command::RevokeAgentKey(token, req.to_owned_message(), tx))
+                .await?,
+        )
+    }
+    async fn rotate_agent_key<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, RotateAgentKeyRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<RotateAgentKeyResponse> + Send + use<'a>> {
+        let token = bearer(&ctx)?;
+        Response::ok(
+            self.rotate_agent_key(&token, &req.to_owned_message().member_id)
                 .await?,
         )
     }
@@ -2815,7 +2924,6 @@ mod tests {
             iat: 1,
             exp: 2,
             key_id: None,
-            key_scopes: None,
         };
         let token = encode(
             &Header::new(Algorithm::HS256),
@@ -2864,7 +2972,7 @@ mod tests {
         let token = actor.exchange_agent_key(&issued.secret).unwrap().token;
         assert!(actor.agent_identity(&token, "projects:write").is_ok());
         let mut owner = agent;
-        owner.role = "member".into();
+        owner.role = "viewer".into();
         owner.access.clear();
         actor.commit(Edit::Member(owner), "System", "Permission changed");
         assert!(actor.agent_identity(&token, "projects:write").is_err());
@@ -2875,7 +2983,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn agent_token_keeps_issued_scope_ceiling() {
+    async fn legacy_key_scopes_do_not_limit_role_permissions() {
         let mut actor = WorkspaceActor::new();
         let admin = actor
             .bootstrap(BootstrapAdminRequest {
@@ -2911,20 +3019,18 @@ mod tests {
             .unwrap();
         let token = actor.exchange_agent_key(&issued.secret).unwrap().token;
         assert!(actor.agent_identity(&token, "projects:read").is_ok());
+        assert!(actor.agent_identity(&token, "projects:write").is_ok());
+        assert!(actor.agent_identity(&token, "reports:write").is_ok());
         let mut key = issued.key.unwrap();
         key.scopes.push("projects:write".into());
         actor.commit(Edit::AgentKey(key.clone()), "System", "Scope widened");
-        assert!(actor.agent_identity(&token, "projects:write").is_err());
+        assert!(actor.agent_identity(&token, "projects:write").is_ok());
         let later_token = actor.exchange_agent_key(&issued.secret).unwrap().token;
         assert!(actor.agent_identity(&later_token, "projects:write").is_ok());
         key.scopes.clear();
         key.scopes.push("projects:read".into());
         actor.commit(Edit::AgentKey(key), "System", "Scope narrowed");
-        assert!(
-            actor
-                .agent_identity(&later_token, "projects:write")
-                .is_err()
-        );
+        assert!(actor.agent_identity(&later_token, "projects:write").is_ok());
     }
 
     #[tokio::test]
@@ -2985,7 +3091,6 @@ mod tests {
                 status: "active".into(),
                 ..Default::default()
             },
-            key_scopes: None,
         };
         assert!(actor.workspace(viewer).settings.is_set());
     }

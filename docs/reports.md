@@ -10,11 +10,11 @@ The reader shows findings, sources, author, last editor and revision. Markdown h
 
 Search the report library, filter status or project, and page through report summaries. Full report bodies are fetched only when opened. Use **New edition** to create another report under the same topic for a new period; it leaves the previous edition intact. Editing a report instead updates that page and appends another saved-record event. There is no revision-history browser yet.
 
-Draft and published are editorial states, not approval records or separate privacy boundaries. Users with report read access can read both. Viewer roles cannot write; members and managers need the reports module, and admins have full access. Existing non-admin accounts must be granted this new module explicitly.
+Draft and published are editorial states, not approval records or separate privacy boundaries. Users with report read access can read both. Viewers cannot write; Members, Managers and Admins have report write permission under the fixed roles.
 
 ## Give an agent access
 
-Create a named AI key in Settings with `reports:write` for writing and reading, or `reports:read` for reading only. Add `projects:read` if the agent also needs to discover project and task IDs for links. Do not give it account-administration permissions. The owner's current permissions still apply to every call.
+Create an AI user in Team with Member role for writing reports or Viewer for read-only access. Copy its automatically generated key into the MCP client's protected configuration. The user's current role applies to every call; no separate key scopes are needed. See [MCP setup](mcp.md).
 
 The MCP endpoint remains `/mcp`. Report tools are:
 

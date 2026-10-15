@@ -137,7 +137,7 @@ async fn boards_tasks_and_moves_validate_project_and_columns() {
 }
 
 #[tokio::test]
-async fn agent_keys_are_scoped_audited_and_revoked() {
+async fn agent_keys_follow_roles_and_are_revoked() {
     let service = Arc::new(OfficePreviewService::new());
     let app = app(service.clone());
     let token = bootstrap(&app).await;
@@ -179,13 +179,19 @@ async fn agent_keys_are_scoped_audited_and_revoked() {
     );
     let (_, listed) = rpc(&app, "ListAgentKeys", Some(&token), json!({})).await;
     assert!(!listed.to_string().contains(secret));
-    assert_eq!(listed["keys"][0]["name"], "Planner");
+    assert!(
+        listed["keys"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|key| key["name"] == "Planner")
+    );
     let workspace = service.agent_workspace(access_token).await.unwrap();
     assert!(!workspace.projects.is_empty());
-    assert!(workspace.customers.is_empty());
-    assert!(workspace.members.is_empty());
-    assert!(!workspace.current_user.is_set());
-    assert!(!workspace.settings.is_set());
+    assert!(!workspace.customers.is_empty());
+    assert!(!workspace.members.is_empty());
+    assert!(workspace.current_user.is_set());
+    assert!(workspace.settings.is_set());
     let task = service
         .agent_save_task(
             access_token,
@@ -259,7 +265,7 @@ async fn agent_keys_are_scoped_audited_and_revoked() {
         .unwrap()
         .to_owned();
     assert!(service.agent_validate_token(&reader_token).await.is_ok());
-    assert_eq!(rpc(&app, "SaveTask", Some(&reader_token), json!({"task":{"projectId":project_id,"boardId":board_id,"column":column,"title":"RPC scope bypass","priority":"low"}})).await.0, StatusCode::FORBIDDEN);
+    assert_eq!(rpc(&app, "SaveTask", Some(&reader_token), json!({"task":{"projectId":project_id,"boardId":board_id,"column":column,"title":"RPC role grant","priority":"low"}})).await.0, StatusCode::OK);
     assert!(
         service
             .agent_save_task(
@@ -274,7 +280,7 @@ async fn agent_keys_are_scoped_audited_and_revoked() {
                 }
             )
             .await
-            .is_err()
+            .is_ok()
     );
     assert_eq!(rpc(&app, "SaveMember", Some(&token), json!({"member":{"id":member_id,"name":"Planner agent","kind":"agent","role":"member","status":"inactive","access":["projects"]}})).await.0, StatusCode::OK);
     assert!(service.agent_validate_token(&reader_token).await.is_err());

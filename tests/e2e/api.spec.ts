@@ -122,7 +122,7 @@ test("SQLite restart retains records, discussion, reports and a browser session"
 	await expect(dialog.getByText(report.body, { exact: true })).toBeVisible();
 });
 
-test("an exchanged agent token keeps stable member attribution and revocation stops future writes", async ({
+test("AI member creation issues a key for direct MCP and token access with stable attribution", async ({
 	office,
 	page,
 	request,
@@ -140,25 +140,18 @@ test("an exchanged agent token keeps stable member attribution and revocation st
 				kind: "agent",
 				role: "member",
 				status: "active",
-				access: ["projects"],
 			},
 		},
 		token,
 	);
 	expect(memberResponse.ok()).toBeTruthy();
-	const { member } = await memberResponse.json();
-	const created = await office.rpc(
-		"CreateAgentKey",
-		{
-			name: "E2E researcher",
-			memberId: member.id,
-			scopes: ["projects:write"],
-			expiresInDays: 1,
-		},
-		token,
-	);
-	expect(created.ok()).toBeTruthy();
-	const { key, secret } = await created.json();
+	const { member, agentKey: key, secret } = await memberResponse.json();
+	expect(secret).toMatch(/^oo_[a-f0-9]{64}$/);
+	expect(key).toMatchObject({ memberId: member.id });
+	expect(key.scopes ?? []).toEqual([]);
+	expect(
+		Math.abs(key.expiresAt - key.createdAt - 90 * 86_400),
+	).toBeLessThanOrEqual(1);
 	const rawKeyMcp = await request.post(`${office.url}/mcp`, {
 		headers: {
 			Authorization: `Bearer ${secret}`,
@@ -167,7 +160,7 @@ test("an exchanged agent token keeps stable member attribution and revocation st
 		},
 		data: { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
 	});
-	expect(rawKeyMcp.status()).toBe(401);
+	expect(rawKeyMcp.ok()).toBeTruthy();
 	const exchanged = await office.rpc("ExchangeAgentKey", { key: secret });
 	expect(exchanged.ok()).toBeTruthy();
 	const agentSession = await exchanged.json();
@@ -229,6 +222,18 @@ test("an exchanged agent token keeps stable member attribution and revocation st
 	expect((await call()).status()).toBe(401);
 	expect(
 		(
+			await request.post(`${office.url}/mcp`, {
+				headers: {
+					Authorization: `Bearer ${secret}`,
+					Accept: "application/json, text/event-stream",
+					"MCP-Protocol-Version": "2025-03-26",
+				},
+				data: { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} },
+			})
+		).status(),
+	).toBe(401);
+	expect(
+		(
 			await office.rpc(
 				"SaveTaskComment",
 				{ taskId: task.id, body: "Revoked token cannot write" },
@@ -245,78 +250,249 @@ test("an exchanged agent token keeps stable member attribution and revocation st
 	expect(after.comments).toEqual(discussion.comments);
 });
 
-test("agent member status and key scopes are checked on RPC and MCP calls", async ({
+test("fixed roles expose the same permissions in ListRoles and GetWorkspace and enforce writes", async ({
 	office,
-	request,
 }) => {
-	const { token } = await office.bootstrap();
-	const memberResponse = await office.rpc(
-		"SaveMember",
-		{
-			member: {
-				name: "Read-only E2E Agent",
-				kind: "agent",
-				role: "member",
-				status: "active",
-				access: ["projects"],
-			},
-		},
-		token,
-	);
-	expect(memberResponse.ok()).toBeTruthy();
-	const { member } = await memberResponse.json();
-	const created = await office.rpc(
-		"CreateAgentKey",
-		{
-			name: "E2E read-only key",
-			memberId: member.id,
-			scopes: ["projects:read"],
-			expiresInDays: 1,
-		},
-		token,
-	);
-	expect(created.ok()).toBeTruthy();
-	const { key, secret } = await created.json();
-	const exchange = await office.rpc("ExchangeAgentKey", { key: secret });
-	expect(exchange.ok()).toBeTruthy();
-	const { token: agentToken } = await exchange.json();
-	const workspace = await (await office.rpc("GetWorkspace", {}, token)).json();
-	const task = workspace.tasks[0];
-	const mcpWrite = await request.post(`${office.url}/mcp`, {
-		headers: {
-			Authorization: `Bearer ${agentToken}`,
-			Accept: "application/json, text/event-stream",
-			"MCP-Protocol-Version": "2025-03-26",
-		},
-		data: {
-			jsonrpc: "2.0",
-			id: 1,
-			method: "tools/call",
-			params: {
-				name: "office_add_task_comment",
-				arguments: { task_id: task.id, body: "Must be denied" },
-			},
-		},
-	});
-	expect(mcpWrite.ok()).toBeTruthy();
-	expect((await mcpWrite.json()).result.isError).toBe(true);
-	const rpcWrite = await office.rpc(
-		"SaveTaskComment",
-		{ taskId: task.id, body: "Must also be denied" },
-		agentToken,
-	);
-	expect(rpcWrite.status()).toBe(403);
+	const { token: adminToken } = await office.bootstrap(true);
+	const modules = [
+		"team",
+		"customers",
+		"projects",
+		"reports",
+		"social",
+		"settings",
+	];
+	const writeModules: Record<string, string[]> = {
+		admin: modules,
+		manager: ["customers", "projects", "reports", "social"],
+		member: ["projects", "reports"],
+		viewer: [],
+	};
+	const rolesResponse = await office.rpc("ListRoles", {}, adminToken);
+	expect(rolesResponse.ok()).toBeTruthy();
+	const { roles } = await rolesResponse.json();
+	expect(roles.map((role: { id: string }) => role.id)).toEqual([
+		"admin",
+		"manager",
+		"member",
+		"viewer",
+	]);
+	for (const role of roles) {
+		const expected = modules.flatMap((module) => [
+			`${module}:read`,
+			...(writeModules[role.id].includes(module) ? [`${module}:write`] : []),
+		]);
+		expect(role.permissions).toEqual(expected);
+	}
+	const adminWorkspace = await (
+		await office.rpc("GetWorkspace", {}, adminToken)
+	).json();
+	const connectionId = adminWorkspace.connections[0].id;
+	for (const role of ["admin", "manager", "member", "viewer"]) {
+		let token = adminToken;
+		if (role !== "admin") {
+			const email = `${role}@example.test`;
+			const saved = await office.rpc(
+				"SaveMember",
+				{
+					member: { name: `E2E ${role}`, email, role, status: "active" },
+					password: "role-password-123",
+				},
+				adminToken,
+			);
+			expect(saved.ok()).toBeTruthy();
+			const login = await office.rpc("Login", {
+				email,
+				password: "role-password-123",
+			});
+			expect(login.ok()).toBeTruthy();
+			token = (await login.json()).token;
+		}
+		const workspaceResponse = await office.rpc("GetWorkspace", {}, token);
+		expect(workspaceResponse.ok()).toBeTruthy();
+		const workspace = await workspaceResponse.json();
+		expect(workspace.permissions).toEqual(
+			roles.find((item: { id: string }) => item.id === role).permissions,
+		);
+		expect(workspace.members.length).toBeGreaterThan(0);
+		expect(workspace.customers.length).toBeGreaterThan(0);
+		expect(workspace.projects.length).toBeGreaterThan(0);
+		expect(workspace.connections.length).toBeGreaterThan(0);
+		expect(workspace.settings).toBeDefined();
+		expect((await office.rpc("ListReports", {}, token)).ok()).toBeTruthy();
+		const writes: Record<string, [string, unknown]> = {
+			team: [
+				"SaveMember",
+				{
+					member: {
+						name: `Writer by ${role}`,
+						email: `writer-${role}@example.test`,
+						role: "viewer",
+						status: "active",
+					},
+					password: "writer-password-123",
+				},
+			],
+			customers: [
+				"SaveCustomer",
+				{
+					customer: {
+						name: `Customer by ${role}`,
+						company: "E2E",
+						status: "active",
+					},
+				},
+			],
+			projects: [
+				"SaveProject",
+				{ project: { name: `Project by ${role}`, status: "planning" } },
+			],
+			reports: [
+				"SaveReport",
+				{
+					report: {
+						title: `Report by ${role}`,
+						kind: "research",
+						status: "draft",
+						body: "Role matrix.",
+					},
+				},
+			],
+			social: [
+				"SavePost",
+				{
+					post: { content: `Draft by ${role}`, connectionId, status: "draft" },
+				},
+			],
+			settings: ["SaveSettings", { settings: workspace.settings }],
+		};
+		for (const module of modules) {
+			const [method, body] = writes[module];
+			const response = await office.rpc(method, body, token);
+			expect(response.status(), `${role} writing ${module}`).toBe(
+				writeModules[role].includes(module) ? 200 : 403,
+			);
+		}
+	}
+});
 
-	const disabled = await office.rpc(
+test("AI admin can create AI users; rotating a key invalidates every prior key and token", async ({
+	office,
+}) => {
+	const { token: humanAdminToken, user: humanAdmin } = await office.bootstrap();
+	const saveAI = async (token: string, name: string, role: string) => {
+		const response = await office.rpc(
+			"SaveMember",
+			{ member: { name, kind: "agent", role, status: "active" } },
+			token,
+		);
+		expect(response.ok()).toBeTruthy();
+		return response.json();
+	};
+	const adminAI = await saveAI(humanAdminToken, "AI administrator", "admin");
+	const adminSession = await office.rpc("ExchangeAgentKey", {
+		key: adminAI.secret,
+	});
+	expect(adminSession.ok()).toBeTruthy();
+	const { token: aiAdminToken } = await adminSession.json();
+	const subordinate = await saveAI(aiAdminToken, "AI researcher", "member");
+	expect(subordinate.agentKey).toMatchObject({
+		memberId: subordinate.member.id,
+		issuedBy: adminAI.member.id,
+	});
+	const memberSession = await office.rpc("ExchangeAgentKey", {
+		key: subordinate.secret,
+	});
+	expect(memberSession.ok()).toBeTruthy();
+	const { token: oldToken } = await memberSession.json();
+	const memberWorkspace = await (
+		await office.rpc("GetWorkspace", {}, oldToken)
+	).json();
+	expect(memberWorkspace.permissions).toEqual([
+		"team:read",
+		"customers:read",
+		"projects:read",
+		"projects:write",
+		"reports:read",
+		"reports:write",
+		"social:read",
+		"settings:read",
+	]);
+	expect(
+		(
+			await office.rpc(
+				"SaveProject",
+				{ project: { name: "AI member project", status: "planning" } },
+				oldToken,
+			)
+		).ok(),
+	).toBeTruthy();
+	expect(
+		(
+			await office.rpc(
+				"SaveMember",
+				{
+					member: {
+						name: "Unauthorized AI user",
+						kind: "agent",
+						role: "viewer",
+						status: "active",
+					},
+				},
+				oldToken,
+			)
+		).status(),
+	).toBe(403);
+	const secondResponse = await office.rpc(
+		"CreateAgentKey",
+		{ memberId: subordinate.member.id },
+		aiAdminToken,
+	);
+	expect(secondResponse.ok()).toBeTruthy();
+	const second = await secondResponse.json();
+	const secondSession = await office.rpc("ExchangeAgentKey", {
+		key: second.secret,
+	});
+	expect(secondSession.ok()).toBeTruthy();
+	const { token: secondToken } = await secondSession.json();
+	const rotatedResponse = await office.rpc(
+		"RotateAgentKey",
+		{ memberId: subordinate.member.id },
+		aiAdminToken,
+	);
+	expect(rotatedResponse.ok()).toBeTruthy();
+	const rotated = await rotatedResponse.json();
+	expect(rotated.secret).toMatch(/^oo_[a-f0-9]{64}$/);
+	expect(rotated.key).toMatchObject({
+		memberId: subordinate.member.id,
+		issuedBy: adminAI.member.id,
+	});
+	for (const oldKey of [subordinate.secret, second.secret]) {
+		expect(
+			(await office.rpc("ExchangeAgentKey", { key: oldKey })).status(),
+		).toBe(401);
+	}
+	for (const oldSession of [oldToken, secondToken]) {
+		expect((await office.rpc("GetWorkspace", {}, oldSession)).status()).toBe(
+			401,
+		);
+	}
+	expect(
+		(await office.rpc("ExchangeAgentKey", { key: rotated.secret })).ok(),
+	).toBeTruthy();
+	const keys = await (
+		await office.rpc("ListAgentKeys", {}, aiAdminToken)
+	).json();
+	expect(
+		keys.keys.filter(
+			(key: { memberId: string; revoked: boolean }) =>
+				key.memberId === subordinate.member.id && !key.revoked,
+		),
+	).toHaveLength(1);
+	const demoteHuman = await office.rpc(
 		"SaveMember",
-		{ member: { ...member, status: "inactive" } },
-		token,
+		{ member: { ...humanAdmin, role: "viewer" } },
+		aiAdminToken,
 	);
-	expect(disabled.ok()).toBeTruthy();
-	expect((await office.rpc("GetWorkspace", {}, agentToken)).status()).toBe(401);
-	expect((await office.rpc("ExchangeAgentKey", { key: secret })).status()).toBe(
-		401,
-	);
-	const revokedKey = await office.rpc("RevokeAgentKey", { id: key.id }, token);
-	expect(revokedKey.ok()).toBeTruthy();
+	expect(demoteHuman.status()).toBe(400);
 });

@@ -28,8 +28,9 @@ import {
 	SaveBoardRequestSchema,
 	SaveTaskRequestSchema,
 	ListAgentKeysRequestSchema,
-	CreateAgentKeyRequestSchema,
 	RevokeAgentKeyRequestSchema,
+	RotateAgentKeyRequestSchema,
+	ListRolesRequestSchema,
 	SaveMemberRequestSchema,
 	SavePostRequestSchema,
 	SaveProjectRequestSchema,
@@ -184,6 +185,9 @@ export async function saveMember(member: Member) {
 		}),
 	);
 }
+export async function listRoles() {
+	return client.listRoles(create(ListRolesRequestSchema));
+}
 export async function saveCustomer(customer: Customer) {
 	return client.saveCustomer(
 		create(SaveCustomerRequestSchema, {
@@ -249,16 +253,13 @@ export async function saveReport(
 export async function listAgentKeys() {
 	return client.listAgentKeys(create(ListAgentKeysRequestSchema));
 }
-export async function createAgentKey(input: {
-	name: string;
-	scopes: string[];
-	expiresInDays: number;
-	memberId: string;
-}) {
-	return client.createAgentKey(create(CreateAgentKeyRequestSchema, input));
-}
 export async function revokeAgentKey(id: string) {
 	return client.revokeAgentKey(create(RevokeAgentKeyRequestSchema, { id }));
+}
+export async function rotateAgentKey(memberId: string) {
+	return client.rotateAgentKey(
+		create(RotateAgentKeyRequestSchema, { memberId }),
+	);
 }
 export async function savePost(post: ScheduledPost) {
 	return client.savePost(

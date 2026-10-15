@@ -67,12 +67,21 @@ test("bootstrap, onboard a viewer, and work with RPC demo records", async ({
 	await dialog
 		.getByRole("button", { name: "Add team member", exact: true })
 		.click();
+	await expect(
+		dialog.getByRole("heading", { name: "Copy your new key" }),
+	).toBeVisible();
+	await dialog.getByRole("button", { name: "Done", exact: true }).click();
 	await expect(dialog).not.toBeVisible();
 	await expect(
 		page.getByText("Preview AI analyst", { exact: true }),
 	).toBeVisible();
-
+	await page.getByRole("button", { name: "Roles & permissions" }).click();
+	await expect(
+		page.getByRole("heading", { name: "Roles & permissions", level: 1 }),
+	).toBeVisible();
+	await expect(page.getByText("Manager", { exact: true })).toBeVisible();
 	await page.getByRole("button", { name: "Customers", exact: true }).click();
+
 	await page.getByRole("button", { name: /Add customer/ }).click();
 	dialog = page.getByRole("dialog");
 	await dialog
@@ -347,22 +356,19 @@ test("bootstrap, onboard a viewer, and work with RPC demo records", async ({
 	).toHaveCount(35);
 	await page.getByLabel("Color theme", { exact: true }).selectOption("nord");
 	await expect(page.locator("html")).toHaveAttribute("data-theme", "nord");
-	await page
-		.getByLabel("Key name", { exact: true })
-		.fill("Browser smoke agent");
-	await page
-		.getByLabel("AI user", { exact: true })
-		.selectOption({ label: "Preview AI analyst" });
-	await page.getByRole("button", { name: "Create key", exact: true }).click();
+	await expect(
+		page
+			.locator(".key-row")
+			.filter({ has: page.getByRole("button", { name: "Rotate key" }) })
+			.getByText("Preview AI analyst", { exact: true }),
+	).toBeVisible();
+	await page.getByRole("button", { name: "Rotate key", exact: true }).click();
 	dialog = page.getByRole("dialog");
 	await expect(
 		dialog.getByRole("heading", { name: "Copy your new key" }),
 	).toBeVisible();
 	await dialog.getByRole("button", { name: "Done", exact: true }).click();
 	await expect(dialog).not.toBeVisible();
-	await expect(
-		page.getByText("Browser smoke agent", { exact: true }),
-	).toBeVisible();
 	const keyToken = await page.evaluate(() =>
 		sessionStorage.getItem("office-office-session"),
 	);
@@ -377,7 +383,7 @@ test("bootstrap, onboard a viewer, and work with RPC demo records", async ({
 		issuedBy: expect.any(String),
 	});
 	await page.getByRole("button", { name: "Revoke", exact: true }).click();
-	await expect(page.getByText("Revoked", { exact: true })).toBeVisible();
+	await expect(page.getByText("Revoked", { exact: true })).toHaveCount(2);
 	await page.screenshot({
 		path: "test-results/office-desktop.png",
 		fullPage: true,

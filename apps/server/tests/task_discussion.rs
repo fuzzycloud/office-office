@@ -142,7 +142,7 @@ async fn comments_history_permissions_revisions_and_replay() {
         )
         .await
         .0,
-        StatusCode::FORBIDDEN
+        StatusCode::OK
     );
     assert_eq!(
         rpc(
@@ -313,12 +313,14 @@ async fn comments_history_permissions_revisions_and_replay() {
         service
             .agent_save_task_comment(&read_token, edit_ai.clone())
             .await
+            .is_ok()
+    );
+    assert!(
+        service
+            .agent_save_task_comment(secret, edit_ai)
+            .await
             .is_err()
     );
-    service
-        .agent_save_task_comment(secret, edit_ai)
-        .await
-        .unwrap();
     assert_eq!(
         service
             .agent_task_discussion(&read_token, task_id)
@@ -386,6 +388,37 @@ async fn comments_history_permissions_revisions_and_replay() {
         .await
         .0,
         StatusCode::CONFLICT
+    );
+    let ai_admin = ok(
+        &router,
+        "SaveMember",
+        Some(admin),
+        json!({"member":{"name":"AI moderator","kind":"agent","role":"admin","status":"active"}}),
+    )
+    .await;
+    let ai_admin_token = ok(
+        &router,
+        "ExchangeAgentKey",
+        None,
+        json!({"key":ai_admin["secret"]}),
+    )
+    .await["token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let moderated = ok(&router, "SaveTaskComment", Some(&ai_admin_token), json!({"taskId":task_id,"commentId":ai.id,"body":"Moderated agent note","expectedRevision":2})).await;
+    assert_eq!(moderated["comment"]["revision"], 3);
+    assert_eq!(moderated["comment"]["body"], "Moderated agent note");
+    assert_eq!(
+        rpc(
+            &router,
+            "SaveTaskComment",
+            Some(&other_token),
+            json!({"taskId":task_id,"commentId":ai.id,"body":"Member edit","expectedRevision":3})
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
     );
     let expected = service.task_discussion(admin, task_id).await.unwrap();
     service.close().await.unwrap();

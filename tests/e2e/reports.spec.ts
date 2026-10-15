@@ -189,7 +189,7 @@ test("stale research saves fail through RPC and UI while retaining the local dra
 	).toBeVisible();
 });
 
-test("report module and viewer permissions apply to navigation, editor and direct RPC", async ({
+test("viewer cannot edit reports and a role change grants report writing immediately", async ({
 	page,
 	office,
 }) => {
@@ -208,7 +208,6 @@ test("report module and viewer permissions apply to navigation, editor and direc
 				email: "report-viewer@example.test",
 				role: "viewer",
 				status: "active",
-				access: ["projects", "reports"],
 			},
 			password: "viewer-password-123",
 		},
@@ -223,6 +222,18 @@ test("report module and viewer permissions apply to navigation, editor and direc
 		})
 	).json();
 	await openReports(page, office.url, viewer.token);
+	await page.getByRole("button", { name: "Roles & permissions" }).click();
+	const viewerRole = page
+		.getByRole("table", { name: "Permissions assigned to each fixed role" })
+		.getByRole("row")
+		.filter({ has: page.getByRole("rowheader", { name: "Viewer" }) });
+	await expect(
+		viewerRole.getByText("reports:read", { exact: true }),
+	).toBeVisible();
+	await expect(
+		viewerRole.getByText("reports:write", { exact: true }),
+	).toHaveCount(0);
+	await page.getByRole("button", { name: "Reports", exact: true }).click();
 	await page.getByRole("button", { name: new RegExp(report.title) }).click();
 	await expect(
 		page.getByRole("heading", { name: report.title, exact: true, level: 3 }),
@@ -245,7 +256,7 @@ test("report module and viewer permissions apply to navigation, editor and direc
 		(
 			await office.rpc(
 				"SaveMember",
-				{ member: { ...member, access: ["projects"] } },
+				{ member: { ...member, role: "member" } },
 				token,
 			)
 		).ok(),
@@ -254,14 +265,16 @@ test("report module and viewer permissions apply to navigation, editor and direc
 	await expect(page.getByRole("button", { name: /^Projects/ })).toBeVisible();
 	await expect(
 		page.getByRole("button", { name: "Reports", exact: true }),
-	).toHaveCount(0);
-	for (const [method, body] of [
-		["ListReports", {}],
-		["GetReport", { id: report.id }],
-		["SaveReport", { report, expectedRevision: report.revision }],
-	] as const) {
-		const denied = await office.rpc(method, body, viewer.token);
-		expect(denied.status()).toBe(403);
-		expect((await denied.json()).code).toBe("permission_denied");
-	}
+	).toBeVisible();
+	await page.getByRole("button", { name: "Reports", exact: true }).click();
+	await expect(page.getByRole("button", { name: /New report/ })).toBeVisible();
+	const allowed = await office.rpc(
+		"SaveReport",
+		{
+			report: { ...report, body: "Member can update reports" },
+			expectedRevision: report.revision,
+		},
+		viewer.token,
+	);
+	expect(allowed.ok()).toBeTruthy();
 });
