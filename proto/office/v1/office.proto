@@ -1,15 +1,137 @@
 syntax = "proto3";
-
 package office.v1;
 
-// The board is exchanged as JSON while the frontend domain model is evolving.
-// This keeps the RPC contract stable while preserving JSON's flexible shape.
 service OfficeService {
-  rpc GetBoard(GetBoardRequest) returns (GetBoardResponse);
+  rpc GetSetupStatus(GetSetupStatusRequest) returns (GetSetupStatusResponse);
+  rpc BootstrapAdmin(BootstrapAdminRequest) returns (BootstrapAdminResponse);
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc GetWorkspace(GetWorkspaceRequest) returns (GetWorkspaceResponse);
+  rpc SaveMember(SaveMemberRequest) returns (SaveMemberResponse);
+  rpc SaveCustomer(SaveCustomerRequest) returns (SaveCustomerResponse);
+  rpc SaveProject(SaveProjectRequest) returns (SaveProjectResponse);
   rpc SaveBoard(SaveBoardRequest) returns (SaveBoardResponse);
+  rpc SaveTask(SaveTaskRequest) returns (SaveTaskResponse);
+  rpc ListAgentKeys(ListAgentKeysRequest) returns (ListAgentKeysResponse);
+  rpc CreateAgentKey(CreateAgentKeyRequest) returns (CreateAgentKeyResponse);
+  rpc RevokeAgentKey(RevokeAgentKeyRequest) returns (RevokeAgentKeyResponse);
+  rpc SavePost(SavePostRequest) returns (SavePostResponse);
+  rpc SaveSettings(SaveSettingsRequest) returns (SaveSettingsResponse);
 }
 
-message GetBoardRequest {}
-message GetBoardResponse { string board_json = 1; }
-message SaveBoardRequest { string board_json = 1; }
-message SaveBoardResponse { string board_json = 1; }
+message GetSetupStatusRequest {}
+message GetSetupStatusResponse { bool needs_setup = 1; bool demo_mode = 2; }
+message BootstrapAdminRequest { string name = 1; string email = 2; string password = 3; string workspace_name = 4; }
+message LoginRequest { string email = 1; string password = 2; }
+message BootstrapAdminResponse { string token = 1; Member user = 2; int64 expires_at = 3; }
+message LoginResponse { string token = 1; Member user = 2; int64 expires_at = 3; }
+message GetWorkspaceRequest {}
+message GetWorkspaceResponse {
+  bool demo_mode = 1;
+  WorkspaceSettings settings = 2;
+  Member current_user = 3;
+  repeated Member members = 4;
+  repeated Customer customers = 5;
+  repeated Project projects = 6;
+  repeated SocialConnection connections = 7;
+  repeated ScheduledPost posts = 8;
+  repeated Activity activity = 9;
+  repeated Board boards = 10;
+  repeated Task tasks = 11;
+}
+message SaveMemberRequest { Member member = 1; string password = 2; }
+message SaveMemberResponse { Member member = 1; }
+message SaveCustomerRequest { Customer customer = 1; }
+message SaveCustomerResponse { Customer customer = 1; }
+message SaveProjectRequest { Project project = 1; }
+message SaveProjectResponse { Project project = 1; }
+message SaveBoardRequest { Board board = 1; }
+message SaveBoardResponse { Board board = 1; }
+message SaveTaskRequest { Task task = 1; }
+message SaveTaskResponse { Task task = 1; }
+message ListAgentKeysRequest {}
+message ListAgentKeysResponse { repeated AgentKey keys = 1; }
+message CreateAgentKeyRequest { string name = 1; repeated string scopes = 2; int32 expires_in_days = 3; }
+message CreateAgentKeyResponse { AgentKey key = 1; string secret = 2; }
+message RevokeAgentKeyRequest { string id = 1; }
+message RevokeAgentKeyResponse { AgentKey key = 1; }
+message SavePostRequest { ScheduledPost post = 1; }
+message SavePostResponse { ScheduledPost post = 1; }
+message SaveSettingsRequest { WorkspaceSettings settings = 1; }
+message SaveSettingsResponse { WorkspaceSettings settings = 1; }
+
+message Member {
+  string id = 1;
+  string name = 2;
+  string email = 3;
+  string job_title = 4;
+  string department = 5;
+  string role = 6;
+  string status = 7;
+  repeated string access = 8;
+}
+message Customer {
+  string id = 1;
+  string name = 2;
+  string company = 3;
+  string email = 4;
+  string status = 5;
+  string owner_id = 6;
+  string notes = 7;
+}
+message Project {
+  string id = 1;
+  string name = 2;
+  string customer_id = 3;
+  string owner_id = 4;
+  string status = 5;
+  string summary = 6;
+  string target_date = 7;
+}
+message Board {
+  string id = 1;
+  string project_id = 2;
+  string name = 3;
+  repeated string columns = 4;
+}
+message Task {
+  string id = 1;
+  string project_id = 2;
+  string board_id = 3;
+  string column = 4;
+  string title = 5;
+  string description = 6;
+  string assignee_id = 7;
+  string priority = 8;
+  string due_date = 9;
+}
+message AgentKey {
+  string id = 1;
+  string name = 2;
+  repeated string scopes = 3;
+  int64 expires_at = 4;
+  int64 created_at = 5;
+  bool revoked = 6;
+}
+message SocialConnection {
+  string id = 1;
+  string platform = 2;
+  string name = 3;
+  string status = 4;
+  bool demo = 5;
+}
+message ScheduledPost {
+  string id = 1;
+  string connection_id = 2;
+  string content = 3;
+  string scheduled_at = 4;
+  string status = 5;
+  string author_id = 6;
+}
+message Activity {
+  string id = 1;
+  string kind = 2;
+  string summary = 3;
+  string actor_name = 4;
+  string occurred_at = 5;
+}
+message WorkspaceSettings { string workspace_name = 1; string default_theme = 2; string timezone = 3; }

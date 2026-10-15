@@ -10,46 +10,346 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file office/v1/office.proto.
  */
 export const file_office_v1_office: GenFile = /*@__PURE__*/
-  fileDesc("ChZvZmZpY2UvdjEvb2ZmaWNlLnByb3RvEglvZmZpY2UudjEiEQoPR2V0Qm9hcmRSZXF1ZXN0IiYKEEdldEJvYXJkUmVzcG9uc2USEgoKYm9hcmRfanNvbhgBIAEoCSImChBTYXZlQm9hcmRSZXF1ZXN0EhIKCmJvYXJkX2pzb24YASABKAkiJwoRU2F2ZUJvYXJkUmVzcG9uc2USEgoKYm9hcmRfanNvbhgBIAEoCTKcAQoNT2ZmaWNlU2VydmljZRJDCghHZXRCb2FyZBIaLm9mZmljZS52MS5HZXRCb2FyZFJlcXVlc3QaGy5vZmZpY2UudjEuR2V0Qm9hcmRSZXNwb25zZRJGCglTYXZlQm9hcmQSGy5vZmZpY2UudjEuU2F2ZUJvYXJkUmVxdWVzdBocLm9mZmljZS52MS5TYXZlQm9hcmRSZXNwb25zZWIGcHJvdG8z");
+  fileDesc("ChZvZmZpY2UvdjEvb2ZmaWNlLnByb3RvEglvZmZpY2UudjEiFwoVR2V0U2V0dXBTdGF0dXNSZXF1ZXN0IkAKFkdldFNldHVwU3RhdHVzUmVzcG9uc2USEwoLbmVlZHNfc2V0dXAYASABKAgSEQoJZGVtb19tb2RlGAIgASgIIl4KFUJvb3RzdHJhcEFkbWluUmVxdWVzdBIMCgRuYW1lGAEgASgJEg0KBWVtYWlsGAIgASgJEhAKCHBhc3N3b3JkGAMgASgJEhYKDndvcmtzcGFjZV9uYW1lGAQgASgJIi8KDExvZ2luUmVxdWVzdBINCgVlbWFpbBgBIAEoCRIQCghwYXNzd29yZBgCIAEoCSJcChZCb290c3RyYXBBZG1pblJlc3BvbnNlEg0KBXRva2VuGAEgASgJEh8KBHVzZXIYAiABKAsyES5vZmZpY2UudjEuTWVtYmVyEhIKCmV4cGlyZXNfYXQYAyABKAMiUwoNTG9naW5SZXNwb25zZRINCgV0b2tlbhgBIAEoCRIfCgR1c2VyGAIgASgLMhEub2ZmaWNlLnYxLk1lbWJlchISCgpleHBpcmVzX2F0GAMgASgDIhUKE0dldFdvcmtzcGFjZVJlcXVlc3QiuAMKFEdldFdvcmtzcGFjZVJlc3BvbnNlEhEKCWRlbW9fbW9kZRgBIAEoCBIuCghzZXR0aW5ncxgCIAEoCzIcLm9mZmljZS52MS5Xb3Jrc3BhY2VTZXR0aW5ncxInCgxjdXJyZW50X3VzZXIYAyABKAsyES5vZmZpY2UudjEuTWVtYmVyEiIKB21lbWJlcnMYBCADKAsyES5vZmZpY2UudjEuTWVtYmVyEiYKCWN1c3RvbWVycxgFIAMoCzITLm9mZmljZS52MS5DdXN0b21lchIkCghwcm9qZWN0cxgGIAMoCzISLm9mZmljZS52MS5Qcm9qZWN0EjAKC2Nvbm5lY3Rpb25zGAcgAygLMhsub2ZmaWNlLnYxLlNvY2lhbENvbm5lY3Rpb24SJwoFcG9zdHMYCCADKAsyGC5vZmZpY2UudjEuU2NoZWR1bGVkUG9zdBIlCghhY3Rpdml0eRgJIAMoCzITLm9mZmljZS52MS5BY3Rpdml0eRIgCgZib2FyZHMYCiADKAsyEC5vZmZpY2UudjEuQm9hcmQSHgoFdGFza3MYCyADKAsyDy5vZmZpY2UudjEuVGFzayJIChFTYXZlTWVtYmVyUmVxdWVzdBIhCgZtZW1iZXIYASABKAsyES5vZmZpY2UudjEuTWVtYmVyEhAKCHBhc3N3b3JkGAIgASgJIjcKElNhdmVNZW1iZXJSZXNwb25zZRIhCgZtZW1iZXIYASABKAsyES5vZmZpY2UudjEuTWVtYmVyIjwKE1NhdmVDdXN0b21lclJlcXVlc3QSJQoIY3VzdG9tZXIYASABKAsyEy5vZmZpY2UudjEuQ3VzdG9tZXIiPQoUU2F2ZUN1c3RvbWVyUmVzcG9uc2USJQoIY3VzdG9tZXIYASABKAsyEy5vZmZpY2UudjEuQ3VzdG9tZXIiOQoSU2F2ZVByb2plY3RSZXF1ZXN0EiMKB3Byb2plY3QYASABKAsyEi5vZmZpY2UudjEuUHJvamVjdCI6ChNTYXZlUHJvamVjdFJlc3BvbnNlEiMKB3Byb2plY3QYASABKAsyEi5vZmZpY2UudjEuUHJvamVjdCIzChBTYXZlQm9hcmRSZXF1ZXN0Eh8KBWJvYXJkGAEgASgLMhAub2ZmaWNlLnYxLkJvYXJkIjQKEVNhdmVCb2FyZFJlc3BvbnNlEh8KBWJvYXJkGAEgASgLMhAub2ZmaWNlLnYxLkJvYXJkIjAKD1NhdmVUYXNrUmVxdWVzdBIdCgR0YXNrGAEgASgLMg8ub2ZmaWNlLnYxLlRhc2siMQoQU2F2ZVRhc2tSZXNwb25zZRIdCgR0YXNrGAEgASgLMg8ub2ZmaWNlLnYxLlRhc2siFgoUTGlzdEFnZW50S2V5c1JlcXVlc3QiOgoVTGlzdEFnZW50S2V5c1Jlc3BvbnNlEiEKBGtleXMYASADKAsyEy5vZmZpY2UudjEuQWdlbnRLZXkiTgoVQ3JlYXRlQWdlbnRLZXlSZXF1ZXN0EgwKBG5hbWUYASABKAkSDgoGc2NvcGVzGAIgAygJEhcKD2V4cGlyZXNfaW5fZGF5cxgDIAEoBSJKChZDcmVhdGVBZ2VudEtleVJlc3BvbnNlEiAKA2tleRgBIAEoCzITLm9mZmljZS52MS5BZ2VudEtleRIOCgZzZWNyZXQYAiABKAkiIwoVUmV2b2tlQWdlbnRLZXlSZXF1ZXN0EgoKAmlkGAEgASgJIjoKFlJldm9rZUFnZW50S2V5UmVzcG9uc2USIAoDa2V5GAEgASgLMhMub2ZmaWNlLnYxLkFnZW50S2V5IjkKD1NhdmVQb3N0UmVxdWVzdBImCgRwb3N0GAEgASgLMhgub2ZmaWNlLnYxLlNjaGVkdWxlZFBvc3QiOgoQU2F2ZVBvc3RSZXNwb25zZRImCgRwb3N0GAEgASgLMhgub2ZmaWNlLnYxLlNjaGVkdWxlZFBvc3QiRQoTU2F2ZVNldHRpbmdzUmVxdWVzdBIuCghzZXR0aW5ncxgBIAEoCzIcLm9mZmljZS52MS5Xb3Jrc3BhY2VTZXR0aW5ncyJGChRTYXZlU2V0dGluZ3NSZXNwb25zZRIuCghzZXR0aW5ncxgBIAEoCzIcLm9mZmljZS52MS5Xb3Jrc3BhY2VTZXR0aW5ncyKGAQoGTWVtYmVyEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDQoFZW1haWwYAyABKAkSEQoJam9iX3RpdGxlGAQgASgJEhIKCmRlcGFydG1lbnQYBSABKAkSDAoEcm9sZRgGIAEoCRIOCgZzdGF0dXMYByABKAkSDgoGYWNjZXNzGAggAygJInUKCEN1c3RvbWVyEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDwoHY29tcGFueRgDIAEoCRINCgVlbWFpbBgEIAEoCRIOCgZzdGF0dXMYBSABKAkSEAoIb3duZXJfaWQYBiABKAkSDQoFbm90ZXMYByABKAkigAEKB1Byb2plY3QSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRITCgtjdXN0b21lcl9pZBgDIAEoCRIQCghvd25lcl9pZBgEIAEoCRIOCgZzdGF0dXMYBSABKAkSDwoHc3VtbWFyeRgGIAEoCRITCgt0YXJnZXRfZGF0ZRgHIAEoCSJGCgVCb2FyZBIKCgJpZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEgwKBG5hbWUYAyABKAkSDwoHY29sdW1ucxgEIAMoCSKlAQoEVGFzaxIKCgJpZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhAKCGJvYXJkX2lkGAMgASgJEg4KBmNvbHVtbhgEIAEoCRINCgV0aXRsZRgFIAEoCRITCgtkZXNjcmlwdGlvbhgGIAEoCRITCgthc3NpZ25lZV9pZBgHIAEoCRIQCghwcmlvcml0eRgIIAEoCRIQCghkdWVfZGF0ZRgJIAEoCSJtCghBZ2VudEtleRIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEg4KBnNjb3BlcxgDIAMoCRISCgpleHBpcmVzX2F0GAQgASgDEhIKCmNyZWF0ZWRfYXQYBSABKAMSDwoHcmV2b2tlZBgGIAEoCCJcChBTb2NpYWxDb25uZWN0aW9uEgoKAmlkGAEgASgJEhAKCHBsYXRmb3JtGAIgASgJEgwKBG5hbWUYAyABKAkSDgoGc3RhdHVzGAQgASgJEgwKBGRlbW8YBSABKAgifAoNU2NoZWR1bGVkUG9zdBIKCgJpZBgBIAEoCRIVCg1jb25uZWN0aW9uX2lkGAIgASgJEg8KB2NvbnRlbnQYAyABKAkSFAoMc2NoZWR1bGVkX2F0GAQgASgJEg4KBnN0YXR1cxgFIAEoCRIRCglhdXRob3JfaWQYBiABKAkiXgoIQWN0aXZpdHkSCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRIPCgdzdW1tYXJ5GAMgASgJEhIKCmFjdG9yX25hbWUYBCABKAkSEwoLb2NjdXJyZWRfYXQYBSABKAkiVAoRV29ya3NwYWNlU2V0dGluZ3MSFgoOd29ya3NwYWNlX25hbWUYASABKAkSFQoNZGVmYXVsdF90aGVtZRgCIAEoCRIQCgh0aW1lem9uZRgDIAEoCTLZCAoNT2ZmaWNlU2VydmljZRJVCg5HZXRTZXR1cFN0YXR1cxIgLm9mZmljZS52MS5HZXRTZXR1cFN0YXR1c1JlcXVlc3QaIS5vZmZpY2UudjEuR2V0U2V0dXBTdGF0dXNSZXNwb25zZRJVCg5Cb290c3RyYXBBZG1pbhIgLm9mZmljZS52MS5Cb290c3RyYXBBZG1pblJlcXVlc3QaIS5vZmZpY2UudjEuQm9vdHN0cmFwQWRtaW5SZXNwb25zZRI6CgVMb2dpbhIXLm9mZmljZS52MS5Mb2dpblJlcXVlc3QaGC5vZmZpY2UudjEuTG9naW5SZXNwb25zZRJPCgxHZXRXb3Jrc3BhY2USHi5vZmZpY2UudjEuR2V0V29ya3NwYWNlUmVxdWVzdBofLm9mZmljZS52MS5HZXRXb3Jrc3BhY2VSZXNwb25zZRJJCgpTYXZlTWVtYmVyEhwub2ZmaWNlLnYxLlNhdmVNZW1iZXJSZXF1ZXN0Gh0ub2ZmaWNlLnYxLlNhdmVNZW1iZXJSZXNwb25zZRJPCgxTYXZlQ3VzdG9tZXISHi5vZmZpY2UudjEuU2F2ZUN1c3RvbWVyUmVxdWVzdBofLm9mZmljZS52MS5TYXZlQ3VzdG9tZXJSZXNwb25zZRJMCgtTYXZlUHJvamVjdBIdLm9mZmljZS52MS5TYXZlUHJvamVjdFJlcXVlc3QaHi5vZmZpY2UudjEuU2F2ZVByb2plY3RSZXNwb25zZRJGCglTYXZlQm9hcmQSGy5vZmZpY2UudjEuU2F2ZUJvYXJkUmVxdWVzdBocLm9mZmljZS52MS5TYXZlQm9hcmRSZXNwb25zZRJDCghTYXZlVGFzaxIaLm9mZmljZS52MS5TYXZlVGFza1JlcXVlc3QaGy5vZmZpY2UudjEuU2F2ZVRhc2tSZXNwb25zZRJSCg1MaXN0QWdlbnRLZXlzEh8ub2ZmaWNlLnYxLkxpc3RBZ2VudEtleXNSZXF1ZXN0GiAub2ZmaWNlLnYxLkxpc3RBZ2VudEtleXNSZXNwb25zZRJVCg5DcmVhdGVBZ2VudEtleRIgLm9mZmljZS52MS5DcmVhdGVBZ2VudEtleVJlcXVlc3QaIS5vZmZpY2UudjEuQ3JlYXRlQWdlbnRLZXlSZXNwb25zZRJVCg5SZXZva2VBZ2VudEtleRIgLm9mZmljZS52MS5SZXZva2VBZ2VudEtleVJlcXVlc3QaIS5vZmZpY2UudjEuUmV2b2tlQWdlbnRLZXlSZXNwb25zZRJDCghTYXZlUG9zdBIaLm9mZmljZS52MS5TYXZlUG9zdFJlcXVlc3QaGy5vZmZpY2UudjEuU2F2ZVBvc3RSZXNwb25zZRJPCgxTYXZlU2V0dGluZ3MSHi5vZmZpY2UudjEuU2F2ZVNldHRpbmdzUmVxdWVzdBofLm9mZmljZS52MS5TYXZlU2V0dGluZ3NSZXNwb25zZWIGcHJvdG8z");
 
 /**
- * @generated from message office.v1.GetBoardRequest
+ * @generated from message office.v1.GetSetupStatusRequest
  */
-export type GetBoardRequest = Message<"office.v1.GetBoardRequest"> & {
+export type GetSetupStatusRequest = Message<"office.v1.GetSetupStatusRequest"> & {
 };
 
 /**
- * Describes the message office.v1.GetBoardRequest.
- * Use `create(GetBoardRequestSchema)` to create a new message.
+ * Describes the message office.v1.GetSetupStatusRequest.
+ * Use `create(GetSetupStatusRequestSchema)` to create a new message.
  */
-export const GetBoardRequestSchema: GenMessage<GetBoardRequest> = /*@__PURE__*/
+export const GetSetupStatusRequestSchema: GenMessage<GetSetupStatusRequest> = /*@__PURE__*/
   messageDesc(file_office_v1_office, 0);
 
 /**
- * @generated from message office.v1.GetBoardResponse
+ * @generated from message office.v1.GetSetupStatusResponse
  */
-export type GetBoardResponse = Message<"office.v1.GetBoardResponse"> & {
+export type GetSetupStatusResponse = Message<"office.v1.GetSetupStatusResponse"> & {
   /**
-   * @generated from field: string board_json = 1;
+   * @generated from field: bool needs_setup = 1;
    */
-  boardJson: string;
+  needsSetup: boolean;
+
+  /**
+   * @generated from field: bool demo_mode = 2;
+   */
+  demoMode: boolean;
 };
 
 /**
- * Describes the message office.v1.GetBoardResponse.
- * Use `create(GetBoardResponseSchema)` to create a new message.
+ * Describes the message office.v1.GetSetupStatusResponse.
+ * Use `create(GetSetupStatusResponseSchema)` to create a new message.
  */
-export const GetBoardResponseSchema: GenMessage<GetBoardResponse> = /*@__PURE__*/
+export const GetSetupStatusResponseSchema: GenMessage<GetSetupStatusResponse> = /*@__PURE__*/
   messageDesc(file_office_v1_office, 1);
+
+/**
+ * @generated from message office.v1.BootstrapAdminRequest
+ */
+export type BootstrapAdminRequest = Message<"office.v1.BootstrapAdminRequest"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string email = 2;
+   */
+  email: string;
+
+  /**
+   * @generated from field: string password = 3;
+   */
+  password: string;
+
+  /**
+   * @generated from field: string workspace_name = 4;
+   */
+  workspaceName: string;
+};
+
+/**
+ * Describes the message office.v1.BootstrapAdminRequest.
+ * Use `create(BootstrapAdminRequestSchema)` to create a new message.
+ */
+export const BootstrapAdminRequestSchema: GenMessage<BootstrapAdminRequest> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 2);
+
+/**
+ * @generated from message office.v1.LoginRequest
+ */
+export type LoginRequest = Message<"office.v1.LoginRequest"> & {
+  /**
+   * @generated from field: string email = 1;
+   */
+  email: string;
+
+  /**
+   * @generated from field: string password = 2;
+   */
+  password: string;
+};
+
+/**
+ * Describes the message office.v1.LoginRequest.
+ * Use `create(LoginRequestSchema)` to create a new message.
+ */
+export const LoginRequestSchema: GenMessage<LoginRequest> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 3);
+
+/**
+ * @generated from message office.v1.BootstrapAdminResponse
+ */
+export type BootstrapAdminResponse = Message<"office.v1.BootstrapAdminResponse"> & {
+  /**
+   * @generated from field: string token = 1;
+   */
+  token: string;
+
+  /**
+   * @generated from field: office.v1.Member user = 2;
+   */
+  user?: Member | undefined;
+
+  /**
+   * @generated from field: int64 expires_at = 3;
+   */
+  expiresAt: bigint;
+};
+
+/**
+ * Describes the message office.v1.BootstrapAdminResponse.
+ * Use `create(BootstrapAdminResponseSchema)` to create a new message.
+ */
+export const BootstrapAdminResponseSchema: GenMessage<BootstrapAdminResponse> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 4);
+
+/**
+ * @generated from message office.v1.LoginResponse
+ */
+export type LoginResponse = Message<"office.v1.LoginResponse"> & {
+  /**
+   * @generated from field: string token = 1;
+   */
+  token: string;
+
+  /**
+   * @generated from field: office.v1.Member user = 2;
+   */
+  user?: Member | undefined;
+
+  /**
+   * @generated from field: int64 expires_at = 3;
+   */
+  expiresAt: bigint;
+};
+
+/**
+ * Describes the message office.v1.LoginResponse.
+ * Use `create(LoginResponseSchema)` to create a new message.
+ */
+export const LoginResponseSchema: GenMessage<LoginResponse> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 5);
+
+/**
+ * @generated from message office.v1.GetWorkspaceRequest
+ */
+export type GetWorkspaceRequest = Message<"office.v1.GetWorkspaceRequest"> & {
+};
+
+/**
+ * Describes the message office.v1.GetWorkspaceRequest.
+ * Use `create(GetWorkspaceRequestSchema)` to create a new message.
+ */
+export const GetWorkspaceRequestSchema: GenMessage<GetWorkspaceRequest> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 6);
+
+/**
+ * @generated from message office.v1.GetWorkspaceResponse
+ */
+export type GetWorkspaceResponse = Message<"office.v1.GetWorkspaceResponse"> & {
+  /**
+   * @generated from field: bool demo_mode = 1;
+   */
+  demoMode: boolean;
+
+  /**
+   * @generated from field: office.v1.WorkspaceSettings settings = 2;
+   */
+  settings?: WorkspaceSettings | undefined;
+
+  /**
+   * @generated from field: office.v1.Member current_user = 3;
+   */
+  currentUser?: Member | undefined;
+
+  /**
+   * @generated from field: repeated office.v1.Member members = 4;
+   */
+  members: Member[];
+
+  /**
+   * @generated from field: repeated office.v1.Customer customers = 5;
+   */
+  customers: Customer[];
+
+  /**
+   * @generated from field: repeated office.v1.Project projects = 6;
+   */
+  projects: Project[];
+
+  /**
+   * @generated from field: repeated office.v1.SocialConnection connections = 7;
+   */
+  connections: SocialConnection[];
+
+  /**
+   * @generated from field: repeated office.v1.ScheduledPost posts = 8;
+   */
+  posts: ScheduledPost[];
+
+  /**
+   * @generated from field: repeated office.v1.Activity activity = 9;
+   */
+  activity: Activity[];
+
+  /**
+   * @generated from field: repeated office.v1.Board boards = 10;
+   */
+  boards: Board[];
+
+  /**
+   * @generated from field: repeated office.v1.Task tasks = 11;
+   */
+  tasks: Task[];
+};
+
+/**
+ * Describes the message office.v1.GetWorkspaceResponse.
+ * Use `create(GetWorkspaceResponseSchema)` to create a new message.
+ */
+export const GetWorkspaceResponseSchema: GenMessage<GetWorkspaceResponse> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 7);
+
+/**
+ * @generated from message office.v1.SaveMemberRequest
+ */
+export type SaveMemberRequest = Message<"office.v1.SaveMemberRequest"> & {
+  /**
+   * @generated from field: office.v1.Member member = 1;
+   */
+  member?: Member | undefined;
+
+  /**
+   * @generated from field: string password = 2;
+   */
+  password: string;
+};
+
+/**
+ * Describes the message office.v1.SaveMemberRequest.
+ * Use `create(SaveMemberRequestSchema)` to create a new message.
+ */
+export const SaveMemberRequestSchema: GenMessage<SaveMemberRequest> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 8);
+
+/**
+ * @generated from message office.v1.SaveMemberResponse
+ */
+export type SaveMemberResponse = Message<"office.v1.SaveMemberResponse"> & {
+  /**
+   * @generated from field: office.v1.Member member = 1;
+   */
+  member?: Member | undefined;
+};
+
+/**
+ * Describes the message office.v1.SaveMemberResponse.
+ * Use `create(SaveMemberResponseSchema)` to create a new message.
+ */
+export const SaveMemberResponseSchema: GenMessage<SaveMemberResponse> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 9);
+
+/**
+ * @generated from message office.v1.SaveCustomerRequest
+ */
+export type SaveCustomerRequest = Message<"office.v1.SaveCustomerRequest"> & {
+  /**
+   * @generated from field: office.v1.Customer customer = 1;
+   */
+  customer?: Customer | undefined;
+};
+
+/**
+ * Describes the message office.v1.SaveCustomerRequest.
+ * Use `create(SaveCustomerRequestSchema)` to create a new message.
+ */
+export const SaveCustomerRequestSchema: GenMessage<SaveCustomerRequest> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 10);
+
+/**
+ * @generated from message office.v1.SaveCustomerResponse
+ */
+export type SaveCustomerResponse = Message<"office.v1.SaveCustomerResponse"> & {
+  /**
+   * @generated from field: office.v1.Customer customer = 1;
+   */
+  customer?: Customer | undefined;
+};
+
+/**
+ * Describes the message office.v1.SaveCustomerResponse.
+ * Use `create(SaveCustomerResponseSchema)` to create a new message.
+ */
+export const SaveCustomerResponseSchema: GenMessage<SaveCustomerResponse> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 11);
+
+/**
+ * @generated from message office.v1.SaveProjectRequest
+ */
+export type SaveProjectRequest = Message<"office.v1.SaveProjectRequest"> & {
+  /**
+   * @generated from field: office.v1.Project project = 1;
+   */
+  project?: Project | undefined;
+};
+
+/**
+ * Describes the message office.v1.SaveProjectRequest.
+ * Use `create(SaveProjectRequestSchema)` to create a new message.
+ */
+export const SaveProjectRequestSchema: GenMessage<SaveProjectRequest> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 12);
+
+/**
+ * @generated from message office.v1.SaveProjectResponse
+ */
+export type SaveProjectResponse = Message<"office.v1.SaveProjectResponse"> & {
+  /**
+   * @generated from field: office.v1.Project project = 1;
+   */
+  project?: Project | undefined;
+};
+
+/**
+ * Describes the message office.v1.SaveProjectResponse.
+ * Use `create(SaveProjectResponseSchema)` to create a new message.
+ */
+export const SaveProjectResponseSchema: GenMessage<SaveProjectResponse> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 13);
 
 /**
  * @generated from message office.v1.SaveBoardRequest
  */
 export type SaveBoardRequest = Message<"office.v1.SaveBoardRequest"> & {
   /**
-   * @generated from field: string board_json = 1;
+   * @generated from field: office.v1.Board board = 1;
    */
-  boardJson: string;
+  board?: Board | undefined;
 };
 
 /**
@@ -57,16 +357,16 @@ export type SaveBoardRequest = Message<"office.v1.SaveBoardRequest"> & {
  * Use `create(SaveBoardRequestSchema)` to create a new message.
  */
 export const SaveBoardRequestSchema: GenMessage<SaveBoardRequest> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 2);
+  messageDesc(file_office_v1_office, 14);
 
 /**
  * @generated from message office.v1.SaveBoardResponse
  */
 export type SaveBoardResponse = Message<"office.v1.SaveBoardResponse"> & {
   /**
-   * @generated from field: string board_json = 1;
+   * @generated from field: office.v1.Board board = 1;
    */
-  boardJson: string;
+  board?: Board | undefined;
 };
 
 /**
@@ -74,22 +374,702 @@ export type SaveBoardResponse = Message<"office.v1.SaveBoardResponse"> & {
  * Use `create(SaveBoardResponseSchema)` to create a new message.
  */
 export const SaveBoardResponseSchema: GenMessage<SaveBoardResponse> = /*@__PURE__*/
-  messageDesc(file_office_v1_office, 3);
+  messageDesc(file_office_v1_office, 15);
 
 /**
- * The board is exchanged as JSON while the frontend domain model is evolving.
- * This keeps the RPC contract stable while preserving JSON's flexible shape.
- *
+ * @generated from message office.v1.SaveTaskRequest
+ */
+export type SaveTaskRequest = Message<"office.v1.SaveTaskRequest"> & {
+  /**
+   * @generated from field: office.v1.Task task = 1;
+   */
+  task?: Task | undefined;
+};
+
+/**
+ * Describes the message office.v1.SaveTaskRequest.
+ * Use `create(SaveTaskRequestSchema)` to create a new message.
+ */
+export const SaveTaskRequestSchema: GenMessage<SaveTaskRequest> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 16);
+
+/**
+ * @generated from message office.v1.SaveTaskResponse
+ */
+export type SaveTaskResponse = Message<"office.v1.SaveTaskResponse"> & {
+  /**
+   * @generated from field: office.v1.Task task = 1;
+   */
+  task?: Task | undefined;
+};
+
+/**
+ * Describes the message office.v1.SaveTaskResponse.
+ * Use `create(SaveTaskResponseSchema)` to create a new message.
+ */
+export const SaveTaskResponseSchema: GenMessage<SaveTaskResponse> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 17);
+
+/**
+ * @generated from message office.v1.ListAgentKeysRequest
+ */
+export type ListAgentKeysRequest = Message<"office.v1.ListAgentKeysRequest"> & {
+};
+
+/**
+ * Describes the message office.v1.ListAgentKeysRequest.
+ * Use `create(ListAgentKeysRequestSchema)` to create a new message.
+ */
+export const ListAgentKeysRequestSchema: GenMessage<ListAgentKeysRequest> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 18);
+
+/**
+ * @generated from message office.v1.ListAgentKeysResponse
+ */
+export type ListAgentKeysResponse = Message<"office.v1.ListAgentKeysResponse"> & {
+  /**
+   * @generated from field: repeated office.v1.AgentKey keys = 1;
+   */
+  keys: AgentKey[];
+};
+
+/**
+ * Describes the message office.v1.ListAgentKeysResponse.
+ * Use `create(ListAgentKeysResponseSchema)` to create a new message.
+ */
+export const ListAgentKeysResponseSchema: GenMessage<ListAgentKeysResponse> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 19);
+
+/**
+ * @generated from message office.v1.CreateAgentKeyRequest
+ */
+export type CreateAgentKeyRequest = Message<"office.v1.CreateAgentKeyRequest"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from field: repeated string scopes = 2;
+   */
+  scopes: string[];
+
+  /**
+   * @generated from field: int32 expires_in_days = 3;
+   */
+  expiresInDays: number;
+};
+
+/**
+ * Describes the message office.v1.CreateAgentKeyRequest.
+ * Use `create(CreateAgentKeyRequestSchema)` to create a new message.
+ */
+export const CreateAgentKeyRequestSchema: GenMessage<CreateAgentKeyRequest> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 20);
+
+/**
+ * @generated from message office.v1.CreateAgentKeyResponse
+ */
+export type CreateAgentKeyResponse = Message<"office.v1.CreateAgentKeyResponse"> & {
+  /**
+   * @generated from field: office.v1.AgentKey key = 1;
+   */
+  key?: AgentKey | undefined;
+
+  /**
+   * @generated from field: string secret = 2;
+   */
+  secret: string;
+};
+
+/**
+ * Describes the message office.v1.CreateAgentKeyResponse.
+ * Use `create(CreateAgentKeyResponseSchema)` to create a new message.
+ */
+export const CreateAgentKeyResponseSchema: GenMessage<CreateAgentKeyResponse> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 21);
+
+/**
+ * @generated from message office.v1.RevokeAgentKeyRequest
+ */
+export type RevokeAgentKeyRequest = Message<"office.v1.RevokeAgentKeyRequest"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+};
+
+/**
+ * Describes the message office.v1.RevokeAgentKeyRequest.
+ * Use `create(RevokeAgentKeyRequestSchema)` to create a new message.
+ */
+export const RevokeAgentKeyRequestSchema: GenMessage<RevokeAgentKeyRequest> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 22);
+
+/**
+ * @generated from message office.v1.RevokeAgentKeyResponse
+ */
+export type RevokeAgentKeyResponse = Message<"office.v1.RevokeAgentKeyResponse"> & {
+  /**
+   * @generated from field: office.v1.AgentKey key = 1;
+   */
+  key?: AgentKey | undefined;
+};
+
+/**
+ * Describes the message office.v1.RevokeAgentKeyResponse.
+ * Use `create(RevokeAgentKeyResponseSchema)` to create a new message.
+ */
+export const RevokeAgentKeyResponseSchema: GenMessage<RevokeAgentKeyResponse> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 23);
+
+/**
+ * @generated from message office.v1.SavePostRequest
+ */
+export type SavePostRequest = Message<"office.v1.SavePostRequest"> & {
+  /**
+   * @generated from field: office.v1.ScheduledPost post = 1;
+   */
+  post?: ScheduledPost | undefined;
+};
+
+/**
+ * Describes the message office.v1.SavePostRequest.
+ * Use `create(SavePostRequestSchema)` to create a new message.
+ */
+export const SavePostRequestSchema: GenMessage<SavePostRequest> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 24);
+
+/**
+ * @generated from message office.v1.SavePostResponse
+ */
+export type SavePostResponse = Message<"office.v1.SavePostResponse"> & {
+  /**
+   * @generated from field: office.v1.ScheduledPost post = 1;
+   */
+  post?: ScheduledPost | undefined;
+};
+
+/**
+ * Describes the message office.v1.SavePostResponse.
+ * Use `create(SavePostResponseSchema)` to create a new message.
+ */
+export const SavePostResponseSchema: GenMessage<SavePostResponse> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 25);
+
+/**
+ * @generated from message office.v1.SaveSettingsRequest
+ */
+export type SaveSettingsRequest = Message<"office.v1.SaveSettingsRequest"> & {
+  /**
+   * @generated from field: office.v1.WorkspaceSettings settings = 1;
+   */
+  settings?: WorkspaceSettings | undefined;
+};
+
+/**
+ * Describes the message office.v1.SaveSettingsRequest.
+ * Use `create(SaveSettingsRequestSchema)` to create a new message.
+ */
+export const SaveSettingsRequestSchema: GenMessage<SaveSettingsRequest> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 26);
+
+/**
+ * @generated from message office.v1.SaveSettingsResponse
+ */
+export type SaveSettingsResponse = Message<"office.v1.SaveSettingsResponse"> & {
+  /**
+   * @generated from field: office.v1.WorkspaceSettings settings = 1;
+   */
+  settings?: WorkspaceSettings | undefined;
+};
+
+/**
+ * Describes the message office.v1.SaveSettingsResponse.
+ * Use `create(SaveSettingsResponseSchema)` to create a new message.
+ */
+export const SaveSettingsResponseSchema: GenMessage<SaveSettingsResponse> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 27);
+
+/**
+ * @generated from message office.v1.Member
+ */
+export type Member = Message<"office.v1.Member"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string email = 3;
+   */
+  email: string;
+
+  /**
+   * @generated from field: string job_title = 4;
+   */
+  jobTitle: string;
+
+  /**
+   * @generated from field: string department = 5;
+   */
+  department: string;
+
+  /**
+   * @generated from field: string role = 6;
+   */
+  role: string;
+
+  /**
+   * @generated from field: string status = 7;
+   */
+  status: string;
+
+  /**
+   * @generated from field: repeated string access = 8;
+   */
+  access: string[];
+};
+
+/**
+ * Describes the message office.v1.Member.
+ * Use `create(MemberSchema)` to create a new message.
+ */
+export const MemberSchema: GenMessage<Member> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 28);
+
+/**
+ * @generated from message office.v1.Customer
+ */
+export type Customer = Message<"office.v1.Customer"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string company = 3;
+   */
+  company: string;
+
+  /**
+   * @generated from field: string email = 4;
+   */
+  email: string;
+
+  /**
+   * @generated from field: string status = 5;
+   */
+  status: string;
+
+  /**
+   * @generated from field: string owner_id = 6;
+   */
+  ownerId: string;
+
+  /**
+   * @generated from field: string notes = 7;
+   */
+  notes: string;
+};
+
+/**
+ * Describes the message office.v1.Customer.
+ * Use `create(CustomerSchema)` to create a new message.
+ */
+export const CustomerSchema: GenMessage<Customer> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 29);
+
+/**
+ * @generated from message office.v1.Project
+ */
+export type Project = Message<"office.v1.Project"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string customer_id = 3;
+   */
+  customerId: string;
+
+  /**
+   * @generated from field: string owner_id = 4;
+   */
+  ownerId: string;
+
+  /**
+   * @generated from field: string status = 5;
+   */
+  status: string;
+
+  /**
+   * @generated from field: string summary = 6;
+   */
+  summary: string;
+
+  /**
+   * @generated from field: string target_date = 7;
+   */
+  targetDate: string;
+};
+
+/**
+ * Describes the message office.v1.Project.
+ * Use `create(ProjectSchema)` to create a new message.
+ */
+export const ProjectSchema: GenMessage<Project> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 30);
+
+/**
+ * @generated from message office.v1.Board
+ */
+export type Board = Message<"office.v1.Board"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string project_id = 2;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string name = 3;
+   */
+  name: string;
+
+  /**
+   * @generated from field: repeated string columns = 4;
+   */
+  columns: string[];
+};
+
+/**
+ * Describes the message office.v1.Board.
+ * Use `create(BoardSchema)` to create a new message.
+ */
+export const BoardSchema: GenMessage<Board> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 31);
+
+/**
+ * @generated from message office.v1.Task
+ */
+export type Task = Message<"office.v1.Task"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string project_id = 2;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string board_id = 3;
+   */
+  boardId: string;
+
+  /**
+   * @generated from field: string column = 4;
+   */
+  column: string;
+
+  /**
+   * @generated from field: string title = 5;
+   */
+  title: string;
+
+  /**
+   * @generated from field: string description = 6;
+   */
+  description: string;
+
+  /**
+   * @generated from field: string assignee_id = 7;
+   */
+  assigneeId: string;
+
+  /**
+   * @generated from field: string priority = 8;
+   */
+  priority: string;
+
+  /**
+   * @generated from field: string due_date = 9;
+   */
+  dueDate: string;
+};
+
+/**
+ * Describes the message office.v1.Task.
+ * Use `create(TaskSchema)` to create a new message.
+ */
+export const TaskSchema: GenMessage<Task> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 32);
+
+/**
+ * @generated from message office.v1.AgentKey
+ */
+export type AgentKey = Message<"office.v1.AgentKey"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: repeated string scopes = 3;
+   */
+  scopes: string[];
+
+  /**
+   * @generated from field: int64 expires_at = 4;
+   */
+  expiresAt: bigint;
+
+  /**
+   * @generated from field: int64 created_at = 5;
+   */
+  createdAt: bigint;
+
+  /**
+   * @generated from field: bool revoked = 6;
+   */
+  revoked: boolean;
+};
+
+/**
+ * Describes the message office.v1.AgentKey.
+ * Use `create(AgentKeySchema)` to create a new message.
+ */
+export const AgentKeySchema: GenMessage<AgentKey> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 33);
+
+/**
+ * @generated from message office.v1.SocialConnection
+ */
+export type SocialConnection = Message<"office.v1.SocialConnection"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string platform = 2;
+   */
+  platform: string;
+
+  /**
+   * @generated from field: string name = 3;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string status = 4;
+   */
+  status: string;
+
+  /**
+   * @generated from field: bool demo = 5;
+   */
+  demo: boolean;
+};
+
+/**
+ * Describes the message office.v1.SocialConnection.
+ * Use `create(SocialConnectionSchema)` to create a new message.
+ */
+export const SocialConnectionSchema: GenMessage<SocialConnection> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 34);
+
+/**
+ * @generated from message office.v1.ScheduledPost
+ */
+export type ScheduledPost = Message<"office.v1.ScheduledPost"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string connection_id = 2;
+   */
+  connectionId: string;
+
+  /**
+   * @generated from field: string content = 3;
+   */
+  content: string;
+
+  /**
+   * @generated from field: string scheduled_at = 4;
+   */
+  scheduledAt: string;
+
+  /**
+   * @generated from field: string status = 5;
+   */
+  status: string;
+
+  /**
+   * @generated from field: string author_id = 6;
+   */
+  authorId: string;
+};
+
+/**
+ * Describes the message office.v1.ScheduledPost.
+ * Use `create(ScheduledPostSchema)` to create a new message.
+ */
+export const ScheduledPostSchema: GenMessage<ScheduledPost> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 35);
+
+/**
+ * @generated from message office.v1.Activity
+ */
+export type Activity = Message<"office.v1.Activity"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string kind = 2;
+   */
+  kind: string;
+
+  /**
+   * @generated from field: string summary = 3;
+   */
+  summary: string;
+
+  /**
+   * @generated from field: string actor_name = 4;
+   */
+  actorName: string;
+
+  /**
+   * @generated from field: string occurred_at = 5;
+   */
+  occurredAt: string;
+};
+
+/**
+ * Describes the message office.v1.Activity.
+ * Use `create(ActivitySchema)` to create a new message.
+ */
+export const ActivitySchema: GenMessage<Activity> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 36);
+
+/**
+ * @generated from message office.v1.WorkspaceSettings
+ */
+export type WorkspaceSettings = Message<"office.v1.WorkspaceSettings"> & {
+  /**
+   * @generated from field: string workspace_name = 1;
+   */
+  workspaceName: string;
+
+  /**
+   * @generated from field: string default_theme = 2;
+   */
+  defaultTheme: string;
+
+  /**
+   * @generated from field: string timezone = 3;
+   */
+  timezone: string;
+};
+
+/**
+ * Describes the message office.v1.WorkspaceSettings.
+ * Use `create(WorkspaceSettingsSchema)` to create a new message.
+ */
+export const WorkspaceSettingsSchema: GenMessage<WorkspaceSettings> = /*@__PURE__*/
+  messageDesc(file_office_v1_office, 37);
+
+/**
  * @generated from service office.v1.OfficeService
  */
 export const OfficeService: GenService<{
   /**
-   * @generated from rpc office.v1.OfficeService.GetBoard
+   * @generated from rpc office.v1.OfficeService.GetSetupStatus
    */
-  getBoard: {
+  getSetupStatus: {
     methodKind: "unary";
-    input: typeof GetBoardRequestSchema;
-    output: typeof GetBoardResponseSchema;
+    input: typeof GetSetupStatusRequestSchema;
+    output: typeof GetSetupStatusResponseSchema;
+  },
+  /**
+   * @generated from rpc office.v1.OfficeService.BootstrapAdmin
+   */
+  bootstrapAdmin: {
+    methodKind: "unary";
+    input: typeof BootstrapAdminRequestSchema;
+    output: typeof BootstrapAdminResponseSchema;
+  },
+  /**
+   * @generated from rpc office.v1.OfficeService.Login
+   */
+  login: {
+    methodKind: "unary";
+    input: typeof LoginRequestSchema;
+    output: typeof LoginResponseSchema;
+  },
+  /**
+   * @generated from rpc office.v1.OfficeService.GetWorkspace
+   */
+  getWorkspace: {
+    methodKind: "unary";
+    input: typeof GetWorkspaceRequestSchema;
+    output: typeof GetWorkspaceResponseSchema;
+  },
+  /**
+   * @generated from rpc office.v1.OfficeService.SaveMember
+   */
+  saveMember: {
+    methodKind: "unary";
+    input: typeof SaveMemberRequestSchema;
+    output: typeof SaveMemberResponseSchema;
+  },
+  /**
+   * @generated from rpc office.v1.OfficeService.SaveCustomer
+   */
+  saveCustomer: {
+    methodKind: "unary";
+    input: typeof SaveCustomerRequestSchema;
+    output: typeof SaveCustomerResponseSchema;
+  },
+  /**
+   * @generated from rpc office.v1.OfficeService.SaveProject
+   */
+  saveProject: {
+    methodKind: "unary";
+    input: typeof SaveProjectRequestSchema;
+    output: typeof SaveProjectResponseSchema;
   },
   /**
    * @generated from rpc office.v1.OfficeService.SaveBoard
@@ -98,6 +1078,54 @@ export const OfficeService: GenService<{
     methodKind: "unary";
     input: typeof SaveBoardRequestSchema;
     output: typeof SaveBoardResponseSchema;
+  },
+  /**
+   * @generated from rpc office.v1.OfficeService.SaveTask
+   */
+  saveTask: {
+    methodKind: "unary";
+    input: typeof SaveTaskRequestSchema;
+    output: typeof SaveTaskResponseSchema;
+  },
+  /**
+   * @generated from rpc office.v1.OfficeService.ListAgentKeys
+   */
+  listAgentKeys: {
+    methodKind: "unary";
+    input: typeof ListAgentKeysRequestSchema;
+    output: typeof ListAgentKeysResponseSchema;
+  },
+  /**
+   * @generated from rpc office.v1.OfficeService.CreateAgentKey
+   */
+  createAgentKey: {
+    methodKind: "unary";
+    input: typeof CreateAgentKeyRequestSchema;
+    output: typeof CreateAgentKeyResponseSchema;
+  },
+  /**
+   * @generated from rpc office.v1.OfficeService.RevokeAgentKey
+   */
+  revokeAgentKey: {
+    methodKind: "unary";
+    input: typeof RevokeAgentKeyRequestSchema;
+    output: typeof RevokeAgentKeyResponseSchema;
+  },
+  /**
+   * @generated from rpc office.v1.OfficeService.SavePost
+   */
+  savePost: {
+    methodKind: "unary";
+    input: typeof SavePostRequestSchema;
+    output: typeof SavePostResponseSchema;
+  },
+  /**
+   * @generated from rpc office.v1.OfficeService.SaveSettings
+   */
+  saveSettings: {
+    methodKind: "unary";
+    input: typeof SaveSettingsRequestSchema;
+    output: typeof SaveSettingsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_office_v1_office, 0);

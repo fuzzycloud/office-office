@@ -3,15 +3,17 @@
 	"private": true,
 	"version": "0.1.0",
 	"license": "MIT OR Apache-2.0",
-	"packageManager": "pnpm@11.25.0",
+	"packageManager": "pnpm@12.6.0",
 	"scripts": {
 		"dev": "pnpm --filter @office-office/web dev",
 		"build": "pnpm --filter @office-office/web build",
 		"check": "pnpm --filter @office-office/web check",
-		"generate": "buf generate"
+		"generate": "buf generate",
+		"test:e2e": "playwright test"
 	},
 	"devDependencies": {
 		"@bufbuild/protoc-gen-es": "2.13.0",
-		"@biomejs/biome": "2.5.7"
+		"@biomejs/biome": "2.5.7",
+		"@playwright/test": "1.62.1"
 	}
 }

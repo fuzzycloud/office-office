@@ -32,3 +32,13 @@ jobs:
       - run: cargo clippy --locked -p office-server --all-targets -- -D warnings
       - run: cargo test --locked -p office-server
       - run: pnpm check && pnpm build
+      - name: Install browser for UI smoke test
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Exercise onboarding in the browser
+        run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-test-results
+          path: test-results
+          retention-days: 7

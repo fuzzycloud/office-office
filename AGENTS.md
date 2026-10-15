@@ -2,11 +2,12 @@
 
 ## Product boundaries
 - Read README.md and docs/architecture.md before changing scope.
-- Daily office visibility: targets, strategy, projects, pricing history, progress.
-- Hermes owns messaging and agent execution. Do not build another agent runtime.
+- Current slice: RPC demo onboarding, team, customers, projects, social queue and settings. Targets, strategy and pricing remain product scope.
+- Durable architecture: SQLite + Litestream, katha events and kathputli actors.
+- Hermes owns conversational messaging and agent execution. Office Office owns the social publishing queue; live posting adapters are deferred.
 - Humans and agents read and write Office Office through the same RPC layer.
 - External access is read-only by default; explicit narrow actions (e.g. Zoho invoice send) need separate permissions and audit records. Never forward provider secrets.
-- Never fabricate customer data, progress, successful connections, or approvals.
+- Explicit demo fixtures must come from RPC and be labelled as samples. Never present fake records, connections, posts or approvals as real.
 
 ## Tools and checks
 - Prefix shell commands with `rtk`; use `rtk proxy` for unsupported commands.

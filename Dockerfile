@@ -37,7 +37,7 @@ RUN groupadd --gid 10001 office && useradd --uid 10001 --gid office --no-create-
 WORKDIR /app
 COPY --from=builder /src/target/release/office-server /usr/local/bin/office-server
 COPY --from=web /src/apps/web/dist /app/apps/web/dist
-ENV ADDR=0.0.0.0:8080 OFFICE_DATA_PATH=/data/board.json
+ENV ADDR=0.0.0.0:8080 OFFICE_DEMO_MODE=true
 USER office
 EXPOSE 8080
 CMD ["office-server"]

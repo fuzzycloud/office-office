@@ -42,3 +42,8 @@ release-plan level="patch": release-check
 # Requires a clean main checkout; cargo-release asks before committing/tagging/pushing.
 release level="patch": check
     cargo release --workspace {{quote(level)}} --execute
+
+# Browser smoke test requires the production UI and an available local TCP port.
+test-e2e:
+    pnpm build
+    pnpm test:e2e

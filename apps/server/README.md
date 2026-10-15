@@ -1,23 +1,9 @@
-# Office board server
+# Office Office preview server
 
-This service exposes `office.v1.OfficeService` under `/rpc` over ConnectRPC. `GetBoard` and
-`SaveBoard` exchange the frontend domain model as a JSON string in the protobuf
-messages during this initial spike. The board contains the `targets`,
-`projects`, `strategies`, `prices`, `updates`, and `connectors` arrays. A later
-storage step can move this persistence layer to Postgres without changing that
-frontend payload contract.
+Run from the repository root with `just server` or `cargo run -p office-server`. No token or data-path environment variable is required. The server binds to `127.0.0.1:8080` by default, serves ConnectRPC at `/rpc`, health at `/healthz`, and the built web app from `apps/web/dist` when present. Binding to a non-loopback address requires `OFFICE_DEMO_MODE=true`.
 
-Run from the repository root with:
+This is an **in-memory demo**. It seeds clearly marked sample records, but no login account. The first visitor creates an administrator through `BootstrapAdmin`; subsequent users can log in only after an admin gives them a temporary password. Passwords are Argon2-hashed, sessions are 15-minute HS256 JWTs signed by a random per-process key, and permissions are checked against the current account state on every RPC. Restarting the server erases accounts, edits, and sessions.
 
-```sh
-OFFICE_HUMAN_TOKEN=human-secret OFFICE_AGENT_TOKEN=agent-secret cargo run -p office-server
-```
+The typed `office.v1.OfficeService` exposes setup, login, workspace read, and per-record save methods for team members, customers, projects, social queue records, and settings. Human and agent clients use the same domain policy. Projects have multiple boards and tasks. The Streamable HTTP MCP endpoint at `/mcp` accepts scoped AI keys issued in Settings; see [MCP setup](../../docs/mcp.md). Social connections are disconnected samples. Saving a queued post records a plan; it never publishes or sends anything to a provider. There are no provider credentials in this preview.
 
-The human and agent bearer tokens must both be set and must differ. Both roles
-may read and save the board. Connector entries must use `mode: "read_only"`;
-scoped bill-send permissions are not implemented. The server binds to
-`127.0.0.1:8080` by default; set `ADDR` to change the bind address. JSON state
-is stored at `data/board.json` by default; set `OFFICE_DATA_PATH` to change it.
-`/healthz` is an unauthenticated liveness endpoint. When `apps/web/dist` exists,
-the server serves it as the frontend and uses its index page for client-side
-routes. The server exits gracefully on Ctrl-C or SIGTERM.
+The preview uses a `kathputli` actor to serialize commands and a `katha` aggregate plus append-only in-memory events to project workspace state. Credentials and the JWT key stay outside those events. Durable SQLite storage with Litestream recovery is planned for the next phase; this server does not claim persistence or real integrations.

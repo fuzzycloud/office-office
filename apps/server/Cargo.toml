@@ -6,15 +6,26 @@ license.workspace = true
 publish = false
 
 [dependencies]
+anyhow = "1"
+async-trait = "0.1"
 axum = "0.8"
+argon2 = "0.5"
 buffa = "0.8"
+chrono = "0.4"
 connectrpc = { version = "0.8", features = ["server", "axum"] }
+jsonwebtoken = { version = "10.4", features = ["rust_crypto"] }
+katha = "=0.2.6"
+kathputli = "=0.2.1"
+rand = "0.8"
+rmcp = { version = "3.3.0", default-features = false, features = ["server", "transport-streamable-http-server"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "fs", "sync"] }
 tower-http = { version = "0.6", features = ["fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4"] }
 
 [build-dependencies]
 connectrpc-build = "0.8"
