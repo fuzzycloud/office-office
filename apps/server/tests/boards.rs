@@ -151,24 +151,36 @@ async fn agent_keys_are_scoped_audited_and_revoked() {
         .unwrap();
     let board_id = board["id"].as_str().unwrap().to_owned();
     let column = board["columns"][0].as_str().unwrap().to_owned();
+    let (_, agent) = rpc(&app, "SaveMember", Some(&token), json!({"member":{"name":"Planner agent","kind":"agent","role":"member","status":"active","access":["projects"]}})).await;
+    let member_id = agent["member"]["id"].as_str().unwrap();
     let (status, created) = rpc(
         &app,
         "CreateAgentKey",
         Some(&token),
         json!({
-            "name":"Planner", "scopes":["projects:write"], "expiresInDays":30
+            "name":"Planner", "memberId":member_id, "scopes":["projects:write"], "expiresInDays":30
         }),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{created}");
     let secret = created["secret"].as_str().unwrap();
+    let exchanged = rpc(&app, "ExchangeAgentKey", None, json!({"key":secret}))
+        .await
+        .1;
+    let access_token = exchanged["token"].as_str().unwrap();
     assert!(secret.starts_with("oo_"));
     assert_eq!(secret.len(), 67);
-    assert!(service.agent_validate_key(secret).await.is_ok());
+    assert!(service.agent_validate_token(access_token).await.is_ok());
+    assert_eq!(
+        rpc(&app, "ListAgentKeys", Some(access_token), json!({}))
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
     let (_, listed) = rpc(&app, "ListAgentKeys", Some(&token), json!({})).await;
     assert!(!listed.to_string().contains(secret));
     assert_eq!(listed["keys"][0]["name"], "Planner");
-    let workspace = service.agent_workspace(secret).await.unwrap();
+    let workspace = service.agent_workspace(access_token).await.unwrap();
     assert!(!workspace.projects.is_empty());
     assert!(workspace.customers.is_empty());
     assert!(workspace.members.is_empty());
@@ -176,7 +188,7 @@ async fn agent_keys_are_scoped_audited_and_revoked() {
     assert!(!workspace.settings.is_set());
     let task = service
         .agent_save_task(
-            secret,
+            access_token,
             Task {
                 project_id: project_id.clone(),
                 board_id: board_id.clone(),
@@ -195,7 +207,7 @@ async fn agent_keys_are_scoped_audited_and_revoked() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|a| a["actorName"] == "Admin (AI: Planner)")
+            .any(|a| a["actorName"] == "Planner agent")
     );
     assert!(!workspace.to_string().contains(secret));
     assert_eq!(
@@ -209,15 +221,21 @@ async fn agent_keys_are_scoped_audited_and_revoked() {
             .0,
         StatusCode::OK
     );
-    assert!(service.agent_validate_key(secret).await.is_err());
-    assert!(service.agent_workspace(secret).await.is_err());
+    assert!(service.agent_validate_token(access_token).await.is_err());
+    assert!(service.agent_workspace(access_token).await.is_err());
+    assert_eq!(
+        rpc(&app, "GetWorkspace", Some(access_token), json!({}))
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
     assert_eq!(
         rpc(
             &app,
             "CreateAgentKey",
             Some(&token),
             json!({
-                "name":"Expired", "scopes":["projects:read"], "expiresInDays":91
+                "name":"Expired", "memberId":member_id, "scopes":["projects:read"], "expiresInDays":91
             })
         )
         .await
@@ -229,16 +247,23 @@ async fn agent_keys_are_scoped_audited_and_revoked() {
         "CreateAgentKey",
         Some(&token),
         json!({
-            "name":"Reader", "scopes":["projects:read"], "expiresInDays":1
+            "name":"Reader", "memberId":member_id, "scopes":["projects:read"], "expiresInDays":1
         }),
     )
     .await;
     let reader_secret = read_key["secret"].as_str().unwrap();
-    assert!(service.agent_validate_key(reader_secret).await.is_ok());
+    let reader_token = rpc(&app, "ExchangeAgentKey", None, json!({"key":reader_secret}))
+        .await
+        .1["token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(service.agent_validate_token(&reader_token).await.is_ok());
+    assert_eq!(rpc(&app, "SaveTask", Some(&reader_token), json!({"task":{"projectId":project_id,"boardId":board_id,"column":column,"title":"RPC scope bypass","priority":"low"}})).await.0, StatusCode::FORBIDDEN);
     assert!(
         service
             .agent_save_task(
-                reader_secret,
+                &reader_token,
                 Task {
                     project_id: project_id.clone(),
                     board_id: board_id.clone(),
@@ -250,5 +275,13 @@ async fn agent_keys_are_scoped_audited_and_revoked() {
             )
             .await
             .is_err()
+    );
+    assert_eq!(rpc(&app, "SaveMember", Some(&token), json!({"member":{"id":member_id,"name":"Planner agent","kind":"agent","role":"member","status":"inactive","access":["projects"]}})).await.0, StatusCode::OK);
+    assert!(service.agent_validate_token(&reader_token).await.is_err());
+    assert_eq!(
+        rpc(&app, "ExchangeAgentKey", None, json!({"key":reader_secret}))
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
     );
 }

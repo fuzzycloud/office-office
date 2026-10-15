@@ -10,9 +10,13 @@ Passwords are stored as Argon2 hashes in private SQLite tables. JWTs last 15 min
 
 ## Agent credentials
 
-AI access uses named opaque bearer keys with module scopes, expiry and immediate revocation. JWT-authenticated administrators create and revoke them. The raw secret is returned once; only its SHA-256 digest and owner binding are retained privately. Credentials are committed atomically with public key metadata events. A module write scope also permits reads in that module. Key scopes are intersected with the owner's current role and module access on each operation; keys cannot administer accounts or other keys.
+AI access uses named opaque bearer keys with module scopes, expiry and immediate revocation. JWT-authenticated administrators create and revoke keys for active AI team members. The raw secret is returned once; only its SHA-256 digest and member binding are retained privately. Issuer metadata is separate from the member identity. Credentials are committed atomically with public key metadata events. A module write scope also permits reads in that module. `ExchangeAgentKey` validates the key and active AI member, then issues a JWT for at most 15 minutes, bounded by key expiry. MCP and functional RPCs accept the access token, not the raw login key. The issued scope ceiling, current key scopes, member role and module access are intersected on each operation. Current key scopes cannot grant team/key/settings administration, even to an AI member with an admin role.
 
-AI writes identify the key name in activity. MCP rejects supplied Origin headers; native clients should omit Origin. Use HTTPS for any future hosted deployment. Neither database persistence nor `OFFICE_ALLOW_REMOTE=true` supplies a production perimeter.
+AI writes use the authenticated member name; comments, reports and task activity use stable member IDs. Rotation does not create a new author. Generic workspace activity still has a display-name-only schema; structured audit enrichment remains planned. MCP rejects supplied Origin headers; native clients should omit Origin. Use HTTPS for any future hosted deployment. Neither database persistence nor `OFFICE_ALLOW_REMOTE=true` supplies a production perimeter.
+
+AI members now have their own identities and credentials. Legacy creator-bound keys are rejected by the new exchange and require explicit replacement. There is still no project-membership authorization; filtering a response by project is not an isolation boundary. The [accepted agent team access contract](agent-team-access.md) requires independent active members, project grants, stable provenance and credential migration before these guarantees can be claimed.
+
+The common session model issues tokens after human password login or AI key exchange. AI tokens must retain their credential scope ceiling across both RPC and MCP. Current member/project/key state is rechecked after issuance; revoking a key or disabling its member must deny an otherwise unexpired token. Runtime choice does not affect authorization, and generic MCP access requires no watcher or execution-profile mapping.
 
 ## Event and storage boundary
 
@@ -28,4 +32,4 @@ Append-only history retains previous personal data values. Event/backup retentio
 
 This development build still needs a production review of TLS/ingress, request throttling, password recovery, retention/erasure and verified backup monitoring. Future provider settings require encryption server-side and a separate protected decryption recovery secret; no such credentials are stored today. Future publishing or invoice actions need explicit narrow permissions, operation IDs, receipts and retry handling. Never pass provider secrets to agents.
 
-Hermes owns agent execution and conversational channels. Office Office owns records and the separately scoped future social publishing queue.
+External clients and runtimes own agent execution and conversational channels. Office Office owns records and the separately scoped future social publishing queue.

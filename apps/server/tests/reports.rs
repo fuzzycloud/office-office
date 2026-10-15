@@ -141,14 +141,25 @@ async fn reports_are_versioned_scoped_and_replayed() {
         .0,
         StatusCode::FORBIDDEN
     );
+    let agent = ok(&router, "SaveMember", Some(token), json!({"member":{"name":"Analyst agent", "kind":"agent", "role":"member", "status":"active", "access":["reports"]}})).await;
     let key = ok(
         &router,
         "CreateAgentKey",
         Some(token),
-        json!({"name":"Analyst", "scopes":["reports:read", "reports:write"], "expiresInDays":30}),
+        json!({"name":"Analyst", "memberId":agent["member"]["id"], "scopes":["reports:read", "reports:write"], "expiresInDays":30}),
     )
     .await;
-    let secret = key["secret"].as_str().unwrap();
+    let secret = ok(
+        &router,
+        "ExchangeAgentKey",
+        None,
+        json!({"key":key["secret"]}),
+    )
+    .await["token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let secret = secret.as_str();
     assert_eq!(
         service
             .agent_list_reports(secret, ListReportsRequest::default())
@@ -189,7 +200,7 @@ async fn reports_are_versioned_scoped_and_replayed() {
         .unwrap();
     assert_eq!(saved_ai.revision, 2);
     assert_eq!(saved_ai.author_id, author["member"]["id"].as_str().unwrap());
-    assert_eq!(saved_ai.updated_by, "Admin (AI: Analyst)");
+    assert_eq!(saved_ai.updated_by, "Analyst agent");
     assert!(
         service
             .agent_save_report(
@@ -282,7 +293,7 @@ async fn reports_are_versioned_scoped_and_replayed() {
     let reopened = ok(&router, "GetReport", Some(token), json!({"id":report_id})).await;
     assert_eq!(reopened["report"]["revision"], 2);
     assert_eq!(reopened["report"]["body"], "# New findings");
-    assert_eq!(reopened["report"]["updatedBy"], "Admin (AI: Analyst)");
+    assert_eq!(reopened["report"]["updatedBy"], "Analyst agent");
     assert_eq!(
         ok(&router, "GetReport", Some(token), json!({"id":linked_id})).await["report"]["taskId"],
         task["task"]["id"]

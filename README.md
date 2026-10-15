@@ -2,7 +2,7 @@
 
 A shared daily office workspace for humans and AI. Office Office is building toward a clear view of targets, strategy, projects, pricing history and progress. It is independent open-source software, inspired by the Hindi sitcom [Office Office](https://en.wikipedia.org/wiki/Office_Office), and is not affiliated with the show or its creators.
 
-Hermes owns conversational channels and agent execution. Office Office owns office records and its social publishing queue. It does not provide another agent runtime.
+Office Office owns office records and its social publishing queue. External clients and runtimes, such as Hermes, execute agents and manage their conversations. Office Office does not provide another agent runtime.
 
 ## Current phase
 
@@ -38,13 +38,17 @@ The durable adapter uses rusqlite to put event writes and private credential tab
 
 The Reports library holds research pages with findings, sources, topics, reporting periods and optional project/task links. Humans can write them in the UI; agents can list, read and save them through MCP using `reports:read` or `reports:write` scopes. Each recurring investigation can produce a new edition without replacing the previous report. Revision checks prevent stale saves from overwriting another editor. Report events survive restarts in SQLite.
 
-See [research reports](docs/reports.md) for the workflow and agent examples. Hermes still schedules and executes research. Marketing analytics and campaign connectors remain future work; the app does not invent metrics.
+See [research reports](docs/reports.md) for the workflow and agent examples. Research scheduling and execution remain with external clients and runtimes. Marketing analytics and campaign connectors remain future work; the app does not invent metrics.
 
 ## AI access
 
-Administrators can create named, scoped AI keys in Settings. Copy the secret when it is created; it is shown once and only a digest is stored. Keys expire within 90 days and can be revoked immediately. A key is tied to its creator and cannot exceed that account's current permissions. In durable mode, key digests and account state survive restarts in SQLite; in demo mode they reset.
+Administrators can create AI users in Team with their own roles and module access, without email/password credentials. In Settings they select an active AI user and create a named, scoped login key. Copy the secret when it is created; it is shown once and only a digest is stored. Keys expire within 90 days and can be revoked immediately. A key is bound to that AI user; its issuing administrator is recorded separately. Exchange the key through `ExchangeAgentKey` for a token lasting at most 15 minutes. The token's issued scope ceiling and the user's current role/module access apply to every RPC/MCP call. Revoking the key or disabling the member invalidates outstanding tokens on subsequent calls. In durable mode, key digests and account state survive restarts in SQLite; in demo mode they reset.
 
-Connect an MCP client such as Hermes to `http://127.0.0.1:8080/mcp` using Streamable HTTP and `Authorization: Bearer <your-key>`. See [MCP setup and tools](docs/mcp.md). The initial tools read scoped workspace records and create or update boards, tasks and research reports. They do not manage accounts, issue keys, contact providers or publish posts.
+Humans obtain tokens with email/password; AI users exchange member-bound keys for tokens. Both use the same member/role model and shared authorization. The AI-user/token flow is new in v0.3.0; v0.2.2 used direct creator-bound keys. Existing keys must be replaced with explicit AI-user keys. Project-level access grants remain unimplemented: module scopes and project filters do not provide client isolation. See [agent team access and the next-deployment checklist](docs/agent-team-access.md).
+
+MCP access is independent of a runtime or watcher. Hermes, Claude Code, Codex and other clients can be configured against supported authentication flows; client compatibility must be verified. A [Ready-based dispatch workflow](docs/agent-dispatch.md) is an optional external integration, not a prerequisite for agent access. Boards do not launch agents yet.
+
+Connect an MCP client such as Hermes to `http://127.0.0.1:8080/mcp` using Streamable HTTP and `Authorization: Bearer <access-token>`. See [MCP setup and tools](docs/mcp.md). The initial tools read scoped workspace records and create or update boards, tasks and research reports. They do not manage accounts, issue keys, contact providers or publish posts.
 
 ## Storage and limits
 
@@ -56,7 +60,7 @@ Litestream can be configured separately by an operator for offsite replication; 
 
 ## Hosting and releases
 
-Version-tagged GHCR images are previews, not a production-ready deployment. No public service is deployed. See [hosting notes](docs/hosting.md) and [release management](docs/releases.md).
+Version-tagged GHCR images are previews, not a production-ready deployment. Operator deployments are managed separately from this public repository. See [hosting notes](docs/hosting.md) and [release management](docs/releases.md).
 
 ## Decisions and security
 

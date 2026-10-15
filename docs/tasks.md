@@ -14,4 +14,8 @@ The Activity tab records task updates and comment changes separately from the co
 
 `ListTaskDiscussion` returns comments and task activity. `SaveTaskComment` creates or edits a comment; `DeleteTaskComment` records a soft deletion. Writes enter the typed engine, kathputli actor and transactional katha/SQLite path. Task comment counts exclude deleted comments and are derived by the server.
 
-Comments are plain text. They do not execute instructions, fetch links, send messages, notify teammates or trigger an agent automatically. Hermes remains responsible for agent execution.
+Comments are plain text. They do not execute instructions, fetch links, send messages, notify teammates or trigger an agent automatically. External clients and runtimes remain responsible for agent execution.
+
+## Planned agent handoff
+
+An [optional external dispatch workflow](agent-dispatch.md) may use Ready as the explicit request to execute work, with an eligible assignee, brief/acceptance/dependency checks, an atomic claim and tracked attempt. In that workflow, In progress requires actual execution start and automated Review routing needs a designated reviewer. Ordinary edits/comments must not start another run. Basic MCP access does not require any dispatcher or runtime mapping; an authenticated AI user can call permitted tools directly.

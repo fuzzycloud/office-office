@@ -5,6 +5,7 @@ service OfficeService {
   rpc GetSetupStatus(GetSetupStatusRequest) returns (GetSetupStatusResponse);
   rpc BootstrapAdmin(BootstrapAdminRequest) returns (BootstrapAdminResponse);
   rpc Login(LoginRequest) returns (LoginResponse);
+  rpc ExchangeAgentKey(ExchangeAgentKeyRequest) returns (ExchangeAgentKeyResponse);
   rpc GetWorkspace(GetWorkspaceRequest) returns (GetWorkspaceResponse);
   rpc SaveMember(SaveMemberRequest) returns (SaveMemberResponse);
   rpc SaveCustomer(SaveCustomerRequest) returns (SaveCustomerResponse);
@@ -30,6 +31,8 @@ message BootstrapAdminRequest { string name = 1; string email = 2; string passwo
 message LoginRequest { string email = 1; string password = 2; }
 message BootstrapAdminResponse { string token = 1; Member user = 2; int64 expires_at = 3; }
 message LoginResponse { string token = 1; Member user = 2; int64 expires_at = 3; }
+message ExchangeAgentKeyRequest { string key = 1; }
+message ExchangeAgentKeyResponse { string token = 1; Member user = 2; int64 expires_at = 3; }
 message GetWorkspaceRequest {}
 message GetWorkspaceResponse {
   bool demo_mode = 1;
@@ -63,7 +66,7 @@ message SaveReportRequest { Report report = 1; uint32 expected_revision = 2; }
 message SaveReportResponse { Report report = 1; }
 message ListAgentKeysRequest {}
 message ListAgentKeysResponse { repeated AgentKey keys = 1; }
-message CreateAgentKeyRequest { string name = 1; repeated string scopes = 2; int32 expires_in_days = 3; }
+message CreateAgentKeyRequest { string name = 1; repeated string scopes = 2; int32 expires_in_days = 3; string member_id = 4; }
 message CreateAgentKeyResponse { AgentKey key = 1; string secret = 2; }
 message RevokeAgentKeyRequest { string id = 1; }
 message RevokeAgentKeyResponse { AgentKey key = 1; }
@@ -81,6 +84,8 @@ message Member {
   string role = 6;
   string status = 7;
   repeated string access = 8;
+  // Empty means human for events created before explicit member kinds.
+  string kind = 9;
 }
 message Customer {
   string id = 1;
@@ -145,6 +150,8 @@ message AgentKey {
   int64 expires_at = 4;
   int64 created_at = 5;
   bool revoked = 6;
+  string member_id = 7;
+  string issued_by = 8;
 }
 message SocialConnection {
   string id = 1;

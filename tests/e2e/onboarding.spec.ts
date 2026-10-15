@@ -2,6 +2,7 @@ import { expect, test } from "./fixtures";
 
 test("bootstrap, onboard a viewer, and work with RPC demo records", async ({
 	page,
+	office,
 }) => {
 	test.setTimeout(90_000);
 	await page.goto("/");
@@ -54,6 +55,22 @@ test("bootstrap, onboard a viewer, and work with RPC demo records", async ({
 		.click();
 	await expect(dialog).not.toBeVisible();
 	await expect(page.getByText("Preview Viewer", { exact: true })).toBeVisible();
+
+	await page.getByRole("button", { name: "Add member" }).click();
+	dialog = page.getByRole("dialog");
+	await dialog.getByLabel("User type", { exact: true }).selectOption("agent");
+	await dialog.getByLabel("Name", { exact: true }).fill("Preview AI analyst");
+	await dialog.getByLabel("Job title", { exact: true }).fill("Research agent");
+	await dialog.getByLabel("Role", { exact: true }).selectOption("member");
+	await expect(dialog.getByLabel("Email", { exact: true })).toHaveCount(0);
+	await expect(dialog.getByLabel(/Temporary password/)).toHaveCount(0);
+	await dialog
+		.getByRole("button", { name: "Add team member", exact: true })
+		.click();
+	await expect(dialog).not.toBeVisible();
+	await expect(
+		page.getByText("Preview AI analyst", { exact: true }),
+	).toBeVisible();
 
 	await page.getByRole("button", { name: "Customers", exact: true }).click();
 	await page.getByRole("button", { name: /Add customer/ }).click();
@@ -333,6 +350,9 @@ test("bootstrap, onboard a viewer, and work with RPC demo records", async ({
 	await page
 		.getByLabel("Key name", { exact: true })
 		.fill("Browser smoke agent");
+	await page
+		.getByLabel("AI user", { exact: true })
+		.selectOption({ label: "Preview AI analyst" });
 	await page.getByRole("button", { name: "Create key", exact: true }).click();
 	dialog = page.getByRole("dialog");
 	await expect(
@@ -343,6 +363,19 @@ test("bootstrap, onboard a viewer, and work with RPC demo records", async ({
 	await expect(
 		page.getByText("Browser smoke agent", { exact: true }),
 	).toBeVisible();
+	const keyToken = await page.evaluate(() =>
+		sessionStorage.getItem("office-office-session"),
+	);
+	const listedKeys = await office.rpc(
+		"ListAgentKeys",
+		{},
+		keyToken ?? undefined,
+	);
+	expect(listedKeys.ok()).toBeTruthy();
+	expect((await listedKeys.json()).keys[0]).toMatchObject({
+		memberId: expect.any(String),
+		issuedBy: expect.any(String),
+	});
 	await page.getByRole("button", { name: "Revoke", exact: true }).click();
 	await expect(page.getByText("Revoked", { exact: true })).toBeVisible();
 	await page.screenshot({

@@ -54,6 +54,7 @@ type RecordDraft = {
 	jobTitle: string;
 	department: string;
 	role: string;
+	kind: string;
 	access: string[];
 	password: string;
 	customerId: string;
@@ -340,6 +341,7 @@ export default function App() {
 					jobTitle: draft.jobTitle,
 					department: draft.department,
 					role: draft.role,
+					kind: draft.kind || "human",
 					status: draft.status,
 					access: draft.access,
 					password: draft.password,
@@ -585,6 +587,7 @@ export default function App() {
 						{page === "settings" && (
 							<Settings
 								data={data}
+								members={data.members}
 								demoMode={data.demoMode}
 								persistentStorage={data.persistentStorage}
 								canManage={canManageTeam}
@@ -1241,6 +1244,11 @@ function Team({
 										</div>
 										<span>
 											<b className="block">{person.name}</b>
+											{person.kind === "agent" && (
+												<span className="badge badge-secondary badge-sm">
+													AI user
+												</span>
+											)}
 											<span className="text-sm text-base-content/60">
 												{person.email}
 											</span>
@@ -2407,6 +2415,7 @@ function Social({
 
 function Settings({
 	data,
+	members,
 	demoMode,
 	persistentStorage,
 	canManage,
@@ -2417,6 +2426,7 @@ function Settings({
 	onSecret,
 }: {
 	data: Workspace;
+	members: Member[];
 	demoMode: boolean;
 	persistentStorage: boolean;
 	canManage: boolean;
@@ -2431,6 +2441,7 @@ function Settings({
 	);
 	const [timezone, setTimezone] = useState(data.settings.timezone);
 	const [keyName, setKeyName] = useState("");
+	const [keyMemberId, setKeyMemberId] = useState("");
 	const [keyScopes, setKeyScopes] = useState<string[]>(["projects:read"]);
 	const [keyExpiry, setKeyExpiry] = useState(90);
 	const [keyError, setKeyError] = useState("");
@@ -2448,6 +2459,7 @@ function Settings({
 			name: string;
 			scopes: string[];
 			expiresInDays: number;
+			memberId: string;
 		}) => {
 			const result = await createAgentKey(input);
 			onSecret(result.secret);
@@ -2616,7 +2628,7 @@ function Settings({
 						<PageTitle
 							eyebrow="Agent access"
 							heading="AI access keys"
-							description="Create scoped keys for agents that use the Office Office RPC interface."
+							description="Create a scoped login key for an AI user."
 						/>
 						<div
 							className={`alert border text-sm ${persistentStorage ? "border-info/20 bg-info/10" : "border-warning/20 bg-warning/10"}`}
@@ -2625,13 +2637,14 @@ function Settings({
 							<span>
 								{!persistentStorage ? (
 									<>
-										Keys work with the <code>/mcp</code> endpoint. Key metadata
-										resets when the server restarts.
+										Keys exchange for a short-lived bearer token used with the{" "}
+										<code>/mcp</code> endpoint. Metadata resets when the server
+										restarts.
 									</>
 								) : (
 									<>
-										Keys work with the <code>/mcp</code> endpoint. Key metadata
-										is saved in SQLite.
+										Keys exchange for a short-lived bearer token used with the{" "}
+										<code>/mcp</code> endpoint. Metadata is saved in SQLite.
 									</>
 								)}
 							</span>
@@ -2656,9 +2669,32 @@ function Settings({
 									name: keyName.trim(),
 									scopes: keyScopes,
 									expiresInDays: keyExpiry,
+									memberId: keyMemberId,
 								});
 							}}
 						>
+							<label className="form-control">
+								<span className="label-text mb-1">AI user</span>
+								<select
+									aria-label="AI user"
+									className="select select-bordered"
+									value={keyMemberId}
+									onChange={(event) => setKeyMemberId(event.target.value)}
+									required
+								>
+									<option value="">Choose an active AI user</option>
+									{members
+										.filter(
+											(member) =>
+												member.kind === "agent" && member.status === "active",
+										)
+										.map((member) => (
+											<option key={member.id} value={member.id}>
+												{member.name}
+											</option>
+										))}
+								</select>
+							</label>
 							<label className="form-control">
 								<span className="label-text mb-1">Key name</span>
 								<input
@@ -2727,7 +2763,17 @@ function Settings({
 							<div className="flex items-end">
 								<button
 									className="btn btn-primary"
-									disabled={createKeyMutation.isPending || !keyScopes.length}
+									disabled={
+										createKeyMutation.isPending ||
+										!keyScopes.length ||
+										!keyMemberId ||
+										!members.some(
+											(member) =>
+												member.id === keyMemberId &&
+												member.kind === "agent" &&
+												member.status === "active",
+										)
+									}
 								>
 									{createKeyMutation.isPending && (
 										<span className="loading loading-spinner loading-sm" />
@@ -2754,13 +2800,23 @@ function Settings({
 								<h3>Existing keys</h3>
 								{keysQuery.data.keys.length === 0 ? (
 									<p className="text-sm text-base-content/60">
-										No agent keys have been created.
+										{members.some(
+											(member) =>
+												member.kind === "agent" && member.status === "active",
+										)
+											? "No agent keys have been created."
+											: "Create an active AI user in Team before issuing a key."}
 									</p>
 								) : (
 									keysQuery.data.keys.map((key) => (
 										<article className="key-row" key={key.id}>
 											<div>
 												<b>{key.name}</b>
+												<p>
+													AI user:{" "}
+													{members.find((member) => member.id === key.memberId)
+														?.name || "Unknown AI user"}
+												</p>
 												<p>{key.scopes.join(", ") || "No access"}</p>
 												<small>
 													{key.revoked
@@ -2826,8 +2882,10 @@ function Settings({
 						<div className="alert mt-4 border border-info/20 bg-info/10 text-sm">
 							<span>⌁</span>
 							<span>
-								Connect to <code>/mcp</code> with this key as a Bearer token. Do
-								not put it in browser storage or source control.
+								Exchange this key with <code>ExchangeAgentKey</code> for a
+								short-lived bearer token, then use that token with{" "}
+								<code>/mcp</code>. Do not put the key in browser storage or
+								source control.
 							</span>
 						</div>
 						<div className="modal-action">
@@ -2893,6 +2951,7 @@ function RecordDialog({
 		jobTitle: readString("jobTitle"),
 		department: readString("department"),
 		role: readString("role", "member"),
+		kind: readString("kind", "human"),
 		access: Array.isArray(initial?.access)
 			? initial.access.filter(
 					(entry): entry is string => typeof entry === "string",
@@ -2917,7 +2976,9 @@ function RecordDialog({
 	};
 	const memberFields: FieldConfig[] = [
 		{ name: "name", label: "Name" },
-		{ name: "email", label: "Email", type: "email" },
+		...(values.kind === "agent"
+			? []
+			: [{ name: "email" as const, label: "Email", type: "email" }]),
 		{ name: "jobTitle", label: "Job title" },
 		{ name: "department", label: "Department" },
 		{
@@ -2933,11 +2994,17 @@ function RecordDialog({
 		{
 			name: "status",
 			label: "Status",
-			options: [
-				["active", "Active"],
-				["inactive", "Inactive"],
-				["pending", "Pending setup"],
-			],
+			options:
+				values.kind === "agent"
+					? [
+							["active", "Active"],
+							["inactive", "Inactive"],
+						]
+					: [
+							["active", "Active"],
+							["inactive", "Inactive"],
+							["pending", "Pending setup"],
+						],
 		},
 	];
 	const customerFields: FieldConfig[] = [
@@ -3049,13 +3116,19 @@ function RecordDialog({
 			return;
 		}
 		if (
+			values.kind !== "agent" &&
 			values.email.trim() &&
 			!v.safeParse(v.pipe(v.string(), v.email()), values.email).success
 		) {
 			setFormError("Enter a valid email address.");
 			return;
 		}
-		if (kind === "member" && values.password && values.password.length < 12) {
+		if (
+			kind === "member" &&
+			values.kind !== "agent" &&
+			values.password &&
+			values.password.length < 12
+		) {
 			setFormError("Use at least 12 characters for a temporary password.");
 			return;
 		}
@@ -3104,11 +3177,46 @@ function RecordDialog({
 				</div>
 				<p className="mt-2 text-sm text-base-content/60">
 					{kind === "member"
-						? "Adding someone records them here; it does not send an invitation."
+						? values.kind === "agent"
+							? "AI users authenticate with a member-bound key issued in Settings."
+							: "Adding someone records them here; it does not send an invitation."
 						: kind === "post"
 							? "This saves a queue record only. It will not publish to a channel."
 							: "Save changes to the shared workspace."}
 				</p>
+				{kind === "member" && (
+					<div className="form-control mt-4">
+						<span className="label-text mb-2 font-medium">User type</span>
+						{isEdit ? (
+							<span className="badge badge-outline w-fit">
+								{values.kind === "agent" ? "AI user" : "Human user"}
+							</span>
+						) : (
+							<select
+								aria-label="User type"
+								className="select select-bordered"
+								value={values.kind}
+								onChange={(event) =>
+									setValues((current) => ({
+										...current,
+										kind: event.target.value,
+										email: event.target.value === "agent" ? "" : current.email,
+										password:
+											event.target.value === "agent" ? "" : current.password,
+										status:
+											event.target.value === "agent" &&
+											current.status === "pending"
+												? "active"
+												: current.status,
+									}))
+								}
+							>
+								<option value="human">Human user</option>
+								<option value="agent">AI user</option>
+							</select>
+						)}
+					</div>
+				)}
 				{(formError || error) && (
 					<div role="alert" className="alert alert-error mt-4">
 						{formError || error}
@@ -3195,7 +3303,7 @@ function RecordDialog({
 							</div>
 						</fieldset>
 					)}
-					{kind === "member" && (
+					{kind === "member" && values.kind !== "agent" && (
 						<label className="form-control sm:col-span-2">
 							<span className="label-text mb-2 font-medium">
 								Temporary password{" "}

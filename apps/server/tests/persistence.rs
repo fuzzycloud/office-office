@@ -92,19 +92,25 @@ async fn restart_replays_records_credentials_and_revocation_without_samples() {
     let column = workspace["boards"][0]["columns"][0].as_str().unwrap();
     let task = ok(&router, "SaveTask", Some(token), json!({"task":{"projectId":project_id, "boardId":board_id, "column":column, "title":"Prepare launch", "assigneeId":member_id, "priority":"high", "dueDate":"2026-12-31"}})).await;
     ok(&router, "SaveSettings", Some(token), json!({"settings":{"workspaceName":"Saved Office", "defaultTheme":"nord", "timezone":"Asia/Kolkata"}})).await;
+    let agent = ok(&router, "SaveMember", Some(token), json!({"member":{"name":"Planner agent","kind":"agent","role":"member","status":"active","access":["projects"]}})).await;
+    let agent_id = agent["member"]["id"].as_str().unwrap();
     let key = ok(
         &router,
         "CreateAgentKey",
         Some(token),
-        json!({"name":"Planner", "scopes":["projects:write"], "expiresInDays":30}),
+        json!({"name":"Planner", "memberId":agent_id, "scopes":["projects:write"], "expiresInDays":30}),
     )
     .await;
     let secret = key["secret"].as_str().unwrap();
+    let access_token = ok(&router, "ExchangeAgentKey", None, json!({"key":secret})).await["token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     let revoked = ok(
         &router,
         "CreateAgentKey",
         Some(token),
-        json!({"name":"Old key", "scopes":["projects:read"], "expiresInDays":1}),
+        json!({"name":"Old key", "memberId":agent_id, "scopes":["projects:read"], "expiresInDays":1}),
     )
     .await;
     ok(
@@ -165,16 +171,16 @@ async fn restart_replays_records_credentials_and_revocation_without_samples() {
         .0,
         StatusCode::FORBIDDEN
     );
-    assert!(service.agent_validate_key(secret).await.is_ok());
+    assert!(service.agent_validate_token(&access_token).await.is_ok());
     assert!(
         service
-            .agent_validate_key(revoked["secret"].as_str().unwrap())
+            .exchange_agent_key(revoked["secret"].as_str().unwrap())
             .await
             .is_err()
     );
     service
         .agent_save_task(
-            secret,
+            &access_token,
             Task {
                 project_id: project_id.into(),
                 board_id: board_id.into(),
@@ -212,7 +218,7 @@ async fn restart_replays_records_credentials_and_revocation_without_samples() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|v| v["actorName"] == "Office Admin (AI: Planner)")
+            .any(|v| v["actorName"] == "Planner agent")
     );
     service.close().await.unwrap();
 }

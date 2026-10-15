@@ -78,6 +78,7 @@ export type Member = {
 	role: string;
 	status: string;
 	access: string[];
+	kind: string;
 	password?: string;
 };
 export type Customer = {
@@ -123,6 +124,8 @@ export type AgentKey = {
 	expiresAt: bigint;
 	createdAt: bigint;
 	revoked: boolean;
+	memberId: string;
+	issuedBy: string;
 };
 export type ScheduledPost = {
 	id: string;
@@ -250,6 +253,7 @@ export async function createAgentKey(input: {
 	name: string;
 	scopes: string[];
 	expiresInDays: number;
+	memberId: string;
 }) {
 	return client.createAgentKey(create(CreateAgentKeyRequestSchema, input));
 }

@@ -73,7 +73,9 @@ fn parse_event(kind: &str, json: &str) -> Result<Event> {
     };
     let valid = match &event {
         Event::DemoInitialized(v) => v.scenario == "office-preview" && v.version == 1,
-        Event::Member(v) => !v.id.is_empty() && !v.name.is_empty() && !v.email.is_empty(),
+        Event::Member(v) => {
+            !v.id.is_empty() && !v.name.is_empty() && (v.kind == "agent" || !v.email.is_empty())
+        }
         Event::Customer(v) => !v.id.is_empty() && !v.name.is_empty() && !v.company.is_empty(),
         Event::Project(v) => !v.id.is_empty() && !v.name.is_empty(),
         Event::Board(v) => !v.id.is_empty() && !v.project_id.is_empty() && !v.columns.is_empty(),

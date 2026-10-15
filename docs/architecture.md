@@ -1,6 +1,6 @@
 # Architecture
 
-Office Office is a shared business workspace for humans and AI. It provides office records and a social publishing queue; Hermes remains responsible for messaging and agent execution. Targets, strategy, pricing history and progress remain part of the product direction.
+Office Office is a shared business workspace for humans and AI. It provides office records and a social publishing queue; external clients and runtimes remain responsible for agent execution and conversations. Hermes is one possible integration, alongside clients such as Claude Code and Codex. Targets, strategy, pricing history and progress remain part of the product direction.
 
 ## Service boundary
 
@@ -38,11 +38,23 @@ Litestream is optional operator configuration for offsite replication. It is not
 
 ## Access and integrations
 
-Authentication and authorization apply at the RPC layer. JWTs expire after 15 minutes, and each request checks current role and module access so role changes take effect immediately. Demo setup is intended for loopback use. MCP bearer keys are scoped, expire within 90 days, and are bound to their creator's current permissions. Keys cannot administer accounts or other keys.
+Authentication and authorization apply at the RPC layer. JWTs expire after 15 minutes, and each request checks current role and module access so role changes take effect immediately. Demo setup is intended for loopback use. AI login keys are scoped, expire within 90 days, and bind to active AI members. `ExchangeAgentKey` issues short-lived access tokens, bounded by credential expiry. UI RPC and MCP resolve the same authenticated principal; every operation checks current member/key state and intersects token scope ceiling, key scopes and member permissions. Raw keys authenticate only the exchange. Existing human tokens remain valid, and legacy creator-bound agent keys require replacement.
 
 The social queue saves plans but has no posting adapter. Social OAuth, external posting and invitations are unavailable. Business integrations such as Zoho remain read-only by default. Any future narrow write action needs its own permission, idempotency key, provider receipt and audit record. Provider credentials are not currently stored. Never forward provider secrets to agents.
 
-Hermes owns Telegram, Slack, WhatsApp/Evolution and other conversational channels and agent execution. MCP initial tools read scoped workspace records and save boards, tasks or reports; agents never read storage directly.
+Conversational channels and execution belong to external clients/runtimes; Hermes is used for those integrations in our own setup. The public application does not require Hermes. MCP initial tools read scoped workspace records and save boards, tasks or reports; agents never read storage directly.
+
+### Shared user authentication and remaining policy work
+
+v0.3.0 implements explicit human/AI members and key exchange. `kind` defaults to human for legacy members; new AI members need no password/email, and user type is immutable. Keys bind to an active AI member with a separate issuer. Stable member IDs identify comment/report authors and task activity. Project memberships, task/board revision checks, command idempotency and structured generic activity attribution remain planned. Existing project filters and reference validation are not project authorization.
+
+Humans and AI are users in one member/role model. Humans authenticate with email/password; AI users exchange a member-bound key for a short-lived access token. Both flows resolve a common principal, intersecting current member role/module permissions and credential scopes across RPC and MCP. Project grants will add another intersection when project authorization is implemented. Revoking a key or disabling a member invalidates its outstanding sessions on subsequent calls. Stable actor identity is separate from assignment and key issuance. See [agent team access](agent-team-access.md) for migration rules, token constraints and acceptance tests. The remaining project-isolation and reliability requirements are not current behavior.
+
+### Optional external execution flow
+
+Functional MCP/API access does not require Ready, a watcher, runtime-profile mapping or Office Office starting an agent. Any supported client can authenticate and perform permitted operations. Client configuration and OAuth interoperability must be documented and tested rather than inferred from a product name.
+
+If an external dispatcher is installed later, Ready can explicitly request work after assignment and brief/acceptance/dependency checks. Such an integration needs atomic claims, attempt/revision tracking, heartbeats, safe retries, uncertain-start reconciliation, cancellation and authorized review. Runtime mappings and named-agent behavior belong in its configuration. Card moves never grant external-action approval. See [optional agent dispatch](agent-dispatch.md); this is separate from baseline team and MCP access.
 
 ## Hosting and product conventions
 

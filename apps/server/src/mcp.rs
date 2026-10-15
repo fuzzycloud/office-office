@@ -32,7 +32,7 @@ use serde_json::{Value, json};
 
 struct OfficeMcp {
     service: Arc<OfficePreviewService>,
-    secret: String,
+    token: String,
 }
 
 pub fn config(extra_hosts: Option<&str>) -> Result<StreamableHttpServerConfig, String> {
@@ -84,23 +84,23 @@ async fn handle(
     if request.headers().contains_key(header::ORIGIN) {
         return (StatusCode::FORBIDDEN, "MCP requests must not send Origin").into_response();
     }
-    let Some(secret) = request
+    let Some(token) = request
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.strip_prefix("Bearer "))
-        .filter(|value| value.starts_with("oo_") && !value.contains(char::is_whitespace))
+        .filter(|value| !value.is_empty() && !value.contains(char::is_whitespace))
     else {
         return (
             StatusCode::UNAUTHORIZED,
-            "An Office Office agent bearer key is required",
+            "An Office Office access token is required",
         )
             .into_response();
     };
-    if service.agent_validate_key(secret).await.is_err() {
+    if service.agent_validate_token(token).await.is_err() {
         return (
             StatusCode::UNAUTHORIZED,
-            "Agent key invalid, expired, or revoked",
+            "Access token invalid, expired, or revoked",
         )
             .into_response();
     }
@@ -109,13 +109,13 @@ async fn handle(
     // handler across requests or bind a second credential to the first one.
     let handler = OfficeMcp {
         service,
-        secret: secret.to_owned(),
+        token: token.to_owned(),
     };
     let transport = StreamableHttpService::new(
         move || {
             Ok(OfficeMcp {
                 service: handler.service.clone(),
-                secret: handler.secret.clone(),
+                token: handler.token.clone(),
             })
         },
         Arc::new(LocalSessionManager::default()),
@@ -331,7 +331,7 @@ impl ServerHandler for OfficeMcp {
                     Ok(value) => value,
                     Err(message) => return Ok(failure(message)),
                 };
-                match self.service.agent_workspace(&self.secret).await {
+                match self.service.agent_workspace(&self.token).await {
                     Ok(mut workspace) => {
                         if !project_id.is_empty() {
                             workspace.projects.retain(|item| item.id == project_id);
@@ -369,7 +369,7 @@ impl ServerHandler for OfficeMcp {
                     })
                 })();
                 match parsed {
-                    Ok(task) => match self.service.agent_save_task(&self.secret, task).await {
+                    Ok(task) => match self.service.agent_save_task(&self.token, task).await {
                         Ok(saved) => match serde_json::to_value(saved) {
                             Ok(value) => success(json!({"task":value})),
                             Err(_) => failure(
@@ -386,7 +386,7 @@ impl ServerHandler for OfficeMcp {
             "office_list_task_discussion" => match string_arg(&args, "task_id") {
                 Ok(task_id) => match self
                     .service
-                    .agent_task_discussion(&self.secret, &task_id)
+                    .agent_task_discussion(&self.token, &task_id)
                     .await
                 {
                     Ok(discussion) => success(
@@ -431,7 +431,7 @@ impl ServerHandler for OfficeMcp {
                         let result = if request.name == "office_delete_task_comment" {
                             self.service
                                 .agent_delete_task_comment(
-                                    &self.secret,
+                                    &self.token,
                                     DeleteTaskCommentRequest {
                                         task_id: value.task_id,
                                         comment_id: value.comment_id,
@@ -442,7 +442,7 @@ impl ServerHandler for OfficeMcp {
                                 .await
                         } else {
                             self.service
-                                .agent_save_task_comment(&self.secret, value)
+                                .agent_save_task_comment(&self.token, value)
                                 .await
                         };
                         match result {
@@ -463,7 +463,7 @@ impl ServerHandler for OfficeMcp {
                     })
                 })();
                 match parsed {
-                    Ok(board) => match self.service.agent_save_board(&self.secret, board).await {
+                    Ok(board) => match self.service.agent_save_board(&self.token, board).await {
                         Ok(saved) => match serde_json::to_value(saved) {
                             Ok(value) => success(json!({"board":value})),
                             Err(_) => failure(
@@ -491,7 +491,7 @@ impl ServerHandler for OfficeMcp {
                 match parsed {
                     Err(message) => failure(message),
                     Ok(request) => {
-                        match self.service.agent_list_reports(&self.secret, request).await {
+                        match self.service.agent_list_reports(&self.token, request).await {
                             Ok(list) => success(
                                 json!({"reports":list.reports,"totalCount":list.total_count,"nextOffset":list.next_offset}),
                             ),
@@ -502,7 +502,7 @@ impl ServerHandler for OfficeMcp {
             }
             "office_get_report" => match string_arg(&args, "id") {
                 Err(message) => failure(message),
-                Ok(id) => match self.service.agent_get_report(&self.secret, &id).await {
+                Ok(id) => match self.service.agent_get_report(&self.token, &id).await {
                     Ok(report) => match serde_json::to_value(report) {
                         Ok(value) => success(json!({"report":value})),
                         Err(_) => failure("Report response unavailable."),
@@ -541,7 +541,7 @@ impl ServerHandler for OfficeMcp {
                 match parsed {
                     Err(message) => failure(message),
                     Ok(request) => {
-                        match self.service.agent_save_report(&self.secret, request).await {
+                        match self.service.agent_save_report(&self.token, request).await {
                             Ok(report) => match serde_json::to_value(report) {
                                 Ok(value) => success(json!({"report":value})),
                                 Err(_) => failure(
@@ -647,16 +647,24 @@ mod tests {
         )
         .await;
         let admin = bootstrap["token"].as_str().unwrap().to_owned();
+        let member = rpc(app, "SaveMember", Some(&admin), json!({"member":{"name":"MCP agent","kind":"agent","role":"member","status":"active","access":["projects","customers","reports","social"]}})).await;
         let created = rpc(
             app,
             "CreateAgentKey",
             Some(&admin),
-            json!({"name":"MCP test","scopes":scopes,"expiresInDays":30}),
+            json!({"name":"MCP test","scopes":scopes,"expiresInDays":30,"memberId":member["member"]["id"]}),
+        )
+        .await;
+        let session = rpc(
+            app,
+            "ExchangeAgentKey",
+            None,
+            json!({"key":created["secret"]}),
         )
         .await;
         (
             admin,
-            created["secret"].as_str().unwrap().to_owned(),
+            session["token"].as_str().unwrap().to_owned(),
             created["key"]["id"].as_str().unwrap().to_owned(),
         )
     }
@@ -665,7 +673,7 @@ mod tests {
     async fn comment_tools_share_scopes_revision_checks_and_key_authorship() {
         let service = Arc::new(OfficePreviewService::new());
         let app = app(service.clone());
-        let (admin, secret, key_id) = key(&app, &["projects:write"]).await;
+        let (admin, secret, _) = key(&app, &["projects:write"]).await;
         let workspace = rpc(&app, "GetWorkspace", Some(&admin), json!({})).await;
         let task_id = workspace["tasks"][0]["id"].as_str().unwrap();
         let call = |name: &str, arguments: Value| json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":name,"arguments":arguments}});
@@ -681,7 +689,16 @@ mod tests {
         .await;
         let comment = &added["result"]["structuredContent"]["comment"];
         assert_eq!(comment["actorKind"], "agent", "{added}");
-        assert_eq!(comment["authorId"], format!("agent:{key_id}"));
+        let agent_id = workspace["members"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["name"] == "MCP agent")
+            .unwrap()["id"]
+            .as_str()
+            .unwrap();
+        assert_eq!(comment["authorId"], agent_id);
+        assert_eq!(comment["authorName"], "MCP agent");
         let comment_id = comment["id"].as_str().unwrap();
         let (_, edited) = mcp(&app, Some(&secret), None, call("office_edit_task_comment", json!({"task_id":task_id,"comment_id":comment_id,"body":"Edited MCP note","expected_revision":1}))).await;
         assert_eq!(
@@ -731,12 +748,19 @@ mod tests {
             &app,
             "CreateAgentKey",
             Some(&admin),
-            json!({"name":"Read only","scopes":["projects:read"],"expiresInDays":30}),
+            json!({"name":"Read only","scopes":["projects:read"],"expiresInDays":30,"memberId":agent_id}),
+        )
+        .await;
+        let read_session = rpc(
+            &app,
+            "ExchangeAgentKey",
+            None,
+            json!({"key":read["secret"]}),
         )
         .await;
         let (_, denied) = mcp(
             &app,
-            read["secret"].as_str(),
+            read_session["token"].as_str(),
             None,
             call(
                 "office_add_task_comment",
@@ -750,7 +774,7 @@ mod tests {
     #[tokio::test]
     async fn requires_request_bearer_and_rejects_browser_origin() {
         let app = app(Arc::new(OfficePreviewService::new()));
-        let (_, secret, _) = key(&app, &["projects:read"]).await;
+        let (admin, secret, _) = key(&app, &["projects:read"]).await;
         let init = json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}});
         assert_eq!(
             mcp(&app, None, None, init.clone()).await.0,
@@ -765,6 +789,22 @@ mod tests {
                 .await
                 .0,
             StatusCode::FORBIDDEN
+        );
+        let (human_status, _) = mcp(&app, Some(&admin), None, init.clone()).await;
+        assert_eq!(human_status, StatusCode::OK);
+        let workspace = rpc(&app, "GetWorkspace", Some(&admin), json!({})).await;
+        let member = workspace["members"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["kind"] == "agent")
+            .unwrap();
+        let raw = rpc(&app, "CreateAgentKey", Some(&admin), json!({"name":"Login only","scopes":["projects:read"],"expiresInDays":1,"memberId":member["id"]})).await;
+        assert_eq!(
+            mcp(&app, raw["secret"].as_str(), None, init.clone())
+                .await
+                .0,
+            StatusCode::UNAUTHORIZED
         );
         let (status, body) = mcp(&app, Some(&secret), None, init).await;
         assert_eq!(status, StatusCode::OK, "{body}");
@@ -921,7 +961,7 @@ mod tests {
         let report = &created["result"]["structuredContent"]["report"];
         let id = report["id"].as_str().unwrap().to_owned();
         assert_eq!(report["revision"], 1);
-        assert_eq!(report["authorName"], "Admin (AI: MCP test)");
+        assert_eq!(report["authorName"], "MCP agent");
         let (_, listed) = mcp(&app, Some(&secret), None, json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"office_list_reports","arguments":{"query":"Weekly competitor review","page_size":1}}})).await;
         assert_eq!(listed["result"]["isError"], false, "{listed}");
         let list = &listed["result"]["structuredContent"]["reports"];
@@ -950,13 +990,94 @@ mod tests {
             &app,
             "CreateAgentKey",
             Some(&admin),
-            json!({"name":"Report reader","scopes":["reports:read"],"expiresInDays":1}),
+            json!({"name":"Report reader","scopes":["reports:read"],"expiresInDays":1,"memberId":report["authorId"]}),
         )
         .await;
-        let reader = readonly["secret"].as_str().unwrap();
+        let reader_session = rpc(
+            &app,
+            "ExchangeAgentKey",
+            None,
+            json!({"key":readonly["secret"]}),
+        )
+        .await;
+        let reader = reader_session["token"].as_str().unwrap();
         let (_, denied) = mcp(&app, Some(reader), None, json!({"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"office_save_report","arguments":{"title":"Not allowed","body":"No write scope"}}})).await;
         assert_eq!(denied["result"]["isError"], true, "{denied}");
         let (_, safe_sources) = mcp(&app, Some(&secret), None, json!({"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"office_save_report","arguments":{"title":"Bad source","body":"Findings","sources":[{"title":"Unsafe","url":"javascript:alert(1)"}]}}})).await;
         assert_eq!(safe_sources["result"]["isError"], true, "{safe_sources}");
+    }
+
+    #[tokio::test]
+    async fn distinct_ai_users_keep_member_authorship_across_key_rotation() {
+        let app = app(Arc::new(OfficePreviewService::new()));
+        let (admin, first_token, _) = key(&app, &["projects:write"]).await;
+        let workspace = rpc(&app, "GetWorkspace", Some(&admin), json!({})).await;
+        let task_id = &workspace["tasks"][0]["id"];
+        let first_id = &workspace["members"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|member| member["kind"] == "agent")
+            .unwrap()["id"];
+        let second = rpc(&app, "SaveMember", Some(&admin), json!({"member":{"name":"Second AI user","kind":"agent","role":"member","status":"active","access":["projects"]}})).await;
+        let second_id = &second["member"]["id"];
+        let issue = |member_id: Value| json!({"name":"Client login","memberId":member_id,"scopes":["projects:write"],"expiresInDays":1});
+        let second_key = rpc(
+            &app,
+            "CreateAgentKey",
+            Some(&admin),
+            issue(second_id.clone()),
+        )
+        .await;
+        let second_session = rpc(
+            &app,
+            "ExchangeAgentKey",
+            None,
+            json!({"key":second_key["secret"]}),
+        )
+        .await;
+        let comment = |body: &str| json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"office_add_task_comment","arguments":{"task_id":task_id,"body":body}}});
+        let (_, first) = mcp(&app, Some(&first_token), None, comment("First user's work")).await;
+        let (_, second) = mcp(
+            &app,
+            second_session["token"].as_str(),
+            None,
+            comment("Second user's work"),
+        )
+        .await;
+        let first = &first["result"]["structuredContent"]["comment"];
+        let second = &second["result"]["structuredContent"]["comment"];
+        assert_eq!(&first["authorId"], first_id);
+        assert_eq!(&second["authorId"], second_id);
+        assert_ne!(first["authorId"], second["authorId"]);
+        assert_eq!(first["authorName"], "MCP agent");
+        assert_eq!(second["authorName"], "Second AI user");
+        let (_, denied) = mcp(&app, second_session["token"].as_str(), None, json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"office_edit_task_comment","arguments":{"task_id":task_id,"comment_id":first["id"],"body":"Impersonation","expected_revision":1}}})).await;
+        assert_eq!(denied["result"]["isError"], true);
+        let rotated = rpc(
+            &app,
+            "CreateAgentKey",
+            Some(&admin),
+            issue(first_id.clone()),
+        )
+        .await;
+        let rotated_session = rpc(
+            &app,
+            "ExchangeAgentKey",
+            None,
+            json!({"key":rotated["secret"]}),
+        )
+        .await;
+        let (_, third) = mcp(
+            &app,
+            rotated_session["token"].as_str(),
+            None,
+            comment("Same user, new credential"),
+        )
+        .await;
+        assert_eq!(
+            &third["result"]["structuredContent"]["comment"]["authorId"],
+            first_id
+        );
     }
 }

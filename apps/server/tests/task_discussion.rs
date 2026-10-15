@@ -186,28 +186,60 @@ async fn comments_history_permissions_revisions_and_replay() {
     .await;
     assert_eq!(edited["comment"]["revision"], 2);
     assert_eq!(edited["comment"]["createdAt"], comment["createdAt"]);
+    let agent = ok(&router, "SaveMember", Some(admin), json!({"member":{"name":"Research bot","kind":"agent","role":"member","status":"active","access":["projects"]}})).await;
+    let other_agent = ok(&router, "SaveMember", Some(admin), json!({"member":{"name":"Other bot","kind":"agent","role":"member","status":"active","access":["projects"]}})).await;
     let key = ok(
         &router,
         "CreateAgentKey",
         Some(admin),
-        json!({"name":"Research bot","scopes":["projects:write"],"expiresInDays":30}),
+        json!({"name":"Research bot","memberId":agent["member"]["id"],"scopes":["projects:write"],"expiresInDays":30}),
     )
     .await;
     let other_key = ok(
         &router,
         "CreateAgentKey",
         Some(admin),
-        json!({"name":"Other bot","scopes":["projects:write"],"expiresInDays":30}),
+        json!({"name":"Other bot","memberId":other_agent["member"]["id"],"scopes":["projects:write"],"expiresInDays":30}),
     )
     .await;
     let read_key = ok(
         &router,
         "CreateAgentKey",
         Some(admin),
-        json!({"name":"Reader bot","scopes":["projects:read"],"expiresInDays":30}),
+        json!({"name":"Reader bot","memberId":agent["member"]["id"],"scopes":["projects:read"],"expiresInDays":30}),
     )
     .await;
-    let secret = key["secret"].as_str().unwrap();
+    let secret = ok(
+        &router,
+        "ExchangeAgentKey",
+        None,
+        json!({"key":key["secret"]}),
+    )
+    .await["token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let other_token = ok(
+        &router,
+        "ExchangeAgentKey",
+        None,
+        json!({"key":other_key["secret"]}),
+    )
+    .await["token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let read_token = ok(
+        &router,
+        "ExchangeAgentKey",
+        None,
+        json!({"key":read_key["secret"]}),
+    )
+    .await["token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let secret = secret.as_str();
     assert!(
         service
             .agent_save_task_comment(
@@ -262,10 +294,7 @@ async fn comments_history_permissions_revisions_and_replay() {
         .await
         .unwrap();
     assert_eq!(ai.actor_kind, "agent");
-    assert_eq!(
-        ai.author_id,
-        format!("agent:{}", key["key"]["id"].as_str().unwrap())
-    );
+    assert_eq!(ai.author_id, agent["member"]["id"].as_str().unwrap());
     assert!(ai.author_name.contains("Research bot"));
     let edit_ai = SaveTaskCommentRequest {
         task_id: task_id.into(),
@@ -276,13 +305,13 @@ async fn comments_history_permissions_revisions_and_replay() {
     };
     assert!(
         service
-            .agent_save_task_comment(other_key["secret"].as_str().unwrap(), edit_ai.clone())
+            .agent_save_task_comment(&other_token, edit_ai.clone())
             .await
             .is_err()
     );
     assert!(
         service
-            .agent_save_task_comment(read_key["secret"].as_str().unwrap(), edit_ai.clone())
+            .agent_save_task_comment(&read_token, edit_ai.clone())
             .await
             .is_err()
     );
@@ -292,7 +321,7 @@ async fn comments_history_permissions_revisions_and_replay() {
         .unwrap();
     assert_eq!(
         service
-            .agent_task_discussion(read_key["secret"].as_str().unwrap(), task_id)
+            .agent_task_discussion(&read_token, task_id)
             .await
             .unwrap()
             .comments

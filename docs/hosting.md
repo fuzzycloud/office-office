@@ -4,7 +4,7 @@
 
 The application now persists events and authentication in SQLite. Normal startup uses `data/office-office.sqlite3`, configurable with `OFFICE_DATABASE_PATH`, and begins with no sample records. First-admin setup runs once; restarting replays the journal and restores accounts, records, AI-key digests and the JWT signing key.
 
-This is not yet a publicly deployed or production-reviewed service. Keep setup on loopback or behind a private ingress. The first visitor to an empty office can claim administrator access. HTTPS, request throttling, password recovery, privacy retention/erasure and a verified operational backup path remain necessary before public customer use.
+This repository publishes a development preview, not a production-reviewed service; operator deployments are configured separately. Keep setup on loopback or behind a private ingress. The first visitor to an empty office can claim administrator access. HTTPS, request throttling, password recovery, privacy retention/erasure and a verified operational backup path remain necessary before public customer use.
 
 `OFFICE_DEMO_MODE=true` selects in-memory storage that resets on restart and preselects the optional sample-data checkbox during first-admin registration. Sample records are created by the engine scenario only after opt-in; the same option can populate a persistent SQLite office. Storage mode is independent of `OFFICE_ALLOW_REMOTE=true`, the acknowledgement required for a non-loopback `ADDR`. Neither flag grants permissions or supplies a production security boundary.
 
