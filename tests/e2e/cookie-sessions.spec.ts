@@ -434,3 +434,68 @@ test("a delayed cookie login response reconciles identity in both tabs", async (
 		await other.close();
 	}
 });
+
+test("an expired cookie clears an admin editor before a different member signs in", async ({
+	office,
+	page,
+}) => {
+	const { token } = await office.bootstrap(false);
+	const created = await office.rpc(
+		"SaveMember",
+		{
+			member: {
+				name: "Expiry Viewer",
+				email: "expiry-viewer@example.test",
+				kind: "human",
+				role: "viewer",
+				status: "active",
+			},
+			password: "expiry-viewer-password-123",
+		},
+		token,
+	);
+	expect(created.ok()).toBeTruthy();
+	await signIn(page);
+	await page.getByRole("button", { name: "Team", exact: true }).click();
+	await page.getByRole("button", { name: /Add member/ }).click();
+	const editor = page.getByRole("dialog");
+	await editor.getByLabel("Name", { exact: true }).fill("Expired Admin Draft");
+	await editor
+		.getByLabel("Email", { exact: true })
+		.fill("expired-draft@example.test");
+	await editor
+		.getByLabel(/Temporary password/)
+		.fill("expired-draft-password-123");
+	await page.context().clearCookies();
+	const rejected = page.waitForResponse(
+		(response) =>
+			response.url().endsWith("/office.v1.OfficeService/SaveMember") &&
+			response.status() === 401,
+	);
+	await editor
+		.getByRole("button", { name: "Add team member", exact: true })
+		.click();
+	expect((await rejected).status()).toBe(401);
+	await expect(
+		page.getByRole("heading", { name: "Sign in", exact: true }),
+	).toBeVisible();
+	await page
+		.getByLabel("Email address", { exact: true })
+		.fill("expiry-viewer@example.test");
+	await page
+		.getByLabel("Password", { exact: true })
+		.fill("expiry-viewer-password-123");
+	await page.getByRole("button", { name: "Sign in", exact: true }).click();
+	await expect(
+		page.getByRole("button", { name: "Team", exact: true }),
+	).toBeVisible();
+	await expect(page.getByRole("dialog")).toHaveCount(0);
+	await expect(
+		page.getByText("Expired Admin Draft", { exact: true }),
+	).toHaveCount(0);
+	await page.getByRole("button", { name: "Team", exact: true }).click();
+	await expect(page.getByRole("button", { name: /Add member/ })).toHaveCount(0);
+	const workspace = await browserRpc(page, office.url, "GetWorkspace");
+	expect(workspace.ok()).toBeTruthy();
+	expect((await workspace.json()).currentUser.role).toBe("viewer");
+});

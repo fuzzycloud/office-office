@@ -308,6 +308,9 @@ export default function App() {
 				? login(payload.email, payload.password)
 				: bootstrapAdmin(payload),
 		onSuccess: (session) => {
+			setDialog(null);
+			setEditing(null);
+			setSecretToReveal("");
 			setSignOutError("");
 			setSessionNotice("");
 			setRecoveryError("");
