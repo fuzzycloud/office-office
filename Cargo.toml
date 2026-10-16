@@ -1,5 +1,5 @@
 [workspace]
-members = ["apps/server"]
+members = ["apps/server", "crates/sqlite-journal"]
 default-members = ["apps/server"]
 resolver = "3"
 

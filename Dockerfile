@@ -19,6 +19,7 @@ RUN cargo install cargo-chef --version 0.1.78 --locked
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
 COPY apps/server apps/server
+COPY crates crates
 COPY proto proto
 RUN cargo chef prepare --recipe-path recipe.json
 
@@ -29,6 +30,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo chef cook --release --locked -p office-server --recipe-path recipe.json
 COPY Cargo.toml Cargo.lock ./
 COPY apps/server apps/server
+COPY crates crates
 COPY proto proto
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
