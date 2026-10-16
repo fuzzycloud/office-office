@@ -10,7 +10,7 @@ Admins can add or update a bio and picture through Team's member editor. Every a
 
 ## Images and limits
 
-Pictures may use a private uploaded image (`avatarFileId`) or a hosted HTTPS image URL (`avatarUrl`), up to 2048 UTF-8 bytes. Settings uploads PNG, JPEG or WebP, then saves the returned own-profile file ID. Uploaded images use authenticated downloads; raw provider URLs and credentials are never exposed. See [private files](files.md) for format, size and access limits.
+Pictures may use a private uploaded image (`avatarFileId`) or a hosted HTTPS image URL (`avatarUrl`), up to 2048 UTF-8 bytes. Settings uploads PNG, JPEG or WebP, then saves the returned own-profile file ID. **Choose existing picture** offers your own previous uploads and reuses the selected file ID without another object upload. Uploaded images use authenticated downloads; raw provider URLs and credentials are never exposed. See [private files](files.md) for format, size and access limits.
 
 For external images, credentials, whitespace, control characters and backslashes in URLs are rejected. Images are loaded by the browser with a no-referrer policy; Office Office does not fetch external URLs on the server. Choose a picture URL that workspace members can access. Missing or failed images fall back to initials.
 

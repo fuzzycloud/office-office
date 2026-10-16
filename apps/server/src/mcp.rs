@@ -154,7 +154,7 @@ fn tools() -> Vec<Tool> {
         .open_world(false);
     vec![
         Tool::new("office_list_files", "List authorized private file metadata. Optional projects/reports/profile module and record_id filters. No object-store credentials are returned.", schema(json!({"type":"object","properties":{"module":{"type":"string","enum":["projects","reports","profile"]},"record_id":{"type":"string"}},"additionalProperties":false}))).with_annotations(read.clone()),
-        Tool::new("office_get_file", "Read private file metadata and an authenticated relative download path. Set include_text for UTF-8 text files up to 128 KiB; binary files require HTTP GET with your own bearer credential.", schema(json!({"type":"object","properties":{"id":{"type":"string","minLength":1},"include_text":{"type":"boolean","default":false}},"required":["id"],"additionalProperties":false}))).with_annotations(read.clone()),
+        Tool::new("office_get_file", "Read private file metadata and authenticated relative download and image preview paths. Set include_text for UTF-8 text files up to 128 KiB; binary files require HTTP GET with your own bearer credential.", schema(json!({"type":"object","properties":{"id":{"type":"string","minLength":1},"include_text":{"type":"boolean","default":false}},"required":["id"],"additionalProperties":false}))).with_annotations(read.clone()),
         Tool::new("office_upload_file", "Upload a UTF-8 text attachment through private storage and the event engine (maximum 128 KiB). Projects/reports write permission required. For binary uploads use POST /api/files?module=projects|reports|profile&record_id=ID&name=URLENCODED_FILENAME with raw body, Content-Type and your bearer credential. No public URLs or provider credentials.", schema(json!({"type":"object","properties":{"name":{"type":"string","minLength":1},"module":{"type":"string","enum":["projects","reports"]},"record_id":{"type":"string"},"content_text":{"type":"string","maxLength":131072}},"required":["name","module","content_text"],"additionalProperties":false}))).with_annotations(write.clone()),
         Tool::new("office_delete_file", "Soft-delete a private file using its current revision. This removes visible access and avatar references, while preserving historical metadata and object bytes.", schema(json!({"type":"object","properties":{"id":{"type":"string","minLength":1},"expected_revision":{"type":"integer","minimum":1}},"required":["id","expected_revision"],"additionalProperties":false}))).with_annotations(write.clone()),
         Tool::new("office_list_roles", "Read the fixed roles and their permissions. Human and AI users follow the same role policy.", schema(json!({"type":"object","properties":{},"additionalProperties":false}))).with_annotations(read.clone()),
@@ -371,6 +371,11 @@ impl ServerHandler for OfficeMcp {
                     Err(e) => failure(e.message.unwrap_or_else(|| "File access denied".into())),
                     Ok(file) => {
                         let path = format!("/api/files/{}/content", file.id);
+                        let preview_path = matches!(
+                            file.content_type.as_str(),
+                            "image/png" | "image/jpeg" | "image/webp"
+                        )
+                        .then(|| format!("/api/files/{}/preview", file.id));
                         if args
                             .get("include_text")
                             .and_then(Value::as_bool)
@@ -399,9 +404,11 @@ impl ServerHandler for OfficeMcp {
                                 }
                             }
                         } else {
-                            success(
-                                json!({"file":file,"downloadPath":path,"authentication":"Authorization: Bearer <your Office Office key or token>"}),
-                            )
+                            let mut result = json!({"file":file,"downloadPath":path,"authentication":"Authorization: Bearer <your Office Office key or token>"});
+                            if let Some(preview_path) = preview_path {
+                                result["previewPath"] = json!(preview_path);
+                            }
+                            success(result)
                         }
                     }
                 },
@@ -902,6 +909,42 @@ mod tests {
         async fn remove(&self, id: &str) -> anyhow::Result<()> {
             self.0.lock().unwrap().remove(id);
             Ok(())
+        }
+    }
+    #[tokio::test]
+    async fn file_tool_exposes_authenticated_preview_paths_only_for_image_candidates() {
+        let service =
+            Arc::new(OfficePreviewService::new().with_file_storage(Arc::new(TestFiles::default())));
+        let app = app(service.clone());
+        let (admin, viewer, _) = key(&app, "viewer").await;
+        for mime in [
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "image/svg+xml",
+            "text/html",
+        ] {
+            // Metadata is only a candidate: the preview HTTP endpoint must still
+            // sniff and decode bytes before returning an inline PNG.
+            let file = service
+                .upload_file(&admin, "projects", "", "candidate", mime, b"test".to_vec())
+                .await
+                .unwrap();
+            let (_, read) = mcp(&app, Some(&viewer), None,
+                json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"office_get_file","arguments":{"id":file.id}}})).await;
+            let content = &read["result"]["structuredContent"];
+            assert_eq!(
+                content["downloadPath"],
+                format!("/api/files/{}/content", file.id)
+            );
+            if matches!(mime, "image/png" | "image/jpeg" | "image/webp") {
+                assert_eq!(
+                    content["previewPath"],
+                    format!("/api/files/{}/preview", file.id)
+                );
+            } else {
+                assert!(content.get("previewPath").is_none());
+            }
         }
     }
     #[tokio::test]

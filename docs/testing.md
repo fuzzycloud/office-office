@@ -116,3 +116,29 @@ command idempotency and hosted recovery/monitoring remain planned. Full projecti
 snapshots and credential-table rewrites on each command are potential growth
 costs; measure them with larger offices before changing the transactional model.
 No release, deployment or hosted data migration was performed during this review.
+
+
+## Gallery checkpoint — 2026-10-16
+
+Files now includes a searchable image gallery with category/project filters,
+lazy private thumbnails, full previews, original downloads and revision-checked
+soft deletion. Settings can reuse an existing profile upload belonging to the
+current member without uploading another object.
+
+`just check` passed: 43 Rust tests, six generated ignored doc examples, Clippy,
+formatting, TypeScript/build and 11 container startup cases. All 38 Chromium
+scenarios passed together. The three new browser scenarios cover filtering,
+image-type exclusions, lazy loading, retry, download bytes, confirmation before
+deletion, Escape/focus restoration, Viewer restrictions, own-profile reuse and a
+390px overflow check. Desktop/mobile screenshots were inspected. File transport
+responses in these browser scenarios are explicit fixtures, not real S3 calls.
+Gallery components and tests pass Biome; existing App/API lint findings remain
+outside this change.
+
+Rust tests verify bounded dimensions, safe image decoding, private response
+headers, invalid/revoked-key denial, deletion denial and absence of preview-side
+writes. A separate disposable local office verified authenticated previews and
+spoof rejection against the actual private S3-compatible store, alongside the
+existing upload/replay/role/deletion checks. Its temporary objects were removed.
+No stored thumbnail objects, schema migration, release or deployment are needed
+for source integration; the hosted office was not changed.

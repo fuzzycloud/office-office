@@ -2869,6 +2869,8 @@ function Settings({
 							</span>
 						</div>
 						<ProfileUpload
+							memberId={data.currentUser.id}
+							currentFileId={avatarFileId}
 							onUploaded={async (id) => {
 								await onSaveProfile(bio, "", id);
 								setAvatarFileId(id);

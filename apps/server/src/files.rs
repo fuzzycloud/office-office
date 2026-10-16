@@ -13,6 +13,11 @@ use std::{io::Cursor, time::Duration};
 
 pub const MAX_FILE_BYTES: usize = 10 * 1024 * 1024;
 const MAX_AVATAR_BYTES: usize = 2 * 1024 * 1024;
+const MAX_PREVIEW_BYTES: usize = 12 * 1024 * 1024;
+// Shared across service instances. A permit moves into blocking work so cancelling
+// an HTTP request cannot release capacity while its decoder is still running.
+static PREVIEW_PERMITS: std::sync::LazyLock<Arc<tokio::sync::Semaphore>> =
+    std::sync::LazyLock::new(|| Arc::new(tokio::sync::Semaphore::new(2)));
 
 #[async_trait::async_trait]
 pub trait BlobStore: Send + Sync {
@@ -428,6 +433,29 @@ impl OfficePreviewService {
             }
         }
     }
+    async fn preview_file(
+        &self,
+        token: &str,
+        id: &str,
+        size: PreviewSize,
+    ) -> Result<Vec<u8>, ConnectError> {
+        self.get_file(token, id).await?;
+        let permit = PREVIEW_PERMITS
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(|_| ConnectError::unavailable("image preview is unavailable"))?;
+        // Bound concurrent object downloads as well as decoding memory.
+        let (_, data) = self.download_file(token, id).await?;
+        let output = tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            render_preview(&data, size)
+        })
+        .await
+        .map_err(|_| ConnectError::unavailable("image preview is unavailable"))??;
+        self.get_file(token, id).await?; // Recheck after potentially slow decode too.
+        Ok(output)
+    }
     pub async fn download_file(
         &self,
         token: &str,
@@ -452,6 +480,63 @@ impl OfficePreviewService {
         self.get_file(token, id).await?; // Recheck revocation/deletion after object I/O.
         Ok((file, data))
     }
+}
+
+#[derive(Clone, Copy, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum PreviewSize {
+    Thumbnail,
+    #[default]
+    Full,
+}
+#[derive(Default, Deserialize)]
+struct PreviewQuery {
+    #[serde(default)]
+    size: PreviewSize,
+}
+
+fn render_preview(data: &[u8], size: PreviewSize) -> Result<Vec<u8>, ConnectError> {
+    if data.is_empty() || data.len() > MAX_FILE_BYTES {
+        return Err(bad("image preview input must contain 1 byte to 10 MiB"));
+    }
+    let format = image::guess_format(data)
+        .map_err(|_| bad("image preview requires valid PNG, JPEG or WebP"))?;
+    if !matches!(
+        format,
+        ImageFormat::Png | ImageFormat::Jpeg | ImageFormat::WebP
+    ) {
+        return Err(bad("image preview requires valid PNG, JPEG or WebP"));
+    }
+    let mut reader = ImageReader::with_format(Cursor::new(data), format);
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(4096);
+    limits.max_image_height = Some(4096);
+    limits.max_alloc = Some(64 * 1024 * 1024);
+    reader.limits(limits);
+    let image = reader
+        .decode()
+        .map_err(|_| bad("image is invalid or exceeds 4096 × 4096 pixels"))?;
+    let edge = match size {
+        PreviewSize::Thumbnail => 384,
+        PreviewSize::Full => 1600,
+    };
+    let image = if image.width() > edge || image.height() > edge {
+        image.thumbnail(edge, edge)
+    } else {
+        image
+    };
+    // Normalize bit depth too: at most 1600² RGBA8 pixels keeps PNG encoding
+    // bounded below 12 MiB even for incompressible input.
+    let image = image::DynamicImage::ImageRgba8(image.to_rgba8());
+    let mut output = Cursor::new(Vec::new());
+    image
+        .write_to(&mut output, ImageFormat::Png)
+        .map_err(|_| bad("image preview could not be processed"))?;
+    let output = output.into_inner();
+    if output.len() > MAX_PREVIEW_BYTES {
+        return Err(bad("processed image preview is too large"));
+    }
+    Ok(output)
 }
 
 fn normalize_avatar(name: &str, data: &[u8]) -> Result<(String, String, Vec<u8>), ConnectError> {
@@ -505,6 +590,7 @@ pub fn router(service: Arc<OfficePreviewService>) -> Router {
     Router::new()
         .route("/api/files", post(upload))
         .route("/api/files/{id}/content", get(download))
+        .route("/api/files/{id}/preview", get(preview))
         .layer(DefaultBodyLimit::max(MAX_FILE_BYTES))
         .with_state(service)
 }
@@ -548,6 +634,35 @@ async fn upload(
     match result {
         Ok(file) => (StatusCode::CREATED, Json(serde_json::json!({"file": file}))).into_response(),
         Err(error) => http_error(error),
+    }
+}
+async fn preview(
+    AxumState(service): AxumState<Arc<OfficePreviewService>>,
+    AxumPath(id): AxumPath<String>,
+    Query(query): Query<PreviewQuery>,
+    headers: HeaderMap,
+) -> HttpResponse {
+    let result = async {
+        let token = service.file_token(&headers).await?;
+        service.preview_file(&token, &id, query.size).await
+    }
+    .await;
+    match result {
+        Err(error) => http_error(error),
+        Ok(data) => (
+            [
+                (header::CONTENT_TYPE, "image/png"),
+                (header::CONTENT_DISPOSITION, "inline"),
+                (header::CACHE_CONTROL, "private, no-store"),
+                (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+                (
+                    header::CONTENT_SECURITY_POLICY,
+                    "default-src 'none'; sandbox",
+                ),
+            ],
+            data,
+        )
+            .into_response(),
     }
 }
 async fn download(
@@ -676,6 +791,182 @@ mod tests {
         let mut bytes = Cursor::new(Vec::new());
         image.write_to(&mut bytes, ImageFormat::Png).unwrap();
         bytes.into_inner()
+    }
+    #[tokio::test]
+    async fn gallery_previews_are_bounded_authorized_and_read_only() {
+        use axum::{body::Body, http::Request};
+        use http_body_util::BodyExt;
+        use tower::ServiceExt;
+        let store = Arc::new(MemoryStore::default());
+        let service = Arc::new(OfficePreviewService::new().with_file_storage(store.clone()));
+        let admin = bootstrap(&service).await;
+        let viewer = ai(&service, &admin.token, "viewer").await;
+        let mut original = Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(2400, 1200)
+            .write_to(&mut original, ImageFormat::Png)
+            .unwrap();
+        let original = original.into_inner();
+        let file = service
+            .upload_file(
+                &admin.token,
+                "projects",
+                "",
+                "wide.png",
+                "image/png",
+                original.clone(),
+            )
+            .await
+            .unwrap();
+        let before = service.workspace(&admin.token).await.unwrap();
+        let files_before = service
+            .list_files(&admin.token, ListFilesRequest::default())
+            .await
+            .unwrap()
+            .files;
+        store.fail_put.store(true, Ordering::Relaxed);
+        let app = router(service.clone());
+        let request = |id: &str, size: &str, token: &str| {
+            Request::builder()
+                .uri(format!("/api/files/{id}/preview{size}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap()
+        };
+        for (query, expected, credential) in [
+            ("?size=thumbnail", (384, 192), viewer.secret.as_str()),
+            ("?size=full", (1600, 800), admin.token.as_str()),
+            ("", (1600, 800), viewer.secret.as_str()),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(request(&file.id, query, credential))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(response.headers()[header::CONTENT_TYPE], "image/png");
+            assert_eq!(response.headers()[header::CONTENT_DISPOSITION], "inline");
+            assert_eq!(
+                response.headers()[header::CACHE_CONTROL],
+                "private, no-store"
+            );
+            assert_eq!(
+                response.headers()[header::X_CONTENT_TYPE_OPTIONS],
+                "nosniff"
+            );
+            assert_eq!(
+                response.headers()[header::CONTENT_SECURITY_POLICY],
+                "default-src 'none'; sandbox"
+            );
+            let bytes = response.into_body().collect().await.unwrap().to_bytes();
+            assert!(bytes.len() <= MAX_PREVIEW_BYTES);
+            let image = image::load_from_memory_with_format(&bytes, ImageFormat::Png).unwrap();
+            assert_eq!((image.width(), image.height()), expected);
+        }
+        assert_eq!(
+            app.clone()
+                .oneshot(request(&file.id, "?size=other", &admin.token))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            app.clone()
+                .oneshot(request(&file.id, "", "invalid"))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            store.objects.lock().unwrap().get(&file.id).unwrap(),
+            &original
+        );
+        assert_eq!(store.objects.lock().unwrap().len(), 1);
+        assert_eq!(
+            service.workspace(&admin.token).await.unwrap().activity,
+            before.activity
+        );
+        assert_eq!(
+            service
+                .list_files(&admin.token, ListFilesRequest::default())
+                .await
+                .unwrap()
+                .files,
+            files_before
+        );
+        service
+            .execute(
+                &admin.token,
+                EngineCommand::DeleteFile(DeleteFileRequest {
+                    id: file.id.clone(),
+                    expected_revision: file.revision,
+                    ..Default::default()
+                }),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            app.clone()
+                .oneshot(request(&file.id, "", &viewer.secret))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::NOT_FOUND
+        );
+        // Revoking the raw key is checked before even looking for the file.
+        service
+            .rotate_agent_key(&admin.token, &viewer.member.unwrap().id)
+            .await
+            .unwrap();
+        assert_eq!(
+            app.oneshot(request(&file.id, "", &viewer.secret))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        service.close().await.unwrap();
+    }
+    #[tokio::test]
+    async fn gallery_preview_rejects_spoofed_or_oversized_images() {
+        use axum::{body::Body, http::Request};
+        use tower::ServiceExt;
+        let service = Arc::new(
+            OfficePreviewService::new().with_file_storage(Arc::new(MemoryStore::default())),
+        );
+        let admin = bootstrap(&service).await;
+        let app = router(service.clone());
+        let mut oversized = Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(4097, 1)
+            .write_to(&mut oversized, ImageFormat::Png)
+            .unwrap();
+        for bytes in [
+            b"<html><script>bad()</script></html>".to_vec(),
+            b"<svg xmlns='http://www.w3.org/2000/svg'/>".to_vec(),
+            b"GIF89a".to_vec(),
+            oversized.into_inner(),
+        ] {
+            let file = service
+                .upload_file(&admin.token, "reports", "", "spoof.png", "image/png", bytes)
+                .await
+                .unwrap();
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri(format!("/api/files/{}/preview", file.id))
+                        .header("authorization", format!("Bearer {}", admin.token))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
+            assert!(!response.headers().contains_key(header::CONTENT_DISPOSITION));
+        }
+        service.close().await.unwrap();
     }
     #[tokio::test]
     async fn file_metadata_replays_and_soft_delete_retains_object_bytes() {

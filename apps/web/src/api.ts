@@ -372,6 +372,17 @@ export async function getFileBlob(id: string) {
 	requireCurrentSession(token);
 	return blob;
 }
+export async function getFilePreviewBlob(
+	id: string,
+	size: "thumbnail" | "full",
+) {
+	const { response, token } = await fileRequest(
+		`/api/files/${encodeURIComponent(id)}/preview?size=${size}`,
+	);
+	const blob = await response.blob();
+	requireCurrentSession(token);
+	return blob;
+}
 export async function downloadFile(id: string, name: string) {
 	const blob = await getFileBlob(id);
 	const url = URL.createObjectURL(blob);
