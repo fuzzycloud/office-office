@@ -1,10 +1,26 @@
-# Litestream 0.5+ operator template, not started by the application or image.
-# All variables must be exported for the Litestream process.
-# OFFICE_DATABASE_PATH should be absolute and match the application database.
+# Bundled Litestream 0.5.17 configuration. Only used when explicitly enabled.
+# Credentials come from the AWS SDK credential chain, never from the image.
+logging:
+  level: info
+  type: text
+  stderr: true
+
+# Flush pending changes on graceful shutdown; give Docker at least 60 seconds.
+shutdown-sync-timeout: 30s
+snapshot:
+  interval: 6h
+  retention: 336h
+
+# No metrics or Litestream MCP listener is exposed by default.
 dbs:
   - path: ${OFFICE_DATABASE_PATH}
+    monitor-interval: 1s
+    checkpoint-interval: 1m
+    busy-timeout: 5s
     replica:
       type: s3
       bucket: ${OFFICE_BACKUP_BUCKET}
       path: ${OFFICE_BACKUP_PREFIX}
       region: ${AWS_REGION}
+      endpoint: ${AWS_ENDPOINT_URL_S3}
+      sync-interval: 1m

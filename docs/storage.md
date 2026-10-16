@@ -16,21 +16,21 @@ Public events contain office records and activity, not password hashes, raw AI k
 
 The database is sensitive: its events contain office/customer data and its private tables contain authentication material. Newly created application storage uses owner-only permissions. Use an encrypted disk/volume and encrypted backups with restricted access. SQLite itself is not encrypted by this implementation. There are no provider secrets or provider-secret encryption keys yet.
 
-For containers, mount a persistent volume at `/data` writable by UID/GID 10001. The image sets `OFFICE_DATABASE_PATH=/data/office-office.sqlite3`. Replacing a container without a volume loses its database. Keep setup behind a private ingress; anyone who reaches an empty office first could claim administrator access.
+For containers, mount a persistent volume at `/data` writable by UID/GID 10001. The image sets `OFFICE_DATABASE_PATH=/data/office-office.sqlite3`. Use a Docker-managed named volume so data survives container replacement and image upgrades. Replacing a container without persistent storage loses its office. Keep setup behind a private ingress; anyone who reaches an empty office first could claim administrator access.
 
 An append-only event log retains old record values. A retention/export/erasure workflow is still needed before production customer data. There is no automatic purge of events or backups.
 
 ## Optional Litestream replication
 
-[deploy/litestream.yml](../deploy/litestream.yml) is an operator template for Litestream 0.5+, using its current single-`replica` configuration. Install Litestream separately; it is not bundled or launched in the application image. The template and AWS upload/restore have not been exercised against a live bucket. See the upstream [S3 guide](https://litestream.io/guides/s3/) and [configuration reference](https://litestream.io/reference/config/).
+[deploy/litestream.yml](../deploy/litestream.yml) is the default Litestream 0.5.17 configuration. The container bundles that pinned version, but does not start replication by default. Litestream supervises `office-server` in the same container when enabled; do not run a second application writer or a separate Litestream process against the same database. The runtime has passed a local file-replica restore drill, including office replay, password login, AI-key authentication and SQLite integrity. AWS upload/restore has not been exercised against a live bucket. See the upstream [S3 guide](https://litestream.io/guides/s3/) and [configuration reference](https://litestream.io/reference/config/).
 
-Export an absolute `OFFICE_DATABASE_PATH`, `OFFICE_BACKUP_BUCKET`, a unique `OFFICE_BACKUP_PREFIX`, and `AWS_REGION`. Give Litestream AWS workload credentials or the usual AWS credential environment variables; never commit them. Run it with access to the same persistent volume and file owner as the application:
+For an existing office, preserve its database before enabling replication. On the first container using a new persistent volume, stop the old service and make a consistent SQLite backup (including WAL state through SQLite's backup mechanism), then place that database in the new volume. Never start an empty replacement and let it claim the existing office's identity.
 
-```sh
-litestream replicate -config deploy/litestream.yml
-```
+The default config is `/etc/office-office/litestream.yml`; set `OFFICE_LITESTREAM_CONFIG` to override it. Enable with `OFFICE_LITESTREAM_ENABLED=true`, then provide absolute `OFFICE_DATABASE_PATH`, `OFFICE_BACKUP_BUCKET`, a unique `OFFICE_BACKUP_PREFIX`, and `AWS_REGION`. Credentials can come from private `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables or the AWS SDK credential chain; optional `AWS_SESSION_TOKEN` supports temporary credentials. `AWS_ENDPOINT_URL_S3` is available for a custom S3-compatible endpoint. Keep credentials out of source control and logs. Copy [the secret-free environment example](../deploy/litestream.env.example) to `.env.litestream` as a starting point.
 
-Replication is asynchronous backup, not high availability or a second application writer. Monitor replication health and test restoration. A successful local database commit does not mean the transaction has already reached S3. Configure bucket encryption, access controls and retention separately.
+When enabled, startup uses an existing database as-is and does not restore over it. If the database is missing, Litestream restores to a temporary file; startup checks SQLite integrity before atomically promoting the file. Network, authorization, restore, corruption, or integrity errors stop startup rather than creating an empty office. If no backup exists, a fresh database is allowed only when `OFFICE_ALLOW_NEW_DATABASE=true` is explicitly set for first boot; remove that flag after initialization. Do not enable it for routine restarts. Demo in-memory mode cannot be backed up and must not be combined with Litestream.
+
+The template syncs every minute, takes a snapshot every six hours, and retains 336 hours (14 days). Retention is a recovery window, not a deletion guarantee for event data. Litestream replication is asynchronous backup, not high availability or a second application writer. A successful local commit does not mean the transaction has reached S3. Configure bucket encryption, access controls and lifecycle separately. On shutdown allow 60 seconds so Litestream can stop the child and finish its final sync; keep one application writer. Monitor replication health and practice restoration before relying on backups.
 
 ## Restore drill
 

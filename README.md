@@ -2,6 +2,8 @@
 
 A shared daily office workspace for humans and AI. Office Office is building toward a clear view of targets, strategy, projects, pricing history and progress. It is independent open-source software, inspired by the Hindi sitcom [Office Office](https://en.wikipedia.org/wiki/Office_Office), and is not affiliated with the show or its creators.
 
+Musaddilal ji deserved a better workflow. This one's for him—and Bhatia, Patel, Usha, Shukla and Pandey. With affection for the characters brought to life by Pankaj Kapur, Manoj Pahwa, Deven Bhojani, Asawari Joshi, Sanjay Mishra and Hemant Pandey, and for the work of writer Ashwni Dhir, director Rajiv Mehra, and the cast and crew of *Office Office*.
+
 Office Office owns office records and its social publishing queue. External clients and runtimes, such as Hermes, execute agents and manage their conversations. Office Office does not provide another agent runtime.
 
 ## Current phase
@@ -26,13 +28,24 @@ just server
 
 In another terminal, run `just web` and open the Vite URL. The durable server creates the `data` directory and database as needed. Choose the workspace and first admin credentials on the bootstrap screen. Keep local use on loopback unless you have deliberately configured and protected an ingress.
 
-For a container, mount persistent storage at `/data`; the image runs as UID 10001, stores the database at `/data/office-office.sqlite3`, and restricts the directory to owner access. Preserve that volume across restarts. Container networking sets `OFFICE_ALLOW_REMOTE=true`; put the service behind a private ingress and do not expose its bootstrap endpoint publicly.
+For a container, create and preserve a named volume at `/data`; the image runs as UID 10001, stores the database at `/data/office-office.sqlite3`, and restricts the directory to owner access. For example:
+
+```sh
+docker volume create office-office-data
+docker run -d --name office-office \
+  --mount source=office-office-data,target=/data \
+  --stop-timeout 60 \
+  -p 127.0.0.1:8080:8080 \
+  ghcr.io/fuzzycloud/office-office:<version>
+```
+
+Keep the service behind a private ingress and do not expose its bootstrap endpoint publicly. For optional Litestream replication, copy [the environment example](deploy/litestream.env.example) to `.env.litestream`, fill in the bucket and credentials, and add `--env-file .env.litestream` to the command. Keep that file outside Git. See [hosting and recovery](docs/hosting.md) before enabling offsite backups or replacing an existing container.
 
 ## Development
 
 The browser uses TanStack Router for section URLs, browser back/forward and direct reloads. Entering a section refreshes workspace data through the shared TanStack Query cache, so external agent writes are visible without a full browser reload. See [navigation and refresh](docs/navigation.md).
 
-The protobuf service is the shared domain boundary for the browser and agents. Project workspaces support multiple boards with custom columns and tasks, owners, priorities and due dates. Task details include comments and a separate activity timeline for humans and agents. Comments support revision-checked edits and event-based soft deletion. See [tasks and discussions](docs/tasks.md). The MCP adapter uses the same actor commands and permission checks. Sample records are created by an explicit engine-command scenario, not by pre-filling projections, direct database inserts or frontend fixtures. Tests can call the typed engine without starting an HTTP server. See [starter data and engine testing](docs/demo.md). Run `just check` for the repository's full check suite; `just generate` lints protobuf and regenerates the TypeScript client. Do not edit generated clients by hand. `just test-e2e` builds the UI and server and runs isolated browser/HTTP scenarios against disposable SQLite offices, including task discussions, reports, permissions, restart persistence and MCP access. See [automated testing](docs/testing.md) for setup, focused runs and failure reports.
+The protobuf service is the shared domain boundary for the browser and agents. Project workspaces support multiple boards with custom columns and tasks, owners, priorities and due dates. Task details include comments and a separate activity timeline for humans and agents. Comments support revision-checked edits and event-based soft deletion. See [tasks and discussions](docs/tasks.md). The MCP adapter uses the same actor commands and permission checks. Sample records are created by an explicit engine-command scenario, not by pre-filling projections, direct database inserts or frontend fixtures. Tests can call the typed engine without starting an HTTP server. See [starter data and engine testing](docs/demo.md). Run `just check` for the repository's full check suite (including Bats and ShellCheck for container startup); `just test-runtime` runs those startup checks alone; `just generate` lints protobuf and regenerates the TypeScript client. Do not edit generated clients by hand. `just test-e2e` builds the UI and server and runs isolated browser/HTTP scenarios against disposable SQLite offices, including task discussions, reports, permissions, restart persistence and MCP access. See [automated testing](docs/testing.md) for setup, focused runs and failure reports.
 
 The durable adapter uses rusqlite to put event writes and private credential tables in the same SQLite transaction; it does not use `katha-sqlx`. This preserves the one-writer model and atomic commit boundary. It is not a claim of production readiness: retention, export, request throttling, a public authentication perimeter and a verified restore process remain to be completed.
 
@@ -62,9 +75,7 @@ Connect an MCP client such as Hermes to `http://127.0.0.1:8080/mcp` using Stream
 
 The database is the source of truth for the event log, password hashes, AI key digests, setup state and JWT signing key. The signing key is private to the database file, so protect and back up the database as a unit. No provider secrets are stored yet. Durable storage does not provide data retention controls, export, rate limiting, audited provider operations or a verified backup restore.
 
-See [storage and recovery](docs/storage.md) for the database lifecycle and the [Litestream template](deploy/litestream.yml).
-
-Litestream can be configured separately by an operator for offsite replication; it is not bundled with or started by this application, and this repository does not verify uploaded backups or restoration. It does not provide active-active service or high availability. Restore and validate a copy before pointing the service at it. Never run multiple server processes against the same database.
+See [storage and recovery](docs/storage.md) for the database lifecycle and opt-in Litestream setup. This source revision bundles pinned Litestream 0.5.17; replication is disabled unless explicitly enabled. The previously published v0.4.0 image predates this integration. Live AWS upload and restore have not been exercised, and this is not high availability. Restore and validate a copy before relying on recovery. Never run multiple server processes against the same database.
 
 ## Hosting and releases
 

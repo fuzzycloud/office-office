@@ -21,7 +21,7 @@ jobs:
       - uses: bufbuild/buf-setup-action@v1
         with:
           github_token: ${{ github.token }}
-      - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler bats shellcheck
       - name: Check shared product version
         run: python3 scripts/check-versions.py
       - name: Check release tag matches product version
@@ -29,6 +29,10 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: python3 scripts/check-versions.py --tag "$RELEASE_TAG"
+      - name: Check container startup and restore rules
+        run: |
+          shellcheck deploy/entrypoint.sh
+          bats tests/runtime/entrypoint.bats
       - run: pnpm install --frozen-lockfile
       - run: buf lint && pnpm generate
       - run: git diff --exit-code -- apps/web/src/gen

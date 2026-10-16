@@ -18,6 +18,7 @@ web:
 
 check:
     python3 scripts/check-versions.py
+    just test-runtime
     cargo fmt --all -- --check
     cargo clippy -p office-server --all-targets -- -D warnings
     cargo test -p office-server
@@ -46,3 +47,8 @@ release level="patch": check
 # Builds the UI/server once, then gives every browser test its own process and database.
 test-e2e:
     pnpm test:e2e
+
+# Requires ShellCheck and Bats; does not need AWS, Docker or a running server.
+test-runtime:
+    shellcheck deploy/entrypoint.sh
+    bats tests/runtime/entrypoint.bats
