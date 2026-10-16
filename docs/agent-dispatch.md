@@ -88,3 +88,13 @@ In addition to the [identity and permissions matrix](agent-team-access.md#next-d
 | Card moves into any category | No publication, external send, spending or security change is implicitly approved |
 
 Until an external dispatcher is installed and these checks pass, assignments remain office records; they do not launch agents. None of these dispatch safeguards is required for basic MCP functional access.
+
+
+## Explicit questions and the attention inbox (planned)
+
+An optional watcher may also handle an explicit response request attached to a
+task comment or project message. A mention or ordinary comment is not a dispatch
+signal. Requests, per-recipient unresolved state and read markers belong in
+Office Office; runtime profile mapping belongs in the local adapter. Apply the
+same claim, deduplication, identity, authorization and uncertain-run rules as task
+execution. See [work conversations and needs attention](work-conversations.md).

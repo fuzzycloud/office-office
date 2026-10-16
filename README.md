@@ -55,7 +55,7 @@ Human and AI members have an optional plain-text bio and HTTPS profile picture U
 
 ## Files
 
-The Files page holds project assets and research documents, optionally linked to a project or report. Its Gallery view adds private image thumbnails, larger previews, search and category/project filters. Settings can reuse your own uploaded profile pictures without another upload. Uploads and downloads pass through the authenticated server; humans and AI use the same live role checks. Files are limited to 10 MiB, and profile pictures to 2 MiB. File metadata and soft deletion follow the event/actor/SQLite pipeline, while bytes live in a private S3-compatible bucket. MCP can list files, read bounded text content and upload text; binary transfers use authenticated HTTP. Storage credentials stay on the server.
+The Files page holds project assets and research documents, optionally linked to a project or report. Its Gallery view adds private image thumbnails, larger previews, search and category/project filters. Settings can select gallery images for your profile: your own profile uploads are reused, while other images become a private profile-sized copy. Uploads and downloads pass through the authenticated server; humans and AI use the same live role checks. Files are limited to 10 MiB, and profile pictures to 2 MiB. File metadata and soft deletion follow the event/actor/SQLite pipeline, while bytes live in a private S3-compatible bucket. MCP can list files, read bounded text content and upload text; binary transfers use authenticated HTTP. Storage credentials stay on the server.
 
 File storage is optional. Configure `OFFICE_FILES_BUCKET`, a dedicated `OFFICE_FILES_PREFIX`, and the AWS-compatible runtime settings described in [files and profile uploads](docs/files.md). Keep uploads separate from the Litestream backup prefix: the seven-day database recovery window must not expire uploaded files. Files are soft deleted; object cleanup and personal-data erasure remain separate unfinished operations.
 
@@ -94,3 +94,14 @@ See [architecture](docs/architecture.md), [ADR 0002: UI-first demo and SQLite di
 ## License
 
 MIT OR Apache-2.0. See LICENSE-MIT and LICENSE-APACHE.
+
+
+## Planned work conversations
+
+Task comments already keep work discussions alongside tasks. The next planned
+slice adds member mentions, explicit response requests, a lightweight project
+discussion and a personal Needs attention inbox shared by humans and AI. Ordinary
+comments will not launch agents; an optional local watcher can route explicit
+requests to configured runtime profiles and post results back. See [the design
+and acceptance plan](docs/work-conversations.md). This workflow is not implemented
+yet.

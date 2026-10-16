@@ -1,6 +1,6 @@
 # Architecture
 
-Office Office is a shared business workspace for humans and AI. It provides office records and a social publishing queue; external clients and runtimes remain responsible for agent execution and conversations. Hermes is one possible integration, alongside clients such as Claude Code and Codex. Targets, strategy, pricing history and progress remain part of the product direction.
+Office Office is a shared business workspace for humans and AI. It provides office records and a social publishing queue; external clients and runtimes remain responsible for agent execution and runtime conversations. Hermes is one possible integration, alongside clients such as Claude Code and Codex. Targets, strategy, pricing history and progress remain part of the product direction.
 
 ## Service boundary
 
@@ -52,7 +52,7 @@ Legacy `Member.access`, `AgentKey.scopes` and request scope fields remain wire/e
 
 The social queue saves plans but has no posting adapter. Social OAuth, external posting and invitations are unavailable. Business integrations such as Zoho remain read-only by default. Any future narrow write action needs its own permission, idempotency key, provider receipt and audit record. Provider credentials are not currently stored. Never forward provider secrets to agents.
 
-Conversational channels and execution belong to external clients/runtimes; Hermes is used for those integrations in our own setup. The public application does not require Hermes. MCP initial tools read role-authorized workspace records, save boards/tasks/reports, and expose Admin-only AI provisioning/key rotation; agents never read storage directly.
+Runtime conversations, messaging-channel integrations and execution belong to external clients/runtimes; Hermes is used for those integrations in our own setup. The public application does not require Hermes. MCP initial tools read role-authorized workspace records, save boards/tasks/reports, and expose Admin-only AI provisioning/key rotation; agents never read storage directly.
 
 ### Shared user authentication and remaining policy work
 
@@ -69,3 +69,17 @@ If an external dispatcher is installed later, Ready can explicitly request work 
 ## Hosting and product conventions
 
 GHCR images are published only for version tags and remain previews; the public repository does not configure an operator-specific deployment. See [hosting](hosting.md) for the deployment boundary. The UI uses React and Vite; the service uses Rust, Axum and ConnectRPC. The protobuf contract is in `proto/office/v1/office.proto`; `just generate` regenerates clients. Use pnpm for frontend work and follow the root `AGENTS.md` for focused checks. Never hand-edit generated clients.
+
+
+### Planned work conversations and personal attention
+
+Task comments are the current work-conversation surface. The accepted follow-up
+adds stable-ID mentions, explicit response requests, revision-specific file/report
+references, one project discussion area and a durable personal Needs attention
+inbox for humans and AI. Read markers are separate from unresolved requests;
+ordinary comments and mentions never launch execution. Our first optional adapter
+uses office events, a local watcher and configured Hermes profiles, with replies
+and visible status written back through authenticated APIs. No Hermes-specific
+identity or persona is added to the app. See [work conversations and needs
+attention](work-conversations.md) for delivery order, policy and acceptance cases;
+these additions are not shipped functionality.
