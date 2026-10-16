@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use axum::{Router, routing::get};
+use axum::{Router, middleware, routing::get};
 use connectrpc::Router as ConnectRouter;
 use office_server::{OfficePreviewService, proto::office::v1::OfficeServiceExt};
 use tower_http::services::{ServeDir, ServeFile};
@@ -34,11 +34,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .merge(mcp::router(service.clone(), mcp_config))
+        .merge(office_server::browser_session::router(
+            service.clone(),
+            !addr.ip().is_loopback(),
+        ))
         .merge(office_server::files::router(service.clone()))
         .nest_service("/rpc", connect.into_axum_service())
         .fallback_service(
             ServeDir::new("apps/web/dist").fallback(ServeFile::new("apps/web/dist/index.html")),
-        );
+        )
+        .layer(middleware::from_fn(
+            office_server::browser_session::bridge_cookie,
+        ));
     let listener = tokio::net::TcpListener::bind(addr).await?;
     if demo {
         tracing::warn!(%addr, "Office Office: temporary in-memory storage; accounts and records reset on restart");

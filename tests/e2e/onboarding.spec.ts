@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { browserRpc, expect, test } from "./fixtures";
 
 test("bootstrap, onboard a viewer, and work with RPC demo records", async ({
 	page,
@@ -369,14 +369,7 @@ test("bootstrap, onboard a viewer, and work with RPC demo records", async ({
 	).toBeVisible();
 	await dialog.getByRole("button", { name: "Done", exact: true }).click();
 	await expect(dialog).not.toBeVisible();
-	const keyToken = await page.evaluate(() =>
-		sessionStorage.getItem("office-office-session"),
-	);
-	const listedKeys = await office.rpc(
-		"ListAgentKeys",
-		{},
-		keyToken ?? undefined,
-	);
+	const listedKeys = await browserRpc(page, office.url, "ListAgentKeys");
 	expect(listedKeys.ok()).toBeTruthy();
 	expect((await listedKeys.json()).keys[0]).toMatchObject({
 		memberId: expect.any(String),
@@ -488,11 +481,7 @@ test("registration without starter data creates an empty durable office", async 
 		.click();
 	await expect(page.getByRole("button", { name: /^Projects/ })).toBeVisible();
 	await expect(page.getByText(/Sample starter data loaded/)).toHaveCount(0);
-	const token = await page.evaluate(() =>
-		sessionStorage.getItem("office-office-session"),
-	);
-	expect(token).toBeTruthy();
-	const response = await office.rpc("GetWorkspace", {}, token ?? undefined);
+	const response = await browserRpc(page, office.url, "GetWorkspace");
 	expect(response.ok()).toBeTruthy();
 	const workspace = await response.json();
 	expect(workspace.persistentStorage).toBe(true);
@@ -512,7 +501,7 @@ test("registration without starter data creates an empty durable office", async 
 	]) {
 		expect(workspace[collection] ?? [], collection).toEqual([]);
 	}
-	const reports = await office.rpc("ListReports", {}, token ?? undefined);
+	const reports = await browserRpc(page, office.url, "ListReports");
 	expect(reports.ok()).toBeTruthy();
 	expect((await reports.json()).reports ?? []).toEqual([]);
 	await page.getByRole("button", { name: /^Projects/ }).click();

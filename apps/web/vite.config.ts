@@ -6,8 +6,9 @@ export default defineConfig({
 	plugins: [react(), tailwindcss()],
 	server: {
 		proxy: {
-			"/rpc": { target: "http://localhost:8080", changeOrigin: true },
-			"/api/files": { target: "http://localhost:8080", changeOrigin: true },
+			"/auth": { target: "http://localhost:8080", changeOrigin: false },
+			"/rpc": { target: "http://localhost:8080", changeOrigin: false },
+			"/api/files": { target: "http://localhost:8080", changeOrigin: false },
 		},
 	},
 });

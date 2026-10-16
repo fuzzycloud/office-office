@@ -71,7 +71,13 @@ test("Files UI sends authenticated bytes, downloads and deletes; route revisits 
 	await page.route(
 		"**/rpc/office.v1.OfficeService/ListFiles",
 		async (route) => {
-			expect(route.request().headers().authorization).toMatch(/^Bearer /);
+			const headers = await route.request().allHeaders();
+			if (headers.authorization)
+				expect(headers.authorization).toBe(`Bearer ${token}`);
+			else {
+				expect(headers.cookie).toContain("office_session=");
+				expect(headers["x-office-csrf"]).toBe("1");
+			}
 			listRequests += 1;
 			const { module } = route.request().postDataJSON();
 			await route.fulfill({

@@ -41,8 +41,7 @@ test("a real invalid-session response returns to sign in and a fresh login recov
 	const token = await page.evaluate(() =>
 		sessionStorage.getItem("office-office-session"),
 	);
-	expect(token).toBeTruthy();
-	expect(token).not.toBe("invalid-e2e-session");
+	expect(token).toMatch(/^cookie:/);
 	await page.reload();
 	await expect(
 		page.getByRole("heading", {

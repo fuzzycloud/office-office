@@ -46,7 +46,7 @@ The image bundles pinned Litestream 0.5.17 as an optional same-container supervi
 
 ## Access and integrations
 
-Authentication and authorization apply at the RPC layer. JWTs expire after at most 15 minutes and every operation rechecks the member's current role and active state. AI keys bind to one AI member, expire within 90 days, and exchange for tokens bounded by credential expiry. Functional RPCs use tokens; MCP accepts tokens or internally exchanges raw AI keys. Revocation, rotation or deactivation denies existing sessions on subsequent calls. Human and AI Admins have the same administration permissions, while a password-backed human administrator must remain for recovery. New AI creation commits member events and key digest atomically and returns the secret once; rotation revokes all previous keys and creates the replacement in one transaction.
+Authentication and authorization apply at the RPC layer. Human JWTs expire after seven days; AI JWTs expire after at most 15 minutes, bounded by key expiry. Every operation rechecks the member's current role and active state. AI keys bind to one AI member, expire within 90 days, and exchange for tokens bounded by credential expiry. Functional RPCs use tokens; MCP accepts tokens or internally exchanges raw AI keys. Revocation, rotation or deactivation denies existing sessions on subsequent calls. Human and AI Admins have the same administration permissions, while a password-backed human administrator must remain for recovery. New AI creation commits member events and key digest atomically and returns the secret once; rotation revokes all previous keys and creates the replacement in one transaction.
 
 Legacy `Member.access`, `AgentKey.scopes` and request scope fields remain wire/event compatible but no longer constrain authorization. Role-only access intentionally replaces that older policy. Existing v0.3 member-bound keys use current roles; v0.2 creator-bound keys remain invalid. Review roles before upgrading, especially where older scoped keys restricted a broad role.
 
@@ -87,3 +87,7 @@ and visible status written back through authenticated APIs. No Hermes-specific
 identity or persona is added to the app. See [work conversations and needs
 attention](work-conversations.md) for delivery order, policy and acceptance cases;
 the remaining additions are not shipped functionality.
+
+## Human browser authentication
+
+The `/auth` HTTP adapter calls the same bootstrap/login actor commands, sets a stateless seven-day HttpOnly cookie and returns user metadata without a bearer token. Session recovery validates the existing cookie; logout clears it. Cookie-to-bearer middleware covers RPC and file endpoints, with CSRF and Origin checks, while MCP remains an explicit-bearer interface. Hosted cookies require HTTPS; loopback development can use HTTP. Browser session changes clear cached records and invalidate results from the previous identity. No storage schema changes or refresh-session records are introduced. See [security boundaries](security.md) for stateless logout limitations.

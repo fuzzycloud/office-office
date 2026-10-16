@@ -67,6 +67,12 @@ The Reports library holds research pages with findings, sources, topics, reporti
 
 See [research reports](docs/reports.md) for the workflow and agent examples. Research scheduling and execution remain with external clients and runtimes. Marketing analytics and campaign connectors remain future work; the app does not invent metrics.
 
+## Browser sessions
+
+Human browser logins use a stateless JWT in an HttpOnly, SameSite=Lax cookie with a fixed seven-day lifetime. The cookie is Secure on hosted deployments; loopback development permits HTTP. Reloading, opening a new tab or restarting the server does not require another login while the cookie and account remain valid. The browser does not store new login JWTs in JavaScript storage. Sign out clears the cookie; after seven days, sign in again.
+
+Cookie-authenticated RPC/file writes and authentication POSTs require the same-origin CSRF header. Account status and roles are still checked on every protected operation. There is no refresh-token table or database migration. Because sessions are stateless, clearing the cookie does not revoke a copied JWT; disabling the member denies access immediately. Existing JavaScript-stored bearer sessions remain supported until expiry; sign out and in once to adopt the cookie flow. AI key authentication remains separate and its access tokens still last at most 15 minutes.
+
 ## AI access
 
 Humans and AI share the same fixed roles: Admin, Manager, Member and Viewer. The **Roles & Permissions** page shows the server's presets; users and keys have no separate permission overrides. Admins can manage users and keys whether they are human or AI. At least one active human administrator with a password must remain for recovery. See [roles and permissions](docs/roles.md).
