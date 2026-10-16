@@ -298,13 +298,25 @@ export default function App() {
 	}
 	const mutation = useMutation({
 		mutationFn: async (payload: SaveInput) => {
-			if (payload.kind === "member") return saveMember(payload.value);
-			if (payload.kind === "customer") return saveCustomer(payload.value);
-			if (payload.kind === "project") return saveProject(payload.value);
-			if (payload.kind === "post") return savePost(payload.value);
-			return saveSettings(payload.value);
+			const token = sessionStorage.getItem(tokenKey);
+			const result = await (payload.kind === "member"
+				? saveMember(payload.value)
+				: payload.kind === "customer"
+					? saveCustomer(payload.value)
+					: payload.kind === "project"
+						? saveProject(payload.value)
+						: payload.kind === "post"
+							? savePost(payload.value)
+							: saveSettings(payload.value));
+			return { result, token };
 		},
-		onSuccess: (result) => {
+		onSuccess: ({ result, token }) => {
+			if (
+				!token ||
+				token !== sessionToken ||
+				token !== sessionStorage.getItem(tokenKey)
+			)
+				return;
 			if (result && "secret" in result && result.secret) {
 				setSecretToReveal(result.secret);
 			}
@@ -680,7 +692,15 @@ export default function App() {
 										queryKey: ["workspace"],
 									});
 								}}
-								onSecret={(secret) => setSecretToReveal(secret)}
+								onSecret={(secret, token) => {
+									if (
+										token &&
+										token === sessionToken &&
+										token === sessionStorage.getItem(tokenKey)
+									) {
+										setSecretToReveal(secret);
+									}
+								}}
 							/>
 						)}
 					</main>
@@ -1670,6 +1690,7 @@ function Projects({
 	const [moveNotice, setMoveNotice] = useState("");
 	const [taskDraft, setTaskDraft] = useState<Task | null>(null);
 	const [boardEditor, setBoardEditor] = useState(false);
+	const [boardProjectId, setBoardProjectId] = useState("");
 	const [boardName, setBoardName] = useState("");
 	const [boardColumns, setBoardColumns] = useState(
 		"Backlog\nIn progress\nReview\nDone",
@@ -1680,6 +1701,11 @@ function Projects({
 	const filters = ["all", "active", "on_hold", "completed", "archived"];
 	const selectedProject =
 		shown.find((item) => item.id === selectedProjectId) || shown[0];
+	useEffect(() => {
+		setBoardEditor(false);
+		setBoardName("");
+		setBoardProjectId("");
+	}, [selectedProject?.id]);
 	const projectBoards = boards.filter(
 		(board) => board.projectId === selectedProject?.id,
 	);
@@ -1932,6 +1958,7 @@ function Projects({
 									<button
 										className="btn btn-ghost btn-sm"
 										onClick={() => {
+											setBoardProjectId(selectedProject.id);
 											setBoardName("");
 											setBoardColumns("Backlog\nIn progress\nReview\nDone");
 											setBoardEditor((value) => !value);
@@ -1941,7 +1968,7 @@ function Projects({
 									</button>
 								)}
 							</div>
-							{boardEditor && (
+							{boardEditor && boardProjectId === selectedProject.id && (
 								<form
 									className="board-editor"
 									onSubmit={(event) => {
@@ -1953,13 +1980,14 @@ function Projects({
 										if (
 											!boardName.trim() ||
 											!columns.length ||
-											!selectedProject
+											!selectedProject ||
+											boardProjectId !== selectedProject.id
 										)
 											return;
 										void save(async () => {
 											await onSaveBoard({
 												id: "",
-												projectId: selectedProject.id,
+												projectId: boardProjectId,
 												name: boardName.trim(),
 												columns,
 											});
@@ -2018,7 +2046,10 @@ function Projects({
 									{canEdit && (
 										<button
 											className="btn btn-primary btn-sm"
-											onClick={() => setBoardEditor(true)}
+											onClick={() => {
+												setBoardProjectId(selectedProject.id);
+												setBoardEditor(true);
+											}}
 										>
 											Create a board
 										</button>
@@ -2658,7 +2689,7 @@ function Settings({
 		avatarUrl: string,
 		avatarFileId: string,
 	) => Promise<void>;
-	onSecret: (secret: string) => void;
+	onSecret: (secret: string, token: string | null) => void;
 }) {
 	const [workspaceName, setWorkspaceName] = useState(
 		data.settings.workspaceName,
@@ -2691,9 +2722,13 @@ function Settings({
 		retry: false,
 	});
 	const rotateKeyMutation = useMutation({
-		mutationFn: rotateAgentKey,
-		onSuccess: (result, memberId) => {
-			onSecret(result.secret);
+		mutationFn: async (memberId: string) => {
+			const token = sessionStorage.getItem(tokenKey);
+			return { result: await rotateAgentKey(memberId), token };
+		},
+		onSuccess: ({ result, token }, memberId) => {
+			if (!token || token !== sessionStorage.getItem(tokenKey)) return;
+			onSecret(result.secret, token);
 			if (memberId !== data.currentUser.id) {
 				void queryClient.invalidateQueries({ queryKey: ["agent-keys"] });
 			}
@@ -3091,6 +3126,13 @@ function Settings({
 	);
 }
 
+function localDateTime(value: string) {
+	if (!value) return "";
+	const date = new Date(value);
+	const pad = (part: number) => String(part).padStart(2, "0");
+	return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function RecordDialog({
 	kind,
 	initial,
@@ -3136,7 +3178,7 @@ function RecordDialog({
 		targetDate: readString("targetDate"),
 		connectionId: readString("connectionId", data.connections[0]?.id || ""),
 		content: readString("content"),
-		scheduledAt: readString("scheduledAt").slice(0, 16),
+		scheduledAt: localDateTime(readString("scheduledAt")),
 		authorId: readString("authorId", data.currentUser.id),
 	}));
 	type TextField = Exclude<keyof RecordDraft, "id" | "password">;
@@ -3334,7 +3376,9 @@ function RecordDialog({
 			id: isEdit ? values.id : "",
 			scheduledAt:
 				kind === "post" && values.scheduledAt
-					? new Date(values.scheduledAt).toISOString()
+					? values.scheduledAt === localDateTime(readString("scheduledAt"))
+						? readString("scheduledAt")
+						: new Date(values.scheduledAt).toISOString()
 					: values.scheduledAt,
 		});
 	}

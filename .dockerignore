@@ -1,4 +1,8 @@
 .git
+# Private operator configuration is never part of a container build context.
+release.sh
+.office-ops
+.kamal
 node_modules
 target
 **/dist

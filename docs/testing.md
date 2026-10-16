@@ -88,3 +88,31 @@ S3 application drill additionally verified HTTP/MCP upload and text read,
 anonymous-access denial, Viewer restrictions, normalized avatars, SQLite restart
 replay, soft deletion and key revocation against a disposable local office. Only
 its temporary object prefix was cleaned up; the hosted office was untouched.
+
+
+## Whole-code review checkpoint — 2026-10-16
+
+Reviewed backend commands, authentication/RPC/MCP policy, actor rollback and SQLite
+replay, file storage, frontend state/navigation, Docker/release configuration and
+documentation. Concrete fixes bind delayed results and one-time key reveals to
+their initiating browser session, preserve queued-post instants when editing in
+non-UTC browsers (including repeated DST hours), and prevent board drafts from
+switching projects through status-filter fallbacks. Private operator files are
+explicitly excluded from Docker build contexts, and obsolete setup docs were
+corrected.
+
+`just check` passed: 40 Rust tests, six generated ignored doc examples, Clippy,
+formatting, TypeScript/build and 11 container startup cases. All 35 Chromium
+scenarios passed together. New scenarios cover delayed real key-rotation results
+across sign-out/login, a delayed real unauthorized response after a new login,
+board-draft project binding, and Kolkata/New York scheduling. Browser-source
+Biome and both RustSec/pnpm dependency audits passed. The updated S3 client also
+passed the isolated real-bucket HTTP/MCP file/identity/replay drill described above.
+
+These checks support incremental work on the current single-office design; they
+are not a claim of statement/branch coverage or production hardening. File-based
+routing, project-specific access grants, task/board optimistic concurrency,
+command idempotency and hosted recovery/monitoring remain planned. Full projection
+snapshots and credential-table rewrites on each command are potential growth
+costs; measure them with larger offices before changing the transactional model.
+No release, deployment or hosted data migration was performed during this review.

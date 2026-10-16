@@ -13,11 +13,11 @@ argon2 = "0.5"
 buffa = "0.8"
 chrono = "0.4"
 connectrpc = { version = "0.8", features = ["server", "axum"] }
-jsonwebtoken = { version = "10.4", features = ["rust_crypto"] }
+jsonwebtoken = { version = "10.4", default-features = false, features = ["aws_lc_rs"] }
 katha = "=0.2.6"
 kathputli = "=0.2.1"
 rand = "0.8"
-rust-s3 = { version = "0.37.2", default-features = false, features = ["tokio-rustls-tls"] }
+rust-s3 = { version = "0.38.0", default-features = false, features = ["tokio-rustls-tls"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 fs2 = "0.4.3"
 rusqlite = { version = "0.37.0", features = ["bundled"] }

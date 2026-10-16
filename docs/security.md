@@ -8,6 +8,8 @@ First-admin setup is available only while a new office is uninitialized. Bootstr
 
 Passwords are stored as Argon2 hashes in private SQLite tables. JWTs last 15 minutes and use a signing key retained in the same protected database, so restart does not invalidate an unexpired session. The raw signing key is never returned to clients or included in domain events. Backups of the database therefore include sensitive authentication material; restrict and encrypt both the volume and backups. SQLite is not encrypted by the application.
 
+The browser binds RPC and file-transfer results to the session that initiated the request. Signing out clears cached workspace data and secret dialogs; delayed results are discarded after a session change. An unauthorized response from an older session cannot clear the newer login. One-time AI-key reveals also check the initiating session before rendering.
+
 ## Agent credentials
 
 AI users receive their own opaque login key automatically at creation. Keys expire after 90 days and can be revoked immediately. Admins, human or AI, manage users and credentials under the same policy. The raw secret is returned once; only its SHA-256 digest and member binding are retained privately. Issuer metadata is separate from authenticated identity. Member events and credentials commit atomically. Rotation revokes all previous keys for the member and creates a replacement in the same transaction.
@@ -37,3 +39,9 @@ Append-only history retains previous personal data values. Event/backup retentio
 This development build still needs a production review of TLS/ingress, request throttling, password recovery, retention/erasure and verified backup monitoring. Future provider settings require encryption server-side and a separate protected decryption recovery secret; no such credentials are stored today. Future publishing or invoice actions need explicit narrow permissions, operation IDs, receipts and retry handling. Never pass provider secrets to agents.
 
 External clients and runtimes own agent execution and conversational channels. Office Office owns records and the separately scoped future social publishing queue.
+
+## Dependency review
+
+The 2026-10-16 review updated rust-s3 to 0.38 with quick-xml 0.41 and selected jsonwebtoken's AWS-LC provider, removing its unused RustCrypto RSA dependency. Office Office still signs and validates HS256 tokens with the existing database signing key. Compatible nanoid and source-map-js patches clear development-tool advisories. RustSec and the complete pnpm audit reported no known vulnerabilities at review time; this is a dated check, not a future guarantee.
+
+Run `cargo audit` and `pnpm audit` when changing dependencies, alongside the normal tests. Keep runtime credentials out of Git, logs, and Docker build contexts. The Docker ignore rules explicitly exclude the private operator helper and configuration directories.

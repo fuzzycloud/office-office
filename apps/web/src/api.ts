@@ -48,16 +48,27 @@ import {
 } from "./gen/office/v1/office_pb";
 
 const key = "office-office-session";
+function requireCurrentSession(token: string | undefined) {
+	if (token && sessionStorage.getItem(key)?.trim() !== token)
+		throw new ConnectError(
+			"The session changed during this request.",
+			Code.Canceled,
+		);
+}
 const authInterceptor: Interceptor = (next) => async (request) => {
 	const token = sessionStorage.getItem(key)?.trim();
 	if (token) request.header.set("Authorization", `Bearer ${token}`);
 	try {
-		return await next(request);
+		const response = await next(request);
+		requireCurrentSession(token);
+		return response;
 	} catch (error) {
+		requireCurrentSession(token);
 		if (
 			error instanceof ConnectError &&
 			error.code === Code.Unauthenticated &&
-			token
+			token &&
+			sessionStorage.getItem(key)?.trim() === token
 		) {
 			sessionStorage.removeItem(key);
 			window.location.reload();
@@ -325,6 +336,7 @@ async function fileRequest(path: string, init?: RequestInit) {
 	const token = sessionStorage.getItem(key)?.trim();
 	if (token) headers.set("Authorization", `Bearer ${token}`);
 	const response = await fetch(path, { ...init, headers });
+	requireCurrentSession(token);
 	if (response.status === 401 && token) {
 		sessionStorage.removeItem(key);
 		window.location.reload();
@@ -333,7 +345,7 @@ async function fileRequest(path: string, init?: RequestInit) {
 		throw new Error(
 			`File request failed (${response.status}). ${await response.text()}`,
 		);
-	return response;
+	return { response, token };
 }
 export async function uploadFile(file: File, module: string, recordId = "") {
 	const query = new URLSearchParams({
@@ -341,20 +353,24 @@ export async function uploadFile(file: File, module: string, recordId = "") {
 		record_id: recordId,
 		name: file.name,
 	});
-	const response = await fileRequest(`/api/files?${query}`, {
+	const { response, token } = await fileRequest(`/api/files?${query}`, {
 		method: "POST",
 		headers: { "Content-Type": file.type || "application/octet-stream" },
 		body: file,
 	});
 	const result = (await response.json()) as { file?: { id?: string } };
+	requireCurrentSession(token);
 	if (!result.file?.id)
 		throw new Error("The upload response is missing its file.");
 	return result.file.id;
 }
 export async function getFileBlob(id: string) {
-	return (
-		await fileRequest(`/api/files/${encodeURIComponent(id)}/content`)
-	).blob();
+	const { response, token } = await fileRequest(
+		`/api/files/${encodeURIComponent(id)}/content`,
+	);
+	const blob = await response.blob();
+	requireCurrentSession(token);
+	return blob;
 }
 export async function downloadFile(id: string, name: string) {
 	const blob = await getFileBlob(id);

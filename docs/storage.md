@@ -18,7 +18,7 @@ The database is sensitive: its events contain office/customer data and its priva
 
 For containers, mount a persistent volume at `/data` writable by UID/GID 10001. The image sets `OFFICE_DATABASE_PATH=/data/office-office.sqlite3`. Use a Docker-managed named volume so data survives container replacement and image upgrades. Replacing a container without persistent storage loses its office. Keep setup behind a private ingress; anyone who reaches an empty office first could claim administrator access.
 
-An append-only event log retains old record values. A retention/export/erasure workflow is still needed before production customer data. There is no automatic purge of events or backups.
+An append-only event log retains old record values. A retention/export/erasure workflow is still needed before production customer data. There is no application-level purge of historical events or uploaded file bytes. Optional Litestream retention manages database replicas separately.
 
 ## Optional Litestream replication
 

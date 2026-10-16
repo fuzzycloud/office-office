@@ -1,7 +1,9 @@
 # ADR 0002: UI-first demo and SQLite event core
 
-- Status: Accepted
+- Status: Historical; superseded by the durable SQLite implementation
 - Date: 2026-10-15
+
+This ADR records the initial in-memory prototype decision. The current default is durable SQLite storage; see [the current architecture](../architecture.md).
 
 ## Context
 
