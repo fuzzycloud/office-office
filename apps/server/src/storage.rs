@@ -46,6 +46,7 @@ fn event_parts(event: &Event) -> Result<(&'static str, String)> {
         Event::TaskComment(v) => ("task_comment", encode(v)?),
         Event::TaskActivity(v) => ("task_activity", encode(v)?),
         Event::Report(v) => ("report", encode(v)?),
+        Event::File(v) => ("file", encode(v)?),
         Event::AgentKey(v) => ("agent_key", encode(v)?),
         Event::Connection(v) => ("connection", encode(v)?),
         Event::Post(v) => ("post", encode(v)?),
@@ -64,6 +65,7 @@ fn parse_event(kind: &str, json: &str) -> Result<Event> {
         "task_comment" => Event::TaskComment(decode(json)?),
         "task_activity" => Event::TaskActivity(decode(json)?),
         "report" => Event::Report(decode(json)?),
+        "file" => Event::File(decode(json)?),
         "agent_key" => Event::AgentKey(decode(json)?),
         "connection" => Event::Connection(decode(json)?),
         "post" => Event::Post(decode(json)?),
@@ -99,6 +101,17 @@ fn parse_event(kind: &str, json: &str) -> Result<Event> {
             !v.id.is_empty() && !v.task_id.is_empty() && !v.actor_id.is_empty() && v.occurred_at > 0
         }
         Event::Report(v) => !v.id.is_empty() && !v.title.is_empty() && v.revision > 0,
+        Event::File(v) => {
+            uuid::Uuid::parse_str(&v.id).is_ok()
+                && !v.name.is_empty()
+                && !v.uploaded_by.is_empty()
+                && !v.created_at.is_empty()
+                && v.revision > 0
+                && v.size_bytes > 0
+                && v.size_bytes <= super::files::MAX_FILE_BYTES as u64
+                && v.sha256.len() == 64
+                && ["projects", "reports", "profile"].contains(&v.module.as_str())
+        }
         Event::AgentKey(v) => !v.id.is_empty() && !v.name.is_empty(),
         Event::Connection(v) => {
             !v.id.is_empty() && !v.name.is_empty() && v.demo && v.status == "disconnected"

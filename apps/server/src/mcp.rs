@@ -153,9 +153,13 @@ fn tools() -> Vec<Tool> {
         .idempotent(false)
         .open_world(false);
     vec![
+        Tool::new("office_list_files", "List authorized private file metadata. Optional projects/reports/profile module and record_id filters. No object-store credentials are returned.", schema(json!({"type":"object","properties":{"module":{"type":"string","enum":["projects","reports","profile"]},"record_id":{"type":"string"}},"additionalProperties":false}))).with_annotations(read.clone()),
+        Tool::new("office_get_file", "Read private file metadata and an authenticated relative download path. Set include_text for UTF-8 text files up to 128 KiB; binary files require HTTP GET with your own bearer credential.", schema(json!({"type":"object","properties":{"id":{"type":"string","minLength":1},"include_text":{"type":"boolean","default":false}},"required":["id"],"additionalProperties":false}))).with_annotations(read.clone()),
+        Tool::new("office_upload_file", "Upload a UTF-8 text attachment through private storage and the event engine (maximum 128 KiB). Projects/reports write permission required. For binary uploads use POST /api/files?module=projects|reports|profile&record_id=ID&name=URLENCODED_FILENAME with raw body, Content-Type and your bearer credential. No public URLs or provider credentials.", schema(json!({"type":"object","properties":{"name":{"type":"string","minLength":1},"module":{"type":"string","enum":["projects","reports"]},"record_id":{"type":"string"},"content_text":{"type":"string","maxLength":131072}},"required":["name","module","content_text"],"additionalProperties":false}))).with_annotations(write.clone()),
+        Tool::new("office_delete_file", "Soft-delete a private file using its current revision. This removes visible access and avatar references, while preserving historical metadata and object bytes.", schema(json!({"type":"object","properties":{"id":{"type":"string","minLength":1},"expected_revision":{"type":"integer","minimum":1}},"required":["id","expected_revision"],"additionalProperties":false}))).with_annotations(write.clone()),
         Tool::new("office_list_roles", "Read the fixed roles and their permissions. Human and AI users follow the same role policy.", schema(json!({"type":"object","properties":{},"additionalProperties":false}))).with_annotations(read.clone()),
         Tool::new("office_create_ai_user", "Admin only: create an AI team member and its login key. Returns a secret once; deliver it securely to the new client, never put it in comments or reports. Role determines all access. Does not launch an agent.", schema(json!({"type":"object","properties":{"name":{"type":"string","minLength":1},"role":{"type":"string","enum":["admin","manager","member","viewer"],"default":"member"},"job_title":{"type":"string"},"department":{"type":"string"},"bio":{"type":"string","maxLength":2000},"avatar_url":{"type":"string","maxLength":2048,"description":"Optional HTTPS profile image URL; never fetched by the server"}},"required":["name"],"additionalProperties":false}))).with_annotations(write.clone()),
-        Tool::new("office_update_profile", "Replace your own bio and profile image URL. Available to every active human or AI user, including Viewer. Supply both fields; empty values clear them. Cannot change identity, role, account status or credentials. Bio is plain text (up to 2000 UTF-8 bytes); picture must be an HTTPS URL without credentials (up to 2048 bytes). Read your current profile in office_get_workspace first to preserve existing values.", schema(json!({"type":"object","properties":{"bio":{"type":"string","maxLength":2000},"avatar_url":{"type":"string","maxLength":2048}},"required":["bio","avatar_url"],"additionalProperties":false}))).with_annotations(write.clone()),
+        Tool::new("office_update_profile", "Replace your own bio and profile image URL or uploaded avatar_file_id. Available to every active human or AI user, including Viewer. Supply both fields; empty values clear them. Cannot change identity, role, account status or credentials. Bio is plain text (up to 2000 UTF-8 bytes); picture must be an HTTPS URL without credentials (up to 2048 bytes). Read your current profile in office_get_workspace first to preserve existing values.", schema(json!({"type":"object","properties":{"bio":{"type":"string","maxLength":2000},"avatar_url":{"type":"string","maxLength":2048},"avatar_file_id":{"type":"string","description":"Own uploaded profile image ID; clear avatar_url when using this"}},"required":["bio","avatar_url"],"additionalProperties":false}))).with_annotations(write.clone()),
         Tool::new("office_rotate_ai_key", "Admin only: replace an AI user's login key, immediately revoking all its old keys and sessions. Returns the new secret once. Deliver it securely; never put it in workspace records.", schema(json!({"type":"object","properties":{"member_id":{"type":"string","minLength":1}},"required":["member_id"],"additionalProperties":false}))).with_annotations(write.clone()),
         Tool::new(
             "office_get_workspace",
@@ -343,6 +347,124 @@ impl ServerHandler for OfficeMcp {
     ) -> Result<CallToolResponse, McpError> {
         let args = request.arguments.unwrap_or_default();
         let answer = match request.name.as_ref() {
+            "office_list_files" => {
+                let request = (|| -> Result<_, String> {
+                    Ok(office_server::proto::office::v1::ListFilesRequest {
+                        module: string_arg(&args, "module")?,
+                        record_id: string_arg(&args, "record_id")?,
+                        ..Default::default()
+                    })
+                })();
+                match request {
+                    Err(e) => failure(e),
+                    Ok(request) => match self.service.list_files(&self.token, request).await {
+                        Ok(response) => success(
+                            json!({"files":response.files,"storageConfigured":response.storage_configured}),
+                        ),
+                        Err(e) => failure(e.message.unwrap_or_else(|| "File access denied".into())),
+                    },
+                }
+            }
+            "office_get_file" => match string_arg(&args, "id") {
+                Err(e) => failure(e),
+                Ok(id) => match self.service.get_file(&self.token, &id).await {
+                    Err(e) => failure(e.message.unwrap_or_else(|| "File access denied".into())),
+                    Ok(file) => {
+                        let path = format!("/api/files/{}/content", file.id);
+                        if args
+                            .get("include_text")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(false)
+                        {
+                            if file.size_bytes > 131072
+                                || !(file.content_type.starts_with("text/")
+                                    || file.content_type == "application/json")
+                            {
+                                failure(
+                                    "Use authenticated HTTP download for binary files or text over 128 KiB",
+                                )
+                            } else {
+                                match self.service.download_file(&self.token, &id).await {
+                                    Ok((file, bytes)) => match String::from_utf8(bytes) {
+                                        Ok(text) => success(
+                                            json!({"file":file,"contentText":text,"downloadPath":path}),
+                                        ),
+                                        Err(_) => failure(
+                                            "File is not UTF-8 text; use authenticated HTTP download",
+                                        ),
+                                    },
+                                    Err(e) => failure(
+                                        e.message.unwrap_or_else(|| "File download failed".into()),
+                                    ),
+                                }
+                            }
+                        } else {
+                            success(
+                                json!({"file":file,"downloadPath":path,"authentication":"Authorization: Bearer <your Office Office key or token>"}),
+                            )
+                        }
+                    }
+                },
+            },
+            "office_upload_file" => {
+                let parsed = (|| -> Result<_, String> {
+                    let module = string_arg(&args, "module")?;
+                    if !matches!(module.as_str(), "projects" | "reports") {
+                        return Err("Choose projects or reports for text attachments".into());
+                    }
+                    let text = string_arg(&args, "content_text")?;
+                    if text.len() > 131072 {
+                        return Err("Text must be at most 128 KiB".into());
+                    }
+                    Ok((
+                        module,
+                        string_arg(&args, "record_id")?,
+                        string_arg(&args, "name")?,
+                        text,
+                    ))
+                })();
+                match parsed {
+                    Err(e) => failure(e),
+                    Ok((module, record, name, text)) => match self
+                        .service
+                        .upload_file(
+                            &self.token,
+                            &module,
+                            &record,
+                            &name,
+                            "text/plain",
+                            text.into_bytes(),
+                        )
+                        .await
+                    {
+                        Ok(file) => success(json!({"file":file})),
+                        Err(e) => failure(e.message.unwrap_or_else(|| "File upload failed".into())),
+                    },
+                }
+            }
+            "office_delete_file" => {
+                let parsed = (|| -> Result<_, String> {
+                    Ok(office_server::proto::office::v1::DeleteFileRequest {
+                        id: string_arg(&args, "id")?,
+                        expected_revision: uint_arg(&args, "expected_revision", 0)?,
+                        ..Default::default()
+                    })
+                })();
+                match parsed {
+                    Err(e) => failure(e),
+                    Ok(request) => match self
+                        .service
+                        .execute(&self.token, EngineCommand::DeleteFile(request))
+                        .await
+                    {
+                        Ok(EngineOutcome::File(file)) => success(json!({"file":file})),
+                        Ok(_) => failure("Unexpected file response"),
+                        Err(e) => {
+                            failure(e.message.unwrap_or_else(|| "File deletion failed".into()))
+                        }
+                    },
+                }
+            }
             "office_list_roles" => match self.service.list_roles(&self.token).await {
                 Ok(catalog) => success(json!({"roles":catalog.roles})),
                 Err(_) => failure("Role catalog unavailable. Check your login and retry."),
@@ -361,6 +483,7 @@ impl ServerHandler for OfficeMcp {
                         department: string_arg(&args, "department")?,
                         bio: string_arg(&args, "bio")?,
                         avatar_url: string_arg(&args, "avatar_url")?,
+                        avatar_file_id: string_arg(&args, "avatar_file_id")?,
                         ..Default::default()
                     })
                 })();
@@ -394,6 +517,7 @@ impl ServerHandler for OfficeMcp {
                     Ok(SaveProfileRequest {
                         bio: string_arg(&args, "bio")?,
                         avatar_url: string_arg(&args, "avatar_url")?,
+                        avatar_file_id: string_arg(&args, "avatar_file_id")?,
                         ..Default::default()
                     })
                 })();
@@ -764,6 +888,83 @@ mod tests {
         )
     }
 
+    #[derive(Default)]
+    struct TestFiles(std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>);
+    #[async_trait::async_trait]
+    impl office_server::files::BlobStore for TestFiles {
+        async fn put(&self, id: &str, bytes: &[u8], _: &str) -> anyhow::Result<()> {
+            self.0.lock().unwrap().insert(id.into(), bytes.into());
+            Ok(())
+        }
+        async fn get(&self, id: &str) -> anyhow::Result<Vec<u8>> {
+            Ok(self.0.lock().unwrap().get(id).cloned().unwrap())
+        }
+        async fn remove(&self, id: &str) -> anyhow::Result<()> {
+            self.0.lock().unwrap().remove(id);
+            Ok(())
+        }
+    }
+    #[tokio::test]
+    async fn file_tools_upload_read_conflict_and_soft_delete() {
+        let app = app(Arc::new(
+            OfficePreviewService::new().with_file_storage(Arc::new(TestFiles::default())),
+        ));
+        let (_, token, _) = key(&app, "member").await;
+        let call = |name: &str, args: Value| json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":name,"arguments":args}});
+        let (_, uploaded) = mcp(
+            &app,
+            Some(&token),
+            None,
+            call(
+                "office_upload_file",
+                json!({"module":"reports","name":"findings.md","content_text":"Verified research"}),
+            ),
+        )
+        .await;
+        assert_eq!(uploaded["result"]["isError"], false, "{uploaded}");
+        let id = uploaded["result"]["structuredContent"]["file"]["id"]
+            .as_str()
+            .unwrap();
+        let (_, read) = mcp(
+            &app,
+            Some(&token),
+            None,
+            call("office_get_file", json!({"id":id,"include_text":true})),
+        )
+        .await;
+        assert_eq!(
+            read["result"]["structuredContent"]["contentText"],
+            "Verified research"
+        );
+        let (_, conflict) = mcp(
+            &app,
+            Some(&token),
+            None,
+            call("office_delete_file", json!({"id":id,"expected_revision":0})),
+        )
+        .await;
+        assert_eq!(conflict["result"]["isError"], true);
+        let (_, deleted) = mcp(
+            &app,
+            Some(&token),
+            None,
+            call("office_delete_file", json!({"id":id,"expected_revision":1})),
+        )
+        .await;
+        assert_eq!(
+            deleted["result"]["structuredContent"]["file"]["deleted"],
+            true
+        );
+        let (_, missing) = mcp(
+            &app,
+            Some(&token),
+            None,
+            call("office_get_file", json!({"id":id})),
+        )
+        .await;
+        assert_eq!(missing["result"]["isError"], true);
+    }
+
     #[tokio::test]
     async fn ai_admin_can_create_and_rotate_member_keys_through_mcp() {
         let app = app(Arc::new(OfficePreviewService::new()));
@@ -1124,7 +1325,7 @@ mod tests {
         .await;
         assert_eq!(
             listed["result"]["tools"].as_array().unwrap().len(),
-            14,
+            18,
             "{listed}"
         );
         let (_, read) = mcp(&app, Some(&secret), None, json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"office_get_workspace","arguments":{"project_id":project_id}}})).await;

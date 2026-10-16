@@ -8,6 +8,7 @@ The UI uses TanStack Router for browser navigation and TanStack Query for the sh
 | Team | `/team` |
 | Customers | `/customers` |
 | Projects | `/projects` |
+| Files | `/files` |
 | Research reports | `/reports` |
 | Roles and permissions | `/roles` |
 | Social queue | `/social` |
@@ -19,4 +20,4 @@ Entering a section revalidates workspace data in the existing QueryClient; secti
 
 The Rust static-file service serves the UI entry point with HTTP 200 for section URLs, allowing direct links and reloads behind the standard container server. API and MCP routing remain explicit server routes. Operators using another static host must configure equivalent SPA fallback behavior.
 
-The router uses its [documented code-based route tree](https://tanstack.com/router/latest/docs/routing/code-based-routing) and the existing [external data cache integration](https://tanstack.com/router/latest/docs/guide/external-data-loading). The small section tree is defined in code; no route generator is needed for this slice.
+The router uses its [documented code-based route tree](https://tanstack.com/router/latest/docs/routing/code-based-routing) and the existing [external data cache integration](https://tanstack.com/router/latest/docs/guide/external-data-loading). The section tree is currently defined in code. Migration to file-based routes remains planned.

@@ -19,18 +19,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("remote binding requires OFFICE_ALLOW_REMOTE=true; protect bootstrap behind a private ingress".into());
     }
     let demo = std::env::var("OFFICE_DEMO_MODE").as_deref() == Ok("true");
-    let service = Arc::new(if demo {
-        OfficePreviewService::new()
-    } else {
-        let path = std::env::var("OFFICE_DATABASE_PATH")
-            .unwrap_or_else(|_| "data/office-office.sqlite3".to_owned());
-        OfficePreviewService::open(path).await?
-    });
+    let service = Arc::new(
+        if demo {
+            OfficePreviewService::new()
+        } else {
+            let path = std::env::var("OFFICE_DATABASE_PATH")
+                .unwrap_or_else(|_| "data/office-office.sqlite3".to_owned());
+            OfficePreviewService::open(path).await?
+        }
+        .with_file_storage_from_env()?,
+    );
     let connect = service.clone().register(ConnectRouter::new());
     let mcp_config = mcp::config(std::env::var("OFFICE_MCP_ALLOWED_HOSTS").ok().as_deref())?;
     let app = Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .merge(mcp::router(service.clone(), mcp_config))
+        .merge(office_server::files::router(service.clone()))
         .nest_service("/rpc", connect.into_axum_service())
         .fallback_service(
             ServeDir::new("apps/web/dist").fallback(ServeFile::new("apps/web/dist/index.html")),

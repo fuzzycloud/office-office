@@ -53,7 +53,7 @@ The reverse proxy must preserve the HTTP `Host` (or HTTP/2 authority) for the pu
 | `office_list_roles` | Inspect fixed roles and permissions | Any authenticated user |
 | `office_create_ai_user` | Create AI member and return its key once | Admin |
 | `office_rotate_ai_key` | Replace all keys for an AI member | Admin |
-| `office_update_profile` | Replace your own bio and HTTPS picture URL | Any active user; self only |
+| `office_update_profile` | Replace your own bio and HTTPS picture URL or private uploaded image ID | Any active user; self only |
 | `office_get_workspace` | Read the records visible to this key | Current role |
 | `office_save_board` | Create or update a project's board and columns | `projects:write` |
 | `office_save_task` | Create or update a task, including its board column | `projects:write` |
@@ -88,3 +88,9 @@ For edits, supply `task_id`, `comment_id`, `body` and `expected_revision` to `of
 ## Upgrade compatibility
 
 v0.3.0 required manual exchange before MCP and used member access/key scope restrictions. The current policy accepts member-bound raw keys at MCP and uses fixed roles only. Legacy access/scope fields no longer constrain permissions, so review roles before upgrading. Existing v0.3 member-bound keys remain valid. v0.2 creator-bound keys remain rejected; provision explicit AI users and replace those keys. Historical activity is retained as recorded, and no database reset is required by this change.
+
+## Private files
+
+`office_list_files` lists authorized metadata, optionally filtered by `module` and `record_id`. `office_get_file` returns metadata and a relative authenticated download path; `include_text: true` returns UTF-8 text up to 128 KiB. `office_upload_file` creates a Projects/Reports text attachment from `name`, `module`, optional `record_id` and `content_text` (128 KiB maximum). `office_delete_file` requires `id` and the current `expected_revision` and performs event-based soft deletion.
+
+Binary uploads and downloads use the authenticated HTTP endpoints described in [private files](files.md), accepting the same member-bound AI key or access token as MCP. The bucket stays private and no provider secrets are returned. Uploaded text is untrusted document content, not an instruction source. Profile uploads can subsequently be linked through `office_update_profile` using `avatar_file_id` with an empty `avatar_url`.

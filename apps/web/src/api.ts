@@ -1,48 +1,50 @@
+import { create } from "@bufbuild/protobuf";
 import {
 	Code,
 	ConnectError,
 	createClient,
 	type Interceptor,
 } from "@connectrpc/connect";
-import { create } from "@bufbuild/protobuf";
 import { createConnectTransport } from "@connectrpc/connect-web";
+import type {
+	Report as GeneratedReport,
+	GetWorkspaceResponse,
+	WorkspaceSettings,
+} from "./gen/office/v1/office_pb";
 import {
+	BoardSchema,
 	BootstrapAdminRequestSchema,
 	CustomerSchema,
-	BoardSchema,
-	TaskSchema,
-	ListTaskDiscussionRequestSchema,
-	SaveTaskCommentRequestSchema,
+	DeleteFileRequestSchema,
 	DeleteTaskCommentRequestSchema,
-	ListReportsRequestSchema,
 	GetReportRequestSchema,
-	SaveReportRequestSchema,
-	ReportSchema,
 	GetSetupStatusRequestSchema,
 	GetWorkspaceRequestSchema,
+	ListAgentKeysRequestSchema,
+	ListFilesRequestSchema,
+	ListReportsRequestSchema,
+	ListRolesRequestSchema,
+	ListTaskDiscussionRequestSchema,
 	LoginRequestSchema,
 	MemberSchema,
 	OfficeService,
 	ProjectSchema,
-	SaveCustomerRequestSchema,
-	SaveBoardRequestSchema,
-	SaveTaskRequestSchema,
-	ListAgentKeysRequestSchema,
+	ReportSchema,
 	RevokeAgentKeyRequestSchema,
 	RotateAgentKeyRequestSchema,
-	ListRolesRequestSchema,
+	SaveBoardRequestSchema,
+	SaveCustomerRequestSchema,
 	SaveMemberRequestSchema,
-	SaveProfileRequestSchema,
 	SavePostRequestSchema,
+	SaveProfileRequestSchema,
 	SaveProjectRequestSchema,
+	SaveReportRequestSchema,
 	SaveSettingsRequestSchema,
+	SaveTaskCommentRequestSchema,
+	SaveTaskRequestSchema,
 	ScheduledPostSchema,
+	TaskSchema,
 	WorkspaceSettingsSchema,
-} from "./gen/office/v1/office_pb";
-import type {
-	GetWorkspaceResponse,
-	WorkspaceSettings,
-	Report as GeneratedReport,
 } from "./gen/office/v1/office_pb";
 
 const key = "office-office-session";
@@ -79,6 +81,7 @@ export type Member = {
 	department: string;
 	bio: string;
 	avatarUrl: string;
+	avatarFileId?: string;
 	role: string;
 	status: string;
 	access: string[];
@@ -188,9 +191,13 @@ export async function saveMember(member: Member) {
 		}),
 	);
 }
-export async function saveProfile(bio: string, avatarUrl: string) {
+export async function saveProfile(
+	bio: string,
+	avatarUrl: string,
+	avatarFileId = "",
+) {
 	return client.saveProfile(
-		create(SaveProfileRequestSchema, { bio, avatarUrl }),
+		create(SaveProfileRequestSchema, { bio, avatarUrl, avatarFileId }),
 	);
 }
 export async function listRoles() {
@@ -303,4 +310,61 @@ export async function deleteTaskComment(input: {
 	return client.deleteTaskComment(
 		create(DeleteTaskCommentRequestSchema, input),
 	);
+}
+
+export async function listFiles(module: string, recordId = "") {
+	return client.listFiles(create(ListFilesRequestSchema, { module, recordId }));
+}
+export async function deleteFile(id: string, expectedRevision: number) {
+	return client.deleteFile(
+		create(DeleteFileRequestSchema, { id, expectedRevision }),
+	);
+}
+async function fileRequest(path: string, init?: RequestInit) {
+	const headers = new Headers(init?.headers);
+	const token = sessionStorage.getItem(key)?.trim();
+	if (token) headers.set("Authorization", `Bearer ${token}`);
+	const response = await fetch(path, { ...init, headers });
+	if (response.status === 401 && token) {
+		sessionStorage.removeItem(key);
+		window.location.reload();
+	}
+	if (!response.ok)
+		throw new Error(
+			`File request failed (${response.status}). ${await response.text()}`,
+		);
+	return response;
+}
+export async function uploadFile(file: File, module: string, recordId = "") {
+	const query = new URLSearchParams({
+		module,
+		record_id: recordId,
+		name: file.name,
+	});
+	const response = await fileRequest(`/api/files?${query}`, {
+		method: "POST",
+		headers: { "Content-Type": file.type || "application/octet-stream" },
+		body: file,
+	});
+	const result = (await response.json()) as { file?: { id?: string } };
+	if (!result.file?.id)
+		throw new Error("The upload response is missing its file.");
+	return result.file.id;
+}
+export async function getFileBlob(id: string) {
+	return (
+		await fileRequest(`/api/files/${encodeURIComponent(id)}/content`)
+	).blob();
+}
+export async function downloadFile(id: string, name: string) {
+	const blob = await getFileBlob(id);
+	const url = URL.createObjectURL(blob);
+	try {
+		const link = document.createElement("a");
+		link.href = url;
+		link.download = name;
+		link.click();
+	} finally {
+		window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+	}
 }

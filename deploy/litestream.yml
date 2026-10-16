@@ -8,8 +8,8 @@ logging:
 # Flush pending changes on graceful shutdown; give Docker at least 60 seconds.
 shutdown-sync-timeout: 30s
 snapshot:
-  interval: 6h
-  retention: 336h
+  interval: 24h
+  retention: 168h
 
 # No metrics or Litestream MCP listener is exposed by default.
 dbs:
@@ -23,4 +23,4 @@ dbs:
       path: ${OFFICE_BACKUP_PREFIX}
       region: ${AWS_REGION}
       endpoint: ${AWS_ENDPOINT_URL_S3}
-      sync-interval: 1m
+      sync-interval: 5m

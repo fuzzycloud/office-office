@@ -10,6 +10,8 @@ service OfficeService {
   rpc GetWorkspace(GetWorkspaceRequest) returns (GetWorkspaceResponse);
   rpc SaveMember(SaveMemberRequest) returns (SaveMemberResponse);
   rpc SaveProfile(SaveProfileRequest) returns (SaveProfileResponse);
+  rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
+  rpc DeleteFile(DeleteFileRequest) returns (DeleteFileResponse);
   rpc SaveCustomer(SaveCustomerRequest) returns (SaveCustomerResponse);
   rpc SaveProject(SaveProjectRequest) returns (SaveProjectResponse);
   rpc SaveBoard(SaveBoardRequest) returns (SaveBoardResponse);
@@ -58,7 +60,7 @@ message GetWorkspaceResponse {
 message SaveMemberRequest { Member member = 1; string password = 2; }
 message SaveMemberResponse { Member member = 1; AgentKey agent_key = 2; string secret = 3; }
 // Updates only the authenticated member's public profile. Empty values clear fields.
-message SaveProfileRequest { string bio = 1; string avatar_url = 2; }
+message SaveProfileRequest { string bio = 1; string avatar_url = 2; string avatar_file_id = 3; }
 message SaveProfileResponse { Member member = 1; }
 message SaveCustomerRequest { Customer customer = 1; }
 message SaveCustomerResponse { Customer customer = 1; }
@@ -106,8 +108,9 @@ message Member {
   // Empty means human for events created before explicit member kinds.
   string kind = 9;
   string bio = 10;
-  // Optional HTTPS image URL; Office Office does not fetch or upload the image.
+  // Optional external HTTPS image URL; mutually exclusive with avatar_file_id.
   string avatar_url = 11;
+  string avatar_file_id = 12;
 }
 message Customer {
   string id = 1;
@@ -228,3 +231,23 @@ message SaveTaskCommentRequest { string task_id = 1; string comment_id = 2; stri
 message SaveTaskCommentResponse { TaskComment comment = 1; }
 message DeleteTaskCommentRequest { string task_id = 1; string comment_id = 2; uint32 expected_revision = 3; }
 message DeleteTaskCommentResponse { TaskComment comment = 1; }
+
+// File bytes live in private object storage; metadata and soft deletion are events.
+message FileRecord {
+  string id = 1;
+  string name = 2;
+  string content_type = 3;
+  uint64 size_bytes = 4;
+  // projects, reports or profile. Empty record_id means a module-wide attachment.
+  string module = 5;
+  string record_id = 6;
+  string uploaded_by = 7;
+  string created_at = 8;
+  bool deleted = 9;
+  uint32 revision = 10;
+  string sha256 = 11;
+}
+message ListFilesRequest { string module = 1; string record_id = 2; }
+message ListFilesResponse { repeated FileRecord files = 1; bool storage_configured = 2; }
+message DeleteFileRequest { string id = 1; uint32 expected_revision = 2; }
+message DeleteFileResponse { FileRecord file = 1; }

@@ -1,13 +1,13 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useId, useRef, useState } from "react";
 import {
 	deleteTaskComment,
 	getReport,
 	listReports,
 	listTaskDiscussion,
-	saveTaskComment,
 	type Member,
+	saveTaskComment,
 	type Task,
 } from "./api";
 import MemberAvatar from "./MemberAvatar";
@@ -445,6 +445,7 @@ export default function TaskDetails({
 															<MemberAvatar
 																name={author.name}
 																avatarUrl={author.avatarUrl}
+																avatarFileId={author.avatarFileId}
 																className="size-8"
 															/>
 														) : null;

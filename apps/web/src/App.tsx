@@ -1,49 +1,51 @@
-import {
-	useEffect,
-	useMemo,
-	useId,
-	useState,
-	type FormEvent,
-	type ReactNode,
-} from "react";
+import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useMatches, useNavigate } from "@tanstack/react-router";
-import { useForm } from "@tanstack/react-form";
-import * as v from "valibot";
-import Reports from "./Reports";
-import TaskDetails from "./TaskDetails";
-import MemberAvatar from "./MemberAvatar";
 import {
+	type FormEvent,
+	type ReactNode,
+	useEffect,
+	useId,
+	useMemo,
+	useState,
+} from "react";
+import * as v from "valibot";
+import {
+	type Board,
 	bootstrapAdmin,
-	listRoles,
+	type Customer,
 	getSetupStatus,
 	getWorkspace,
 	listAgentKeys,
+	listRoles,
 	login,
+	type Member,
+	type Project,
 	revokeAgentKey,
 	rotateAgentKey,
+	type ScheduledPost,
 	saveBoard,
 	saveCustomer,
 	saveMember,
 	savePost,
+	saveProfile,
 	saveProject,
 	saveSettings,
-	saveProfile,
 	saveTask,
-	type Board,
-	type Customer,
 	type Task,
-	type Member,
-	type Project,
-	type ScheduledPost,
 	type Workspace,
 } from "./api";
+import Files, { ProfileUpload } from "./Files";
+import MemberAvatar from "./MemberAvatar";
+import Reports from "./Reports";
+import TaskDetails from "./TaskDetails";
 
 type Page =
 	| "overview"
 	| "team"
 	| "customers"
 	| "projects"
+	| "files"
 	| "reports"
 	| "roles"
 	| "social"
@@ -53,6 +55,7 @@ const pagePaths = {
 	team: "/team",
 	customers: "/customers",
 	projects: "/projects",
+	files: "/files",
 	reports: "/reports",
 	roles: "/roles",
 	social: "/social",
@@ -73,6 +76,7 @@ type RecordDraft = {
 	department: string;
 	bio: string;
 	avatarUrl: string;
+	avatarFileId: string;
 	role: string;
 	kind: string;
 	password: string;
@@ -95,6 +99,7 @@ const nav: { id: Page; label: string; icon: string }[] = [
 	{ id: "team", label: "Team", icon: "♧" },
 	{ id: "customers", label: "Customers", icon: "◎" },
 	{ id: "projects", label: "Projects", icon: "▤" },
+	{ id: "files", label: "Files", icon: "▱" },
 	{ id: "reports", label: "Reports", icon: "⌕" },
 	{ id: "roles", label: "Roles & permissions", icon: "♙" },
 	{ id: "social", label: "Social queue", icon: "◷" },
@@ -144,6 +149,7 @@ const title: Record<Page, string> = {
 	team: "Team",
 	customers: "Customers",
 	projects: "Projects",
+	files: "Files",
 	reports: "Reports",
 	roles: "Roles & permissions",
 	social: "Social queue",
@@ -251,6 +257,10 @@ export default function App() {
 		area === "overview" ||
 		area === "settings" ||
 		area === "roles" ||
+		(area === "files" &&
+			["projects:read", "reports:read"].some((permission) =>
+				data?.permissions.includes(permission),
+			)) ||
 		(area === "team" && me?.role === "admin") ||
 		!!data?.permissions.includes(`${area}:read`);
 	const navigate = (next: Page) => {
@@ -403,6 +413,7 @@ export default function App() {
 					department: draft.department,
 					bio: draft.bio,
 					avatarUrl: draft.avatarUrl.trim(),
+					avatarFileId: draft.avatarFileId,
 					role: draft.role,
 					kind: draft.kind || "human",
 					status: draft.status,
@@ -494,6 +505,7 @@ export default function App() {
 									<MemberAvatar
 										name={me.name}
 										avatarUrl={me.avatarUrl}
+										avatarFileId={me.avatarFileId}
 										className="size-9"
 									/>
 								</button>
@@ -529,6 +541,7 @@ export default function App() {
 									<MemberAvatar
 										name={me.name}
 										avatarUrl={me.avatarUrl}
+										avatarFileId={me.avatarFileId}
 										className="size-8"
 									/>
 									<span>
@@ -595,6 +608,7 @@ export default function App() {
 							/>
 						)}
 						{page === "roles" && <RolesPage />}
+						{page === "files" && <Files workspace={data} />}
 						{page === "customers" && (
 							<Customers
 								items={data.customers}
@@ -660,8 +674,8 @@ export default function App() {
 								theme={theme}
 								onTheme={updateTheme}
 								onSave={(value) => mutation.mutate({ kind: "settings", value })}
-								onSaveProfile={async (bio, avatarUrl) => {
-									await saveProfile(bio, avatarUrl);
+								onSaveProfile={async (bio, avatarUrl, avatarFileId) => {
+									await saveProfile(bio, avatarUrl, avatarFileId);
 									await queryClient.invalidateQueries({
 										queryKey: ["workspace"],
 									});
@@ -727,7 +741,11 @@ export default function App() {
 						</ul>
 						<div className="mt-auto rounded-box bg-base-200 p-3">
 							<div className="flex items-center gap-3">
-								<MemberAvatar name={me.name} avatarUrl={me.avatarUrl} />
+								<MemberAvatar
+									name={me.name}
+									avatarUrl={me.avatarUrl}
+									avatarFileId={me.avatarFileId}
+								/>
 								<div className="min-w-0 flex-1">
 									<b className="block truncate text-sm">{me.name}</b>
 									<span className="text-sm capitalize text-base-content/60">
@@ -1381,6 +1399,7 @@ function Team({
 										<MemberAvatar
 											name={person.name}
 											avatarUrl={person.avatarUrl}
+											avatarFileId={person.avatarFileId}
 										/>
 										<span>
 											<b className="block">{person.name}</b>
@@ -2634,7 +2653,11 @@ function Settings({
 	theme: string;
 	onTheme: (theme: string) => void;
 	onSave: (settings: Workspace["settings"]) => void;
-	onSaveProfile: (bio: string, avatarUrl: string) => Promise<void>;
+	onSaveProfile: (
+		bio: string,
+		avatarUrl: string,
+		avatarFileId: string,
+	) => Promise<void>;
 	onSecret: (secret: string) => void;
 }) {
 	const [workspaceName, setWorkspaceName] = useState(
@@ -2644,6 +2667,9 @@ function Settings({
 	const [keyError, setKeyError] = useState("");
 	const [bio, setBio] = useState(data.currentUser.bio);
 	const [avatarUrl, setAvatarUrl] = useState(data.currentUser.avatarUrl);
+	const [avatarFileId, setAvatarFileId] = useState(
+		data.currentUser.avatarFileId,
+	);
 	const [profileError, setProfileError] = useState("");
 	const [profileSaved, setProfileSaved] = useState(false);
 	const [profileBusy, setProfileBusy] = useState(false);
@@ -2652,7 +2678,12 @@ function Settings({
 	useEffect(() => {
 		setBio(data.currentUser.bio);
 		setAvatarUrl(data.currentUser.avatarUrl);
-	}, [data.currentUser.bio, data.currentUser.avatarUrl]);
+		setAvatarFileId(data.currentUser.avatarFileId);
+	}, [
+		data.currentUser.bio,
+		data.currentUser.avatarUrl,
+		data.currentUser.avatarFileId,
+	]);
 	const keysQuery = useQuery({
 		queryKey: ["agent-keys"],
 		queryFn: listAgentKeys,
@@ -2791,6 +2822,7 @@ function Settings({
 							<MemberAvatar
 								name={data.currentUser.name}
 								avatarUrl={data.currentUser.avatarUrl}
+								avatarFileId={data.currentUser.avatarFileId}
 								className="size-14"
 							/>
 							<h2 className="text-xl font-semibold">{data.currentUser.name}</h2>
@@ -2801,6 +2833,22 @@ function Settings({
 								{data.currentUser.jobTitle} · {data.currentUser.department}
 							</span>
 						</div>
+						<ProfileUpload
+							onUploaded={async (id) => {
+								await onSaveProfile(bio, "", id);
+								setAvatarFileId(id);
+								setAvatarUrl("");
+							}}
+							onRemove={
+								avatarFileId
+									? async () => {
+											await onSaveProfile(bio, "", "");
+											setAvatarFileId("");
+											setAvatarUrl("");
+										}
+									: undefined
+							}
+						/>
 						<form
 							className="mt-4 grid gap-3"
 							onSubmit={async (event) => {
@@ -2815,7 +2863,7 @@ function Settings({
 										throw new Error(
 											"Enter an HTTPS image URL without credentials (2048 bytes maximum).",
 										);
-									await onSaveProfile(bio, avatarUrl.trim());
+									await onSaveProfile(bio, avatarUrl.trim(), avatarFileId);
 									setProfileSaved(true);
 								} catch (error) {
 									setProfileError(
@@ -2841,14 +2889,18 @@ function Settings({
 									className="input input-bordered"
 									type="url"
 									value={avatarUrl}
-									onChange={(event) => setAvatarUrl(event.target.value)}
+									onChange={(event) => {
+										setAvatarUrl(event.target.value);
+										setAvatarFileId("");
+									}}
 									placeholder="https://example.com/photo.jpg"
 								/>
 								<span
 									id={`${fieldId}-profile-picture-help`}
 									className="label-text-alt mt-1"
 								>
-									Leave blank to remove your profile picture.
+									A hosted URL replaces your uploaded picture. Leave blank to
+									use initials.
 								</span>
 							</div>
 							<label className="form-control">
@@ -3075,6 +3127,7 @@ function RecordDialog({
 		department: readString("department"),
 		bio: readString("bio"),
 		avatarUrl: readString("avatarUrl"),
+		avatarFileId: readString("avatarFileId"),
 		role: readString("role", "member"),
 		kind: readString("kind", "human"),
 		password: "",
@@ -3228,7 +3281,11 @@ function RecordDialog({
 		post: "post",
 	};
 	function update(name: TextField, value: string) {
-		setValues((current) => ({ ...current, [name]: value }));
+		setValues((current) => ({
+			...current,
+			[name]: value,
+			...(name === "avatarUrl" ? { avatarFileId: "" } : {}),
+		}));
 	}
 	function submit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();

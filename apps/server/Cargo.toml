@@ -17,6 +17,8 @@ jsonwebtoken = { version = "10.4", features = ["rust_crypto"] }
 katha = "=0.2.6"
 kathputli = "=0.2.1"
 rand = "0.8"
+rust-s3 = { version = "0.37.2", default-features = false, features = ["tokio-rustls-tls"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 fs2 = "0.4.3"
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 rmcp = { version = "3.3.0", default-features = false, features = ["server", "transport-streamable-http-server"] }

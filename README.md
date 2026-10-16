@@ -51,7 +51,13 @@ The durable adapter uses rusqlite to put event writes and private credential tab
 
 ## Team profiles
 
-Human and AI members have an optional plain-text bio and HTTPS profile picture URL. Admins edit them in Team; every active user can edit their own bio and picture in Settings, including Viewers. Self-profile editing cannot change roles, account status or credentials. Initials remain the fallback when an image is missing or fails to load. This first version uses hosted image URLs, not uploads; the server never fetches those URLs. Profile changes use the same event/actor/SQLite pipeline as other records. See [profiles](docs/profiles.md).
+Human and AI members have an optional plain-text bio and HTTPS profile picture URL. Admins edit them in Team; every active user can edit their own bio and picture in Settings, including Viewers. Self-profile editing cannot change roles, account status or credentials. Initials remain the fallback when an image is missing or fails to load. With optional S3-compatible file storage configured, members can upload a private profile picture; hosted HTTPS URLs remain supported without a server-side fetch. Uploaded pictures are validated and normalized by the server. Profile changes use the same event/actor/SQLite pipeline as other records. See [profiles](docs/profiles.md).
+
+## Files
+
+The Files page holds project assets and research documents, optionally linked to a project or report. Uploads and downloads pass through the authenticated server; humans and AI use the same live role checks. Files are limited to 10 MiB, and profile pictures to 2 MiB. File metadata and soft deletion follow the event/actor/SQLite pipeline, while bytes live in a private S3-compatible bucket. MCP can list files, read bounded text content and upload text; binary transfers use authenticated HTTP. Storage credentials stay on the server.
+
+File storage is optional. Configure `OFFICE_FILES_BUCKET`, a dedicated `OFFICE_FILES_PREFIX`, and the AWS-compatible runtime settings described in [files and profile uploads](docs/files.md). Keep uploads separate from the Litestream backup prefix: the seven-day database recovery window must not expire uploaded files. Files are soft deleted; object cleanup and personal-data erasure remain separate unfinished operations.
 
 ## Research reports
 
@@ -75,7 +81,7 @@ Connect an MCP client such as Hermes to `http://127.0.0.1:8080/mcp` using Stream
 
 The database is the source of truth for the event log, password hashes, AI key digests, setup state and JWT signing key. The signing key is private to the database file, so protect and back up the database as a unit. No provider secrets are stored yet. Durable storage does not provide data retention controls, export, rate limiting, audited provider operations or a verified backup restore.
 
-See [storage and recovery](docs/storage.md) for the database lifecycle and opt-in Litestream setup. This source revision bundles pinned Litestream 0.5.17; replication is disabled unless explicitly enabled. The previously published v0.4.0 image predates this integration. Live AWS upload and restore have not been exercised, and this is not high availability. Restore and validate a copy before relying on recovery. Never run multiple server processes against the same database.
+See [storage and recovery](docs/storage.md) for the database lifecycle and opt-in Litestream setup. This source revision bundles pinned Litestream 0.5.17; replication is disabled unless explicitly enabled. The previously published v0.4.0 image predates this integration. An isolated S3-compatible upload/restore drill has passed with SQLite integrity verification; deployment migration is still a separate operator step. This is not high availability. Restore and validate a copy before relying on recovery. Never run multiple server processes against the same database.
 
 ## Hosting and releases
 

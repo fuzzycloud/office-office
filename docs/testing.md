@@ -15,9 +15,9 @@ Run the suite from the repository root:
 just test-e2e
 ```
 
-`pnpm test:e2e` invokes the same Playwright suite. Its global setup builds the React UI and Rust server once. Each test starts that real server with a fresh SQLite database in a temporary directory. No test uses the development database, resets an existing office, or relies on another test running first. Setup and fixture records enter through normal RPC and engine commands; browser requests are not mocked. A test can stop and restart its own server against the same database to verify replay and session persistence.
+`pnpm test:e2e` invokes the same Playwright suite. Its global setup builds the React UI and Rust server once. Each test starts that real server with a fresh SQLite database in a temporary directory. No test uses the development database, resets an existing office, or relies on another test running first. Setup and fixture records enter through normal RPC and engine commands; most browser scenarios use real RPCs throughout. File UI contract tests explicitly intercept file metadata/byte transfers without claiming to verify S3; bootstrap, sessions and role setup still use the real server. A test can stop and restart its own server against the same database to verify replay and session persistence.
 
-The suite covers first-admin registration, optional starter data, team onboarding, customers, projects and boards, task comments and activity, research reports, social drafts, themes, permissions and AI key revocation. Additional scenarios cover a rejected browser session, recovery from one failed RPC, draft preservation without duplicate writes, author-versus-peer permissions, board/project isolation, mobile navigation and keyboard focus restoration. Failure simulations abort a request before delivery; they do not fabricate successful responses or claim to test an uncertain response after a committed write. HTTP tests exercise the real ConnectRPC and MCP endpoints. Test agent keys and logins belong only to disposable test offices. No AWS or social provider credentials are needed, and no test publishes posts or contacts external providers.
+The suite covers first-admin registration, optional starter data, team onboarding, customers, projects and boards, task comments and activity, research reports, social drafts, themes, permissions and AI key revocation. Additional scenarios cover a rejected browser session, recovery from one failed RPC, draft preservation without duplicate writes, author-versus-peer permissions, board/project isolation, mobile navigation and keyboard focus restoration. Failure simulations abort a request before delivery; they do not fabricate successful responses or claim to test an uncertain response after a committed write. HTTP tests exercise the real ConnectRPC and MCP endpoints. Test agent keys and logins belong only to disposable test offices. No AWS or social provider credentials are needed for the automated suite, and no test publishes posts or contacts external providers.
 
 Run a focused file or inspect a failure:
 
@@ -72,3 +72,19 @@ This checkpoint is committed for continued development; it has not been released
 `just test-runtime` runs ShellCheck and 11 Bats cases for the Docker entrypoint, without AWS or a running application. CI runs the same checks. Cases cover disabled mode, configuration validation, existing databases, missing-database restore, explicit new-office initialization, restore failures, empty restore output, stale SQLite sidecars, no-clobber promotion and command forwarding. ShellCheck 0.11.0 and Bats 1.14.0 passed locally.
 
 The `runtime-base` Docker target built successfully and executed pinned Litestream 0.5.17 as the non-root application user. A separate real local Docker drill used the built debug server and disposable data/replica volumes: after an initial replica existed, a later write was committed, the supervisor was gracefully stopped, and a fresh container restored the database. Customer records, password login, the original JWT signing state and AI-key authentication survived; `PRAGMA integrity_check` returned `ok`. This verifies the real Litestream file backend and app replay, not AWS credentials, bucket policy or live S3 recovery. The hosted office was not touched.
+
+## Private files and S3 verification — 2026-10-16
+
+File engine tests cover role and owner checks, image validation/normalization, metadata replay, revision-checked soft deletion with retained object bytes, failed object writes, digest corruption and raw AI-key HTTP authentication/revocation. MCP tests exercise text upload/read and stale-delete rejection. Browser file tests use explicit test-only file transport responses to verify upload/download controls, downloaded bytes, profile pictures, Viewer behavior, route refresh and unconfigured storage; they do not prove live object-store behavior.
+
+Separate isolated checks against an S3-compatible bucket verified object upload/download and cleanup, plus real bundled Litestream replication and a fresh Docker-volume restore with SQLite integrity/content checks using the seven-day configuration. Temporary replicas and objects were removed. These checks did not touch the hosted office. A complete hosted-office migration and combined database-plus-attachment recovery remain deployment checks.
+
+The completed file-storage change passed 40 Rust tests (six existing ignored cases),
+Clippy with warnings denied, schema regeneration, frontend TypeScript/build,
+container startup checks and browser-source Biome. The full browser run passed
+29 of 30 scenarios; the new Files scenario found duplicate page headings. After
+fixing the heading, all three file scenarios passed on a focused rerun. The real
+S3 application drill additionally verified HTTP/MCP upload and text read,
+anonymous-access denial, Viewer restrictions, normalized avatars, SQLite restart
+replay, soft deletion and key revocation against a disposable local office. Only
+its temporary object prefix was cleaned up; the hosted office was untouched.

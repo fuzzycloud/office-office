@@ -42,6 +42,7 @@ const sectionPaths = new Set([
 	"/customers",
 	"/projects",
 	"/reports",
+	"/files",
 	"/roles",
 	"/social",
 	"/settings",
@@ -85,6 +86,11 @@ const projectsRoute = createRoute({
 			["report"],
 		]),
 });
+const filesRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "files",
+	beforeLoad: ({ context }) => refreshOnEntry(context.queryClient, [["files"]]),
+});
 const reportsRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "reports",
@@ -114,6 +120,7 @@ const routeTree = rootRoute.addChildren([
 	customersRoute,
 	projectsRoute,
 	reportsRoute,
+	filesRoute,
 	rolesRoute,
 	socialRoute,
 	settingsRoute,

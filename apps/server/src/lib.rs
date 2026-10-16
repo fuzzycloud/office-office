@@ -25,6 +25,7 @@ pub mod proto {
     connectrpc::include_generated!();
 }
 mod demo;
+pub mod files;
 mod storage;
 use proto::office::v1::*;
 
@@ -241,6 +242,7 @@ struct State {
     comments: Vec<TaskComment>,
     task_activity: Vec<TaskActivity>,
     reports: Vec<Report>,
+    files: Vec<FileRecord>,
     agent_keys: Vec<AgentKey>,
     connections: Vec<SocialConnection>,
     posts: Vec<ScheduledPost>,
@@ -263,6 +265,7 @@ enum Event {
     TaskComment(TaskComment),
     TaskActivity(TaskActivity),
     Report(Report),
+    File(FileRecord),
     AgentKey(AgentKey),
     Connection(SocialConnection),
     Post(ScheduledPost),
@@ -279,6 +282,7 @@ enum Edit {
     Task(Task),
     TaskComment(TaskComment),
     Report(Report),
+    File(FileRecord),
     AgentKey(AgentKey),
     Connection(SocialConnection),
     Post(ScheduledPost),
@@ -306,6 +310,7 @@ impl Aggregate<State, Edit, Event> for Projection {
             Edit::Task(v) => Event::Task(v.clone()),
             Edit::TaskComment(v) => Event::TaskComment(v.clone()),
             Edit::Report(v) => Event::Report(v.clone()),
+            Edit::File(v) => Event::File(v.clone()),
             Edit::AgentKey(v) => Event::AgentKey(v.clone()),
             Edit::Connection(v) => Event::Connection(v.clone()),
             Edit::Post(v) => Event::Post(v.clone()),
@@ -340,6 +345,7 @@ impl Aggregate<State, Edit, Event> for Projection {
             }
             Event::TaskActivity(v) => state.task_activity.insert(0, v.clone()),
             Event::Report(v) => upsert(&mut state.reports, v.clone(), |x| &x.id),
+            Event::File(v) => upsert(&mut state.files, v.clone(), |x| &x.id),
             Event::AgentKey(v) => upsert(&mut state.agent_keys, v.clone(), |x| &x.id),
             Event::Connection(v) => upsert(&mut state.connections, v.clone(), |x| &x.id),
             Event::Post(v) => upsert(&mut state.posts, v.clone(), |x| &x.id),
@@ -361,6 +367,8 @@ fn upsert<T>(items: &mut Vec<T>, value: T, key: impl Fn(&T) -> &String) {
 pub enum EngineCommand {
     SaveMember(SaveMemberRequest),
     SaveProfile(SaveProfileRequest),
+    RegisterFile(FileRecord),
+    DeleteFile(DeleteFileRequest),
     SaveCustomer(SaveCustomerRequest),
     SaveProject(SaveProjectRequest),
     SaveBoard(SaveBoardRequest),
@@ -377,6 +385,7 @@ pub enum EngineCommand {
 pub enum EngineOutcome {
     Member(SaveMemberResponse),
     Profile(SaveProfileResponse),
+    File(FileRecord),
     Customer(SaveCustomerResponse),
     Project(SaveProjectResponse),
     Board(SaveBoardResponse),
@@ -390,6 +399,22 @@ pub enum EngineOutcome {
 }
 
 enum Command {
+    ListFiles(
+        String,
+        ListFilesRequest,
+        oneshot::Sender<Result<ListFilesResponse, ConnectError>>,
+    ),
+    GetFile(
+        String,
+        String,
+        oneshot::Sender<Result<FileRecord, ConnectError>>,
+    ),
+    AuthorizeFile(
+        String,
+        String,
+        String,
+        oneshot::Sender<Result<Member, ConnectError>>,
+    ),
     TaskDiscussion(
         String,
         String,
@@ -539,7 +564,8 @@ impl WorkspaceActor {
                 "invalid member access or status"
             );
             ensure!(
-                validate_profile(&member.bio, &member.avatar_url).is_ok(),
+                validate_profile(&member.bio, &member.avatar_url).is_ok()
+                    && self.validate_member_avatar(member).is_ok(),
                 "invalid member profile"
             );
             ensure!(
@@ -811,6 +837,7 @@ impl WorkspaceActor {
                 Event::TaskComment(_) => "task_comment_saved",
                 Event::TaskActivity(_) => "task_activity_recorded",
                 Event::Report(_) => "report_saved",
+                Event::File(_) => "file_saved",
                 Event::AgentKey(_) => "agent_key_saved",
                 Event::Connection(_) => "connection_saved",
                 Event::Post(_) => "post_saved",
@@ -1319,6 +1346,7 @@ impl WorkspaceActor {
         if m.kind == "human" && !self.passwords.contains_key(&m.id) {
             m.status = "pending".into();
         }
+        self.validate_member_avatar(&m)?;
         self.commit(Edit::Member(m.clone()), &actor.name, "Team member saved");
         let (agent_key, secret) = if new_agent {
             let (key, secret) = self.issue_agent_key(&actor, &m, &m.name, 90);
@@ -1342,7 +1370,9 @@ impl WorkspaceActor {
         validate_profile(&request.bio, &request.avatar_url)?;
         let mut member = actor.member.clone();
         member.bio = request.bio;
+        self.validate_avatar_file(&actor, &request.avatar_file_id, &request.avatar_url)?;
         member.avatar_url = request.avatar_url;
+        member.avatar_file_id = request.avatar_file_id;
         self.commit(
             Edit::Member(member.clone()),
             &actor.name,
@@ -2045,6 +2075,12 @@ impl WorkspaceActor {
     ) -> Result<EngineOutcome, ConnectError> {
         let token = token.to_owned();
         match command {
+            EngineCommand::RegisterFile(file) => {
+                self.register_file(token, file).map(EngineOutcome::File)
+            }
+            EngineCommand::DeleteFile(request) => self
+                .delete_file_record(token, request)
+                .map(EngineOutcome::File),
             EngineCommand::SaveMember(v) => {
                 self.save_member(token, v).await.map(EngineOutcome::Member)
             }
@@ -2239,6 +2275,15 @@ impl Actor for WorkspaceActor {
                 });
                 let _ = tx.send(self.persist(before, result).await);
             }
+            Command::ListFiles(token, request, tx) => {
+                let _ = tx.send(self.list_files_as(&token, request));
+            }
+            Command::GetFile(token, id, tx) => {
+                let _ = tx.send(self.get_file_as(&token, &id));
+            }
+            Command::AuthorizeFile(token, module, record, tx) => {
+                let _ = tx.send(self.authorize_file(&token, &module, &record, true));
+            }
             Command::ListReports(t, v, tx) => {
                 let result = self
                     .user(&t)
@@ -2321,6 +2366,7 @@ impl Actor for WorkspaceActor {
 pub struct OfficePreviewService {
     actor: ActorRef<Command>,
     closed: AtomicBool,
+    file_storage: Option<Arc<dyn files::BlobStore>>,
 }
 impl Default for OfficePreviewService {
     fn default() -> Self {
@@ -2332,6 +2378,7 @@ impl OfficePreviewService {
         Self {
             actor: spawn(WorkspaceActor::new(), 128),
             closed: AtomicBool::new(false),
+            file_storage: None,
         }
     }
     pub async fn open(path: impl AsRef<Path>) -> anyhow::Result<Self> {
@@ -2403,6 +2450,7 @@ impl OfficePreviewService {
         Ok(Self {
             actor: spawn(actor, 128),
             closed: AtomicBool::new(false),
+            file_storage: None,
         })
     }
     pub async fn close(&self) -> anyhow::Result<()> {
@@ -2724,6 +2772,35 @@ impl OfficeService for OfficePreviewService {
             unreachable!()
         };
         Response::ok(result)
+    }
+    async fn list_files<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, ListFilesRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<ListFilesResponse> + Send + use<'a>> {
+        Response::ok(
+            self.list_files(&bearer(&ctx)?, req.to_owned_message())
+                .await?,
+        )
+    }
+    async fn delete_file<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, DeleteFileRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<DeleteFileResponse> + Send + use<'a>> {
+        let EngineOutcome::File(file) = self
+            .execute(
+                &bearer(&ctx)?,
+                EngineCommand::DeleteFile(req.to_owned_message()),
+            )
+            .await?
+        else {
+            unreachable!()
+        };
+        Response::ok(DeleteFileResponse {
+            file: Some(file).into(),
+            ..Default::default()
+        })
     }
     async fn list_reports<'a>(
         &'a self,
