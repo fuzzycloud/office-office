@@ -4,7 +4,7 @@ Status: shared human/AI users, fixed roles, automatic AI keys and key rotation a
 
 ## Current identity and permission contract
 
-Humans and AI are users with stable member IDs, names, roles and active/disabled state. Humans authenticate with email/password; AI users authenticate with a key bound to exactly one AI member. Both obtain short-lived JWTs and use the same server authorization through UI, RPC, MCP and engine commands. Authenticated identity determines authorship; the caller cannot supply another author's name or ID. Key issuance and assignment are separate from authorship.
+Humans and AI are users with stable member IDs, names, roles and active/disabled state. Humans authenticate with email/password; AI users authenticate with a key bound to exactly one AI member. Human sessions use seven-day JWTs (HttpOnly cookies in the browser); AI key exchanges issue short-lived JWTs. Both use the same server authorization through UI, RPC, MCP and engine commands. Authenticated identity determines authorship; the caller cannot supply another author's name or ID. Key issuance and assignment are separate from authorship.
 
 [Roles and permissions](roles.md) defines the fixed Admin, Manager, Member and Viewer matrix. There are no editable member permission lists or key scopes. `ListRoles` exposes the policy and `GetWorkspace.permissions` exposes the caller's effective permissions. Role changes and deactivation take effect on subsequent operations. Project-level authorization is not implemented; every role can read workspace records. Project filters and consistency checks are not client isolation.
 

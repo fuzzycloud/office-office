@@ -20,8 +20,10 @@ import {
 	listAgentKeys,
 	listRoles,
 	login,
+	logout,
 	type Member,
 	type Project,
+	recoverBrowserSession,
 	revokeAgentKey,
 	rotateAgentKey,
 	type ScheduledPost,
@@ -33,6 +35,8 @@ import {
 	saveProject,
 	saveSettings,
 	saveTask,
+	sessionChangedEvent,
+	sessionExpiredMessage,
 	type Task,
 	type Workspace,
 } from "./api";
@@ -201,9 +205,19 @@ export default function App() {
 	});
 	const page = pathPages[matchedPath ?? ""] ?? "overview";
 	const routerNavigate = useNavigate();
-	const [sessionToken, setSessionToken] = useState(
-		() => sessionStorage.getItem(tokenKey) || "",
+	const [sessionToken, setSessionToken] = useState(() => {
+		const stored = sessionStorage.getItem(tokenKey) || "";
+		return stored.startsWith("cookie:") ? "" : stored;
+	});
+	const [checkingSession, setCheckingSession] = useState(
+		() =>
+			!sessionStorage.getItem(tokenKey) ||
+			!!sessionStorage.getItem(tokenKey)?.startsWith("cookie:"),
 	);
+	const [sessionNotice, setSessionNotice] = useState("");
+	const [recoveryError, setRecoveryError] = useState("");
+	const [recoveryAttempt, setRecoveryAttempt] = useState(0);
+	const [signOutError, setSignOutError] = useState("");
 	const [navigationOpen, setNavigationOpen] = useState(false);
 	const [theme, setTheme] = useState(initialTheme);
 	const [dialog, setDialog] = useState<
@@ -212,6 +226,60 @@ export default function App() {
 	const [editing, setEditing] = useState<Record<string, unknown> | null>(null);
 	const [secretToReveal, setSecretToReveal] = useState("");
 	const queryClient = useQueryClient();
+	useEffect(() => {
+		let active = true;
+		let recoveryVersion = 0;
+		const recover = async () => {
+			const version = ++recoveryVersion;
+			setCheckingSession(true);
+			setRecoveryError("");
+			try {
+				const hadCookieSession = sessionStorage
+					.getItem(tokenKey)
+					?.startsWith("cookie:");
+				const token = await recoverBrowserSession();
+				if (active && version === recoveryVersion) {
+					setSessionToken(token);
+					if (!token && hadCookieSession)
+						setSessionNotice(sessionExpiredMessage);
+				}
+			} catch (error) {
+				if (active && version === recoveryVersion)
+					setRecoveryError(
+						error instanceof Error
+							? error.message
+							: "Could not check your session.",
+					);
+			} finally {
+				if (active && version === recoveryVersion) setCheckingSession(false);
+			}
+		};
+		const changed = (event: Event) => {
+			recoveryVersion++;
+			setSessionToken("");
+			setSecretToReveal("");
+			void queryClient.cancelQueries();
+			queryClient.clear();
+			if ((event as CustomEvent<string>).detail === "expired") {
+				setCheckingSession(false);
+				setSessionNotice(sessionExpiredMessage);
+			} else {
+				setSessionNotice(
+					"Your account session changed in another tab. Sign in again if needed.",
+				);
+				setDialog(null);
+				setEditing(null);
+				void recover();
+			}
+		};
+		window.addEventListener(sessionChangedEvent, changed);
+		const stored = sessionStorage.getItem(tokenKey);
+		if (!stored || stored.startsWith("cookie:")) void recover();
+		return () => {
+			active = false;
+			window.removeEventListener(sessionChangedEvent, changed);
+		};
+	}, [queryClient, recoveryAttempt]);
 	const setup = useQuery({
 		queryKey: ["setup"],
 		queryFn: getSetupStatus,
@@ -220,7 +288,7 @@ export default function App() {
 	const workspace = useQuery({
 		queryKey: ["workspace"],
 		queryFn: getWorkspace,
-		enabled: !!sessionToken,
+		enabled: !!sessionToken && !checkingSession,
 		retry: false,
 	});
 	const sessionMutation = useMutation({
@@ -240,9 +308,12 @@ export default function App() {
 				? login(payload.email, payload.password)
 				: bootstrapAdmin(payload),
 		onSuccess: (session) => {
-			sessionStorage.setItem(tokenKey, session.token);
-			setSessionToken(session.token);
-			queryClient.invalidateQueries();
+			setSignOutError("");
+			setSessionNotice("");
+			setRecoveryError("");
+			setCheckingSession(false);
+			queryClient.clear();
+			setSessionToken(session.sessionId);
 		},
 	});
 	const data = workspace.data;
@@ -284,14 +355,28 @@ export default function App() {
 		localStorage.setItem("office-office-theme", value);
 		document.documentElement.dataset.theme = value;
 	}
-	function signOut() {
+	async function signOut() {
+		const token = sessionStorage.getItem(tokenKey);
+		setSignOutError("");
+		try {
+			await logout();
+		} catch (error) {
+			if (token !== sessionStorage.getItem(tokenKey)) return;
+			setSignOutError(
+				error instanceof Error
+					? error.message
+					: "Could not sign out. Try again.",
+			);
+			return;
+		}
 		setNavigationOpen(false);
-		sessionStorage.removeItem(tokenKey);
 		setSessionToken("");
+		setSessionNotice("");
 		void routerNavigate({ to: "/" });
 		setDialog(null);
 		setEditing(null);
 		setSecretToReveal("");
+		void queryClient.cancelQueries();
 		queryClient.clear();
 	}
 	function edit(kind: NonNullable<typeof dialog>, item?: object) {
@@ -331,7 +416,7 @@ export default function App() {
 		},
 	});
 
-	if (setup.isPending)
+	if (setup.isPending || checkingSession)
 		return (
 			<div className="min-h-screen grid place-items-center">
 				<span
@@ -339,6 +424,13 @@ export default function App() {
 					aria-label="Checking workspace"
 				/>
 			</div>
+		);
+	if (recoveryError)
+		return (
+			<FullError
+				message={recoveryError}
+				retry={() => setRecoveryAttempt((value) => value + 1)}
+			/>
 		);
 	if (setup.isError)
 		return (
@@ -354,7 +446,7 @@ export default function App() {
 				demoMode={setup.data.demoMode}
 				persistentStorage={setup.data.persistentStorage}
 				busy={sessionMutation.isPending}
-				error={sessionMutation.error?.message}
+				error={sessionMutation.error?.message || sessionNotice}
 				onSubmit={(value) =>
 					sessionMutation.mutate({
 						mode: "setup",
@@ -374,7 +466,7 @@ export default function App() {
 				demoMode={setup.data?.demoMode ?? false}
 				persistentStorage={setup.data?.persistentStorage ?? false}
 				busy={sessionMutation.isPending}
-				error={sessionMutation.error?.message}
+				error={sessionMutation.error?.message || sessionNotice}
 				onSubmit={(value) =>
 					sessionMutation.mutate({
 						mode: "login",
@@ -394,7 +486,7 @@ export default function App() {
 	if (workspace.isError)
 		return (
 			<FullError
-				message={workspace.error.message}
+				message={signOutError || workspace.error.message}
 				retry={() => void workspace.refetch()}
 				signOut={signOut}
 			/>
@@ -542,6 +634,11 @@ export default function App() {
 						</div>
 					</header>
 					<main className="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-7 lg:p-9">
+						{signOutError && (
+							<div role="alert" className="alert alert-error mb-4">
+								{signOutError}
+							</div>
+						)}
 						<div className="mb-6 flex flex-wrap items-end justify-between gap-4">
 							<div>
 								<p className="text-sm font-medium text-primary">

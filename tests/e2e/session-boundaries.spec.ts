@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { browserRpc, expect, test } from "./fixtures";
 
 test("rotated keys are revealed only to the session that requested them", async ({
 	page,
@@ -110,11 +110,7 @@ test("rotated keys are revealed only to the session that requested them", async 
 	await expect(page.getByText("Your profile", { exact: true })).toBeVisible();
 	await expect(reveal).toHaveCount(0);
 	await expect(page.getByText(delayedSecret, { exact: true })).toHaveCount(0);
-	const viewerToken = await page.evaluate(() =>
-		sessionStorage.getItem("office-office-session"),
-	);
-	if (!viewerToken) throw new Error("Viewer session was lost");
-	const workspace = await office.rpc("GetWorkspace", {}, viewerToken);
+	const workspace = await browserRpc(page, office.url, "GetWorkspace");
 	expect(workspace.ok()).toBeTruthy();
 	expect((await workspace.json()).currentUser.role).toBe("viewer");
 });
@@ -200,12 +196,7 @@ test("an old unauthorized response cannot sign out a newer session", async ({
 	);
 	await page.getByRole("button", { name: "Settings", exact: true }).click();
 	await expect(page.getByText("Your profile", { exact: true })).toBeVisible();
-	const viewerToken = await page.evaluate(() =>
-		sessionStorage.getItem("office-office-session"),
-	);
-	if (!viewerToken)
-		throw new Error("The new session was cleared by an older response");
-	const workspace = await office.rpc("GetWorkspace", {}, viewerToken);
+	const workspace = await browserRpc(page, office.url, "GetWorkspace");
 	expect(workspace.ok()).toBeTruthy();
 	expect((await workspace.json()).currentUser.role).toBe("viewer");
 });

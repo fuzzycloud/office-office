@@ -5,7 +5,12 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { type APIResponse, test as base, expect } from "@playwright/test";
+import {
+	type APIResponse,
+	test as base,
+	expect,
+	type Page,
+} from "@playwright/test";
 import { repositoryRoot, serverBinary } from "./global-setup";
 
 export type BootstrapResult = {
@@ -179,3 +184,19 @@ export const test = base.extend<{ office: Office }>({
 });
 
 export { expect };
+
+// Use the browser's cookie jar without extracting an HttpOnly credential.
+export function browserRpc(
+	page: Page,
+	url: string,
+	method: string,
+	body: unknown = {},
+) {
+	return page.request.post(`${url}/rpc/office.v1.OfficeService/${method}`, {
+		data: body,
+		headers: {
+			"Connect-Protocol-Version": "1",
+			"X-Office-CSRF": "1",
+		},
+	});
+}

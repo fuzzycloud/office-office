@@ -24,6 +24,7 @@ use uuid::Uuid;
 pub mod proto {
     connectrpc::include_generated!();
 }
+pub mod browser_session;
 mod demo;
 pub mod files;
 mod notifications;
@@ -1049,7 +1050,9 @@ impl WorkspaceActor {
         member: &Member,
         credential: Option<&AgentKey>,
     ) -> Result<(String, i64), ConnectError> {
-        let expiry = credential.map_or(now() + 900, |key| (now() + 900).min(key.expires_at));
+        let expiry = credential.map_or(now() + browser_session::SESSION_SECONDS, |key| {
+            (now() + 900).min(key.expires_at)
+        });
         let claims = Claims {
             sub: member.id.clone(),
             iss: ISSUER.into(),
@@ -2998,6 +3001,25 @@ impl OfficeService for OfficePreviewService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn human_sessions_last_seven_days_and_ai_sessions_fifteen_minutes() {
+        let actor = WorkspaceActor::new();
+        let member = Member {
+            id: id(),
+            ..Default::default()
+        };
+        let started = now();
+        let (_, human_expiry) = actor.claims(&member, None).unwrap();
+        assert!((started + 604_800..=now() + 604_800).contains(&human_expiry));
+        let key = AgentKey {
+            id: id(),
+            expires_at: now() + 86_400,
+            ..Default::default()
+        };
+        let (_, ai_expiry) = actor.claims(&member, Some(&key)).unwrap();
+        assert!((started + 900..=now() + 900).contains(&ai_expiry));
+    }
 
     async fn initialized_durable_database(path: &Path) {
         let (storage, loaded) = storage::Storage::open(path).unwrap();
