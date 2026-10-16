@@ -19,6 +19,10 @@ service OfficeService {
   rpc ListTaskDiscussion(ListTaskDiscussionRequest) returns (ListTaskDiscussionResponse);
   rpc SaveTaskComment(SaveTaskCommentRequest) returns (SaveTaskCommentResponse);
   rpc DeleteTaskComment(DeleteTaskCommentRequest) returns (DeleteTaskCommentResponse);
+  rpc CreateNotification(CreateNotificationRequest) returns (CreateNotificationResponse);
+  rpc ListNotifications(ListNotificationsRequest) returns (ListNotificationsResponse);
+  rpc PollNotifications(PollNotificationsRequest) returns (PollNotificationsResponse);
+  rpc UpdateNotification(UpdateNotificationRequest) returns (UpdateNotificationResponse);
   rpc ListReports(ListReportsRequest) returns (ListReportsResponse);
   rpc GetReport(GetReportRequest) returns (GetReportResponse);
   rpc SaveReport(SaveReportRequest) returns (SaveReportResponse);
@@ -251,3 +255,43 @@ message ListFilesRequest { string module = 1; string record_id = 2; }
 message ListFilesResponse { repeated FileRecord files = 1; bool storage_configured = 2; }
 message DeleteFileRequest { string id = 1; uint32 expected_revision = 2; }
 message DeleteFileResponse { FileRecord file = 1; }
+
+// Personal attention records; status never changes a linked task's status.
+message Notification {
+  string id = 1;
+  string recipient_id = 2;
+  string sender_id = 3;
+  string title = 4;
+  string body = 5;
+  string kind = 6;
+  string source_kind = 7;
+  string source_id = 8;
+  string status = 9;
+  int64 created_at = 10;
+  int64 updated_at = 11;
+  int64 read_at = 12;
+  uint32 revision = 13;
+  uint64 sequence = 14;
+  string request_id = 15;
+  string claim_id = 16;
+  string updated_by = 17;
+  string note = 18;
+  uint64 created_sequence = 19;
+}
+message CreateNotificationRequest {
+  string request_id = 1;
+  string title = 2;
+  string body = 3;
+  string kind = 4;
+  repeated string recipient_ids = 5;
+  string source_kind = 6;
+  string source_id = 7;
+}
+message CreateNotificationResponse { repeated Notification notifications = 1; }
+message ListNotificationsRequest { string scope = 1; string status = 2; uint32 page_size = 3; uint32 offset = 4; }
+message ListNotificationsResponse { repeated Notification notifications = 1; uint32 total_count = 2; uint32 next_offset = 3; }
+// Decimal cursor. Poll returns immutable change snapshots and never marks read.
+message PollNotificationsRequest { string after_cursor = 1; uint32 page_size = 2; }
+message PollNotificationsResponse { repeated Notification notifications = 1; string next_cursor = 2; bool has_more = 3; }
+message UpdateNotificationRequest { string id = 1; uint32 expected_revision = 2; string action = 3; string claim_id = 4; string note = 5; }
+message UpdateNotificationResponse { Notification notification = 1; }

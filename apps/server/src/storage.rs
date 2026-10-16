@@ -37,6 +37,7 @@ fn decode<T: DeserializeOwned>(json: &str) -> Result<T> {
 }
 fn event_parts(event: &Event) -> Result<(&'static str, String)> {
     Ok(match event {
+        Event::Notification(v) => ("notification", encode(v)?),
         Event::DemoInitialized(v) => ("demo_initialized", encode(v)?),
         Event::Member(v) => ("member", encode(v)?),
         Event::Customer(v) => ("customer", encode(v)?),
@@ -56,6 +57,7 @@ fn event_parts(event: &Event) -> Result<(&'static str, String)> {
 }
 fn parse_event(kind: &str, json: &str) -> Result<Event> {
     let event = match kind {
+        "notification" => Event::Notification(decode(json)?),
         "demo_initialized" => Event::DemoInitialized(decode(json)?),
         "member" => Event::Member(decode(json)?),
         "customer" => Event::Customer(decode(json)?),
@@ -74,6 +76,7 @@ fn parse_event(kind: &str, json: &str) -> Result<Event> {
         _ => bail!("unsupported event type: {kind}"),
     };
     let valid = match &event {
+        Event::Notification(v) => super::notifications::valid_notification(v),
         Event::DemoInitialized(v) => v.scenario == "office-preview" && v.version == 1,
         Event::Member(v) => {
             !v.id.is_empty() && !v.name.is_empty() && (v.kind == "agent" || !v.email.is_empty())

@@ -39,6 +39,7 @@ function NotFound() {
 const sectionPaths = new Set([
 	"/",
 	"/team",
+	"/notifications",
 	"/customers",
 	"/projects",
 	"/reports",
@@ -65,6 +66,12 @@ const overviewRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/",
 	beforeLoad: ({ context }) => refreshOnEntry(context.queryClient),
+});
+const notificationsRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "notifications",
+	beforeLoad: ({ context }) =>
+		refreshOnEntry(context.queryClient, [["notifications"]]),
 });
 const teamRoute = createRoute({
 	getParentRoute: () => rootRoute,
@@ -117,6 +124,7 @@ const settingsRoute = createRoute({
 const routeTree = rootRoute.addChildren([
 	overviewRoute,
 	teamRoute,
+	notificationsRoute,
 	customersRoute,
 	projectsRoute,
 	reportsRoute,

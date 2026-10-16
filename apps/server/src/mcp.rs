@@ -153,6 +153,10 @@ fn tools() -> Vec<Tool> {
         .idempotent(false)
         .open_world(false);
     vec![
+        Tool::new("office_create_notification", "Send a durable notice or explicit response/work/review request to active member IDs. Requires Member, Manager or Admin role. Use a stable request_id for retry safety. No agent is invoked; a local watcher handles explicit requests. Source references are validated and original records are unchanged.", schema(json!({"type":"object","properties":{"request_id":{"type":"string","minLength":1,"maxLength":128},"title":{"type":"string","minLength":1,"maxLength":200},"body":{"type":"string","maxLength":10000},"kind":{"type":"string","enum":["notice","response_request","work_request","review_request","blocker"],"default":"notice"},"recipient_ids":{"type":"array","items":{"type":"string","minLength":1},"minItems":1,"maxItems":20},"source_kind":{"type":"string","enum":["task","project","report","file"]},"source_id":{"type":"string"}},"required":["request_id","title","recipient_ids"],"additionalProperties":false}))).with_annotations(ToolAnnotations::new().read_only(false).destructive(false).idempotent(true).open_world(false)),
+        Tool::new("office_list_notifications", "Read current notifications in your inbox or sent list; only Admin may use all. Lists are paginated and do not mark read or acknowledge. Use poll for a durable change cursor, or pending/claimed current lists to reconcile local work after interruption.", schema(json!({"type":"object","properties":{"scope":{"type":"string","enum":["inbox","sent","all"],"default":"inbox"},"status":{"type":"string","enum":["pending","claimed","acknowledged","dismissed","cancelled"]},"page_size":{"type":"integer","minimum":1,"maximum":100,"default":50},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}))).with_annotations(read.clone()),
+        Tool::new("office_poll_notifications", "Poll only your own recipient notification changes after a saved decimal string cursor (start at 0). No read/ack side effects. Returns immutable change snapshots, nextCursor and hasMore; drain pages before sleeping. Safely persist changes locally before advancing your cursor. Reconcile current inbox before acting on old pending snapshots. Ordinary notices do not authorize agent execution.", schema(json!({"type":"object","properties":{"after_cursor":{"type":"string","pattern":"^[0-9]+$","default":"0"},"page_size":{"type":"integer","minimum":1,"maximum":100,"default":50}},"additionalProperties":false}))).with_annotations(read.clone()),
+        Tool::new("office_update_notification", "Update a notification with its expected_revision. Recipient actions: read, claim, acknowledge or dismiss; sender/Admin may cancel. Reading does not resolve it. Claim requires a stable unique claim_id; acknowledging a claimed item requires the same claim_id. Claims are atomic and have no automatic timeout/requeue: reconcile uncertain local runs instead of blindly invoking again. Acknowledgement records notification handling, never completion of a linked task.", schema(json!({"type":"object","properties":{"id":{"type":"string","minLength":1},"expected_revision":{"type":"integer","minimum":1},"action":{"type":"string","enum":["read","claim","acknowledge","dismiss","cancel"]},"claim_id":{"type":"string","maxLength":128},"note":{"type":"string","maxLength":2000}},"required":["id","expected_revision","action"],"additionalProperties":false}))).with_annotations(write.clone()),
         Tool::new("office_list_files", "List authorized private file metadata. Optional projects/reports/profile module and record_id filters. No object-store credentials are returned.", schema(json!({"type":"object","properties":{"module":{"type":"string","enum":["projects","reports","profile"]},"record_id":{"type":"string"}},"additionalProperties":false}))).with_annotations(read.clone()),
         Tool::new("office_get_file", "Read private file metadata and authenticated relative download and image preview paths. Set include_text for UTF-8 text files up to 128 KiB; binary files require HTTP GET with your own bearer credential.", schema(json!({"type":"object","properties":{"id":{"type":"string","minLength":1},"include_text":{"type":"boolean","default":false}},"required":["id"],"additionalProperties":false}))).with_annotations(read.clone()),
         Tool::new("office_upload_file", "Upload a UTF-8 text attachment through private storage and the event engine (maximum 128 KiB). Projects/reports write permission required. For binary uploads use POST /api/files?module=projects|reports|profile&record_id=ID&name=URLENCODED_FILENAME with raw body, Content-Type and your bearer credential. No public URLs or provider credentials.", schema(json!({"type":"object","properties":{"name":{"type":"string","minLength":1},"module":{"type":"string","enum":["projects","reports"]},"record_id":{"type":"string"},"content_text":{"type":"string","maxLength":131072}},"required":["name","module","content_text"],"additionalProperties":false}))).with_annotations(write.clone()),
@@ -347,6 +351,106 @@ impl ServerHandler for OfficeMcp {
     ) -> Result<CallToolResponse, McpError> {
         let args = request.arguments.unwrap_or_default();
         let answer = match request.name.as_ref() {
+            "office_create_notification" => {
+                let parsed = (|| -> Result<_, String> {
+                    let recipients = args
+                        .get("recipient_ids")
+                        .and_then(Value::as_array)
+                        .ok_or("recipient_ids must be an array of member IDs")?
+                        .iter()
+                        .map(|value| {
+                            value.as_str().map(str::to_owned).ok_or_else(|| {
+                                "recipient_ids must contain member ID strings".to_owned()
+                            })
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                    Ok(
+                        office_server::proto::office::v1::CreateNotificationRequest {
+                            request_id: string_arg(&args, "request_id")?,
+                            title: string_arg(&args, "title")?,
+                            body: string_arg(&args, "body")?,
+                            kind: string_arg(&args, "kind")?,
+                            recipient_ids: recipients,
+                            source_kind: string_arg(&args, "source_kind")?,
+                            source_id: string_arg(&args, "source_id")?,
+                            ..Default::default()
+                        },
+                    )
+                })();
+                match parsed {
+                    Err(message) => failure(message),
+                    Ok(request) => match self.service.create_notification(&self.token, request).await {
+                        Ok(response) => success(json!({"notifications":response.notifications})),
+                        Err(error) => failure(error.message.unwrap_or_else(|| "Notification creation failed; check recipients, permissions and request ID.".into())),
+                    }
+                }
+            }
+            "office_list_notifications" => {
+                let parsed = (|| -> Result<_, String> {
+                    Ok(office_server::proto::office::v1::ListNotificationsRequest {
+                        scope: string_arg(&args, "scope")?,
+                        status: string_arg(&args, "status")?,
+                        page_size: uint_arg(&args, "page_size", 50)?,
+                        offset: uint_arg(&args, "offset", 0)?,
+                        ..Default::default()
+                    })
+                })();
+                match parsed {
+                    Err(message) => failure(message),
+                    Ok(request) => {
+                        match self.service.list_notifications(&self.token, request).await {
+                            Ok(response) => success(
+                                json!({"notifications":response.notifications,"totalCount":response.total_count,"nextOffset":response.next_offset}),
+                            ),
+                            Err(error) => failure(error.message.unwrap_or_else(|| {
+                                "Notification list unavailable; check your scope and login.".into()
+                            })),
+                        }
+                    }
+                }
+            }
+            "office_poll_notifications" => {
+                let parsed = (|| -> Result<_, String> {
+                    Ok(office_server::proto::office::v1::PollNotificationsRequest {
+                        after_cursor: string_arg(&args, "after_cursor")?,
+                        page_size: uint_arg(&args, "page_size", 50)?,
+                        ..Default::default()
+                    })
+                })();
+                match parsed {
+                    Err(message) => failure(message),
+                    Ok(request) => match self.service.poll_notifications(&self.token, request).await
+                    {
+                        Ok(response) => success(
+                            json!({"notifications":response.notifications,"nextCursor":response.next_cursor,"hasMore":response.has_more}),
+                        ),
+                        Err(error) => failure(error.message.unwrap_or_else(|| {
+                            "Notification polling failed; check your saved cursor and login.".into()
+                        })),
+                    },
+                }
+            }
+            "office_update_notification" => {
+                let parsed = (|| -> Result<_, String> {
+                    Ok(
+                        office_server::proto::office::v1::UpdateNotificationRequest {
+                            id: string_arg(&args, "id")?,
+                            expected_revision: uint_arg(&args, "expected_revision", 0)?,
+                            action: string_arg(&args, "action")?,
+                            claim_id: string_arg(&args, "claim_id")?,
+                            note: string_arg(&args, "note")?,
+                            ..Default::default()
+                        },
+                    )
+                })();
+                match parsed {
+                    Err(message) => failure(message),
+                    Ok(request) => match self.service.update_notification(&self.token, request).await {
+                        Ok(response) => success(json!({"notification":response.notification})),
+                        Err(error) => failure(error.message.unwrap_or_else(|| "Notification update failed; refresh its revision and check recipient/claim identity.".into())),
+                    }
+                }
+            }
             "office_list_files" => {
                 let request = (|| -> Result<_, String> {
                     Ok(office_server::proto::office::v1::ListFilesRequest {
@@ -895,6 +999,167 @@ mod tests {
         )
     }
 
+    #[tokio::test]
+    async fn notification_tools_poll_claim_acknowledge_with_raw_member_keys() {
+        let app = app(Arc::new(OfficePreviewService::new()));
+        let (admin, sender, _) = key(&app, "member").await;
+        let recipient = rpc(
+            &app,
+            "SaveMember",
+            Some(&admin),
+            json!({"member":{"name":"Prachi","kind":"agent","role":"member","status":"active"}}),
+        )
+        .await;
+        let raw_key = recipient["secret"].as_str().unwrap();
+        let recipient_id = recipient["member"]["id"].as_str().unwrap();
+        let workspace = rpc(&app, "GetWorkspace", Some(&sender), json!({})).await;
+        let sender_id = workspace["currentUser"]["id"].as_str().unwrap();
+        let call = |name: &str, arguments: Value| json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":name,"arguments":arguments}});
+        let args = json!({"request_id":"mcp-response-request-1","title":"Review these findings","body":"Please add your research summary to the task.","kind":"response_request","recipient_ids":[recipient_id],"source_kind":"task","source_id":workspace["tasks"][0]["id"]});
+        let (_, created) = mcp(
+            &app,
+            Some(&sender),
+            None,
+            call("office_create_notification", args.clone()),
+        )
+        .await;
+        assert_eq!(created["result"]["isError"], false, "{created}");
+        let notification = &created["result"]["structuredContent"]["notifications"][0];
+        assert_eq!(notification["senderId"], sender_id);
+        assert_eq!(notification["recipientId"], recipient_id);
+        assert_eq!(notification["status"], "pending");
+        let (_, duplicate) = mcp(
+            &app,
+            Some(&sender),
+            None,
+            call("office_create_notification", args),
+        )
+        .await;
+        assert_eq!(
+            duplicate["result"]["structuredContent"]["notifications"][0]["id"],
+            notification["id"]
+        );
+        let (_, polled) = mcp(
+            &app,
+            Some(raw_key),
+            None,
+            call(
+                "office_poll_notifications",
+                json!({"after_cursor":"0","page_size":1}),
+            ),
+        )
+        .await;
+        assert_eq!(polled["result"]["isError"], false, "{polled}");
+        let page = &polled["result"]["structuredContent"];
+        assert_eq!(page["notifications"][0]["id"], notification["id"]);
+        assert_eq!(page["notifications"][0]["status"], "pending");
+        assert!(page["nextCursor"].is_string());
+        let (_, empty) = mcp(
+            &app,
+            Some(raw_key),
+            None,
+            call(
+                "office_poll_notifications",
+                json!({"after_cursor":page["nextCursor"]}),
+            ),
+        )
+        .await;
+        assert_eq!(
+            empty["result"]["structuredContent"]["notifications"],
+            json!([])
+        );
+        let (_, other) = mcp(
+            &app,
+            Some(&sender),
+            None,
+            call("office_poll_notifications", json!({"after_cursor":"0"})),
+        )
+        .await;
+        assert_eq!(
+            other["result"]["structuredContent"]["notifications"],
+            json!([])
+        );
+        let (_, denied) = mcp(
+            &app,
+            Some(raw_key),
+            None,
+            call("office_list_notifications", json!({"scope":"all"})),
+        )
+        .await;
+        assert_eq!(denied["result"]["isError"], true);
+        let claim_args = json!({"id":notification["id"],"expected_revision":1,"action":"claim","claim_id":"local-watcher-attempt-1"});
+        let (_, denied_claim) = mcp(
+            &app,
+            Some(&sender),
+            None,
+            call("office_update_notification", claim_args.clone()),
+        )
+        .await;
+        assert_eq!(denied_claim["result"]["isError"], true);
+        let (_, claim) = mcp(
+            &app,
+            Some(raw_key),
+            None,
+            call("office_update_notification", claim_args.clone()),
+        )
+        .await;
+        assert_eq!(
+            claim["result"]["structuredContent"]["notification"]["status"],
+            "claimed"
+        );
+        let (_, repeated) = mcp(
+            &app,
+            Some(raw_key),
+            None,
+            call("office_update_notification", claim_args),
+        )
+        .await;
+        assert_eq!(
+            repeated["result"]["structuredContent"]["notification"]["revision"],
+            claim["result"]["structuredContent"]["notification"]["revision"]
+        );
+        let revision = &claim["result"]["structuredContent"]["notification"]["revision"];
+        let (_, handled) = mcp(&app, Some(raw_key), None, call("office_update_notification", json!({"id":notification["id"],"expected_revision":revision,"action":"acknowledge","claim_id":"local-watcher-attempt-1","note":"Reply posted on the task."}))).await;
+        assert_eq!(
+            handled["result"]["structuredContent"]["notification"]["status"],
+            "acknowledged"
+        );
+        let (_, changes) = mcp(
+            &app,
+            Some(raw_key),
+            None,
+            call(
+                "office_poll_notifications",
+                json!({"after_cursor":page["nextCursor"]}),
+            ),
+        )
+        .await;
+        let changes = changes["result"]["structuredContent"]["notifications"]
+            .as_array()
+            .unwrap();
+        assert_eq!(changes.len(), 2);
+        assert_eq!(changes[0]["status"], "claimed");
+        assert_eq!(changes[1]["status"], "acknowledged");
+        rpc(
+            &app,
+            "RevokeAgentKey",
+            Some(&admin),
+            json!({"id":recipient["agentKey"]["id"]}),
+        )
+        .await;
+        assert_eq!(
+            mcp(
+                &app,
+                Some(raw_key),
+                None,
+                call("office_poll_notifications", json!({"after_cursor":"0"}))
+            )
+            .await
+            .0,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
     #[derive(Default)]
     struct TestFiles(std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>);
     #[async_trait::async_trait]
@@ -1368,7 +1633,7 @@ mod tests {
         .await;
         assert_eq!(
             listed["result"]["tools"].as_array().unwrap().len(),
-            18,
+            22,
             "{listed}"
         );
         let (_, read) = mcp(&app, Some(&secret), None, json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"office_get_workspace","arguments":{"project_id":project_id}}})).await;

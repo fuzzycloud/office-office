@@ -10,6 +10,7 @@ import {
 	useState,
 } from "react";
 import * as v from "valibot";
+import ActionIcon from "./ActionIcon";
 import {
 	type Board,
 	bootstrapAdmin,
@@ -36,13 +37,14 @@ import {
 	type Workspace,
 } from "./api";
 import Files, { ProfileUpload } from "./Files";
-import ActionIcon from "./ActionIcon";
 import MemberAvatar from "./MemberAvatar";
+import Notifications from "./Notifications";
 import Reports from "./Reports";
 import TaskDetails from "./TaskDetails";
 
 type Page =
 	| "overview"
+	| "notifications"
 	| "team"
 	| "customers"
 	| "projects"
@@ -54,6 +56,7 @@ type Page =
 const pagePaths = {
 	overview: "/",
 	team: "/team",
+	notifications: "/notifications",
 	customers: "/customers",
 	projects: "/projects",
 	files: "/files",
@@ -97,6 +100,7 @@ type SaveInput =
 	| { kind: "settings"; value: Workspace["settings"] };
 const nav: { id: Page; label: string; icon: string }[] = [
 	{ id: "overview", label: "Overview", icon: "⌂" },
+	{ id: "notifications", label: "Notifications", icon: "♧" },
 	{ id: "team", label: "Team", icon: "♧" },
 	{ id: "customers", label: "Customers", icon: "◎" },
 	{ id: "projects", label: "Projects", icon: "▤" },
@@ -148,6 +152,7 @@ const initialTheme = localStorage.getItem("office-office-theme") || "light";
 const title: Record<Page, string> = {
 	overview: "Your office, at a glance",
 	team: "Team",
+	notifications: "Notifications",
 	customers: "Customers",
 	projects: "Projects",
 	files: "Files",
@@ -258,6 +263,7 @@ export default function App() {
 		area === "overview" ||
 		area === "settings" ||
 		area === "roles" ||
+		area === "notifications" ||
 		(area === "files" &&
 			["projects:read", "reports:read"].some((permission) =>
 				data?.permissions.includes(permission),
@@ -594,8 +600,9 @@ export default function App() {
 							<div className="alert mb-6 border border-info/20 bg-info/10 text-sm">
 								<span aria-hidden="true">ⓘ</span>
 								<span>
-									You have read-only access. Your administrator manages
-									workspace changes.
+									You can read workspace records and manage your own
+									notifications. Your administrator manages other workspace
+									changes.
 								</span>
 							</div>
 						)}
@@ -621,6 +628,7 @@ export default function App() {
 							/>
 						)}
 						{page === "roles" && <RolesPage />}
+						{page === "notifications" && <Notifications workspace={data} />}
 						{page === "files" && <Files workspace={data} />}
 						{page === "customers" && (
 							<Customers

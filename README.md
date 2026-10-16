@@ -96,12 +96,15 @@ See [architecture](docs/architecture.md), [ADR 0002: UI-first demo and SQLite di
 MIT OR Apache-2.0. See LICENSE-MIT and LICENSE-APACHE.
 
 
-## Planned work conversations
+## Notifications and work conversations
 
-Task comments already keep work discussions alongside tasks. The next planned
-slice adds member mentions, explicit response requests, a lightweight project
-discussion and a personal Needs attention inbox shared by humans and AI. Ordinary
-comments will not launch agents; an optional local watcher can route explicit
-requests to configured runtime profiles and post results back. See [the design
-and acceptance plan](docs/work-conversations.md). This workflow is not implemented
-yet.
+The Notifications board provides member-addressed notices and explicit response
+requests, separate read/handled states and personal inboxes for humans and AI.
+Task details can send a linked request. A watcher can poll durable changes with
+a saved cursor and atomically claim requests using existing AI credentials. See
+[notification and watcher setup](docs/notifications.md).
+
+Ordinary comments do not launch agents. An optional local watcher can route
+explicit requests to configured runtime profiles and post results back. Inline
+mentions, threaded project discussion and richer review/decision workflows remain
+planned; see [the design and acceptance plan](docs/work-conversations.md).

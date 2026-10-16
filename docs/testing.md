@@ -162,3 +162,34 @@ recovery. Own-profile reuse still performs no upload. Desktop and 390px picker
 screenshots were inspected; the picker uses two columns to keep action labels
 readable in the Settings panel. These fixture tests do not constitute another
 live S3 drill. No release or deployment was performed for this fix.
+
+
+## Notification board checkpoint — 2026-10-16
+
+Added event-backed personal notifications and explicit task-linked response
+requests. Create/list/poll/update are shared by RPC and MCP; polling exposes
+immutable recipient changes with restart-stable string cursors and no read/ack
+side effects. Fanout is atomic and idempotent by sender/request ID. Claims use
+revision checks and stable attempt IDs, and uncertain claims remain claimed.
+Notification content is excluded from the workspace-wide activity feed.
+
+`just check` passed: 50 Rust tests, six generated ignored doc examples, Clippy
+with warnings denied, formatting, frontend TypeScript/build and 11 container
+startup cases. All 46 isolated Chromium scenarios passed together. Six new Rust
+integration cases cover cursor paging/replay, privacy and Viewer handling,
+invalid-recipient atomicity, idempotent retries, concurrent claims, explicit
+resolution, stale writes, RPC authorization and live key/member revocation. A
+new MCP test polls/claims/acknowledges through a raw AI member key and checks
+revocation. Three new browser/HTTP scenarios cover the durable lifecycle across
+restart, actual member targeting, read versus handled state, response-note draft
+retention and task-linked requests. An ordinary `@Prachi` comment produces no
+notification. Desktop/390px screenshots were inspected and no page overflow was
+observed. New component/test Biome checks passed.
+
+This does not test or implement a Hermes/local runtime invocation. Full dispatch
+heartbeats, run reconciliation, inline comment mentions, project discussion and
+project-specific grants remain planned. The storage adapter is unchanged: Katha
+aggregate/event replay with the existing custom rusqlite journal, not Katha's
+SQLx event-store adapter. No release, deployment, data reset or journal migration
+was performed. [Notifications](notifications.md) is the watcher integration
+contract.

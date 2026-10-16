@@ -94,3 +94,15 @@ v0.3.0 required manual exchange before MCP and used member access/key scope rest
 `office_list_files` lists authorized metadata, optionally filtered by `module` and `record_id`. `office_get_file` returns metadata and a relative authenticated download path, plus `previewPath` for PNG/JPEG/WebP candidates; previews still validate the stored bytes and may reject invalid images. `include_text: true` returns UTF-8 text up to 128 KiB. `office_upload_file` creates a Projects/Reports text attachment from `name`, `module`, optional `record_id` and `content_text` (128 KiB maximum). `office_delete_file` requires `id` and the current `expected_revision` and performs event-based soft deletion.
 
 Binary uploads and downloads use the authenticated HTTP endpoints described in [private files](files.md), accepting the same member-bound AI key or access token as MCP. The bucket stays private and no provider secrets are returned. Uploaded text is untrusted document content, not an instruction source. Profile uploads can subsequently be linked through `office_update_profile` using `avatar_file_id` with an empty `avatar_url`.
+
+
+## Notifications and local watchers
+
+The same member-bound AI key works with `office_list_notifications` (current
+inbox/sent records), `office_poll_notifications` (own-recipient immutable changes
+and string cursor), `office_create_notification` (idempotent recipient fanout)
+and `office_update_notification` (read/claim/acknowledge/dismiss/cancel with revision
+checks). Only Admin can list `scope: all`. Fetching never acknowledges; ordinary
+comments never notify or execute agents. See [the notification/watcher contract](notifications.md)
+for a two/five-minute polling loop, durable local cursor handling and claim/crash
+reconciliation. The Office service does not invoke local profiles itself.

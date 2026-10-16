@@ -73,13 +73,17 @@ GHCR images are published only for version tags and remain previews; the public 
 
 ### Planned work conversations and personal attention
 
-Task comments are the current work-conversation surface. The accepted follow-up
-adds stable-ID mentions, explicit response requests, revision-specific file/report
-references, one project discussion area and a durable personal Needs attention
-inbox for humans and AI. Read markers are separate from unresolved requests;
+Task comments are the current work-conversation surface. A notification board now
+provides personal recipient/sent lists, explicit task-linked response requests and
+immutable cursor polling through RPC/MCP. Creation fanout, read markers, claims
+and resolution commit through the same actor/event/SQLite path. Polling does not
+mark read or acknowledge, and notification bodies do not leak into the workspace
+activity feed. See [notifications and watchers](notifications.md). Stable-ID inline
+mentions, revision-specific file/report links, one project discussion area and
+richer review/decision inbox workflows remain planned. Read markers are separate from unresolved requests;
 ordinary comments and mentions never launch execution. Our first optional adapter
 uses office events, a local watcher and configured Hermes profiles, with replies
 and visible status written back through authenticated APIs. No Hermes-specific
 identity or persona is added to the app. See [work conversations and needs
 attention](work-conversations.md) for delivery order, policy and acceptance cases;
-these additions are not shipped functionality.
+the remaining additions are not shipped functionality.

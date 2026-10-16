@@ -26,6 +26,7 @@ pub mod proto {
 }
 mod demo;
 pub mod files;
+mod notifications;
 mod storage;
 use proto::office::v1::*;
 
@@ -242,6 +243,8 @@ struct State {
     comments: Vec<TaskComment>,
     task_activity: Vec<TaskActivity>,
     reports: Vec<Report>,
+    notifications: Vec<Notification>,
+    notification_changes: Vec<Notification>,
     files: Vec<FileRecord>,
     agent_keys: Vec<AgentKey>,
     connections: Vec<SocialConnection>,
@@ -253,9 +256,10 @@ struct DemoInitialized {
     scenario: String,
     version: u32,
 }
-// Events contain only public workspace records. Credentials and signing keys live off-log.
+// Events contain workspace records, including personal notifications. Credentials and signing keys live off-log.
 #[derive(Clone)]
 enum Event {
+    Notification(Notification),
     DemoInitialized(DemoInitialized),
     Member(Member),
     Customer(Customer),
@@ -319,6 +323,10 @@ impl Aggregate<State, Edit, Event> for Projection {
     }
     fn apply(&self, mut state: State, event: &Event) -> State {
         match event {
+            Event::Notification(v) => {
+                upsert(&mut state.notifications, v.clone(), |x| &x.id);
+                state.notification_changes.push(v.clone());
+            }
             Event::DemoInitialized(v) => state.demo = Some(v.clone()),
             Event::Member(v) => upsert(&mut state.members, v.clone(), |x| &x.id),
             Event::Customer(v) => upsert(&mut state.customers, v.clone(), |x| &x.id),
@@ -365,6 +373,8 @@ fn upsert<T>(items: &mut Vec<T>, value: T, key: impl Fn(&T) -> &String) {
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum EngineCommand {
+    CreateNotification(CreateNotificationRequest),
+    UpdateNotification(UpdateNotificationRequest),
     SaveMember(SaveMemberRequest),
     SaveProfile(SaveProfileRequest),
     RegisterFile(FileRecord),
@@ -383,6 +393,8 @@ pub enum EngineCommand {
 
 #[derive(Serialize, Deserialize)]
 pub enum EngineOutcome {
+    Notifications(CreateNotificationResponse),
+    Notification(UpdateNotificationResponse),
     Member(SaveMemberResponse),
     Profile(SaveProfileResponse),
     File(FileRecord),
@@ -399,6 +411,16 @@ pub enum EngineOutcome {
 }
 
 enum Command {
+    ListNotifications(
+        String,
+        ListNotificationsRequest,
+        oneshot::Sender<Result<ListNotificationsResponse, ConnectError>>,
+    ),
+    PollNotifications(
+        String,
+        PollNotificationsRequest,
+        oneshot::Sender<Result<PollNotificationsResponse, ConnectError>>,
+    ),
     ListFiles(
         String,
         ListFilesRequest,
@@ -710,6 +732,7 @@ impl WorkspaceActor {
                 "report author missing"
             );
         }
+        self.validate_notification_replay()?;
         ids.clear();
         for key in &self.state.agent_keys {
             ensure!(
@@ -828,6 +851,7 @@ impl WorkspaceActor {
     fn commit(&mut self, edit: Edit, actor: &str, summary: &str) {
         for event in Projection.execute(&self.state, &edit).expect("valid edit") {
             let name = match &event {
+                Event::Notification(_) => "notification_changed",
                 Event::DemoInitialized(_) => "demo_initialized",
                 Event::Member(_) => "member_saved",
                 Event::Customer(_) => "customer_saved",
@@ -2075,6 +2099,14 @@ impl WorkspaceActor {
     ) -> Result<EngineOutcome, ConnectError> {
         let token = token.to_owned();
         match command {
+            EngineCommand::CreateNotification(v) => self
+                .user(&token)
+                .and_then(|actor| self.create_notification_as(&actor, v))
+                .map(EngineOutcome::Notifications),
+            EngineCommand::UpdateNotification(v) => self
+                .user(&token)
+                .and_then(|actor| self.update_notification_as(&actor, v))
+                .map(EngineOutcome::Notification),
             EngineCommand::RegisterFile(file) => {
                 self.register_file(token, file).map(EngineOutcome::File)
             }
@@ -2187,6 +2219,18 @@ impl Actor for WorkspaceActor {
     type Msg = Command;
     async fn handle(&mut self, message: Command) {
         match message {
+            Command::ListNotifications(token, request, tx) => {
+                let _ = tx.send(
+                    self.user(&token)
+                        .and_then(|actor| self.list_notifications_as(&actor, request)),
+                );
+            }
+            Command::PollNotifications(token, request, tx) => {
+                let _ = tx.send(
+                    self.user(&token)
+                        .and_then(|actor| self.poll_notifications_as(&actor, request)),
+                );
+            }
             Command::Close(tx) => {
                 self.closed = true;
                 let storage = self.storage.take();
@@ -2801,6 +2845,48 @@ impl OfficeService for OfficePreviewService {
             file: Some(file).into(),
             ..Default::default()
         })
+    }
+    async fn create_notification<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, CreateNotificationRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<CreateNotificationResponse> + Send + use<'a>>
+    {
+        Response::ok(
+            OfficePreviewService::create_notification(self, &bearer(&ctx)?, req.to_owned_message())
+                .await?,
+        )
+    }
+    async fn list_notifications<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, ListNotificationsRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<ListNotificationsResponse> + Send + use<'a>> {
+        Response::ok(
+            OfficePreviewService::list_notifications(self, &bearer(&ctx)?, req.to_owned_message())
+                .await?,
+        )
+    }
+    async fn poll_notifications<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, PollNotificationsRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<PollNotificationsResponse> + Send + use<'a>> {
+        Response::ok(
+            OfficePreviewService::poll_notifications(self, &bearer(&ctx)?, req.to_owned_message())
+                .await?,
+        )
+    }
+    async fn update_notification<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, UpdateNotificationRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<UpdateNotificationResponse> + Send + use<'a>>
+    {
+        Response::ok(
+            OfficePreviewService::update_notification(self, &bearer(&ctx)?, req.to_owned_message())
+                .await?,
+        )
     }
     async fn list_reports<'a>(
         &'a self,

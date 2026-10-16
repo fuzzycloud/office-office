@@ -22,3 +22,11 @@ Creating an AI user automatically creates its own 90-day key. The creation respo
 ## Upgrade policy
 
 This replaces v0.3.0's separate member access lists and key scopes. Those legacy fields remain in protobuf/events for compatibility but are ignored for authorization. Existing member-bound keys remain usable under the member's current role. This can broaden access compared with an old narrow key; review all role assignments before upgrading. Legacy v0.2 creator-bound keys are still rejected and must be replaced. No history is rewritten and no database reset is required.
+
+
+Notification inboxes are personal: each active member can read and handle its
+own notifications, including Viewer. Admin/Manager/Member can send; Viewer cannot.
+Senders can inspect sent records and cancel their own pending/claimed requests;
+only Admin can inspect All or cancel another sender's request. These personal
+attention actions do not change module permissions or complete linked work. See
+[notifications](notifications.md).

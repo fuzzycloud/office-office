@@ -1,8 +1,9 @@
 # Work conversations and needs attention
 
-Status: accepted product direction, not implemented. Existing task comments and
-activity are available today; structured mentions, replies, project discussion,
-attention requests and an inbox are follow-up work. Read with [tasks](tasks.md),
+Status: partially implemented. Task comments, the notification board, personal
+inboxes, explicit task-linked response requests and cursor-based watcher polling
+are available in source. Inline structured mentions, replies, project discussion
+and richer review/decision workflows remain follow-up work. See [notifications](notifications.md). Read with [tasks](tasks.md),
 [agent access](agent-team-access.md) and [optional dispatch](agent-dispatch.md).
 
 ## Task conversations

@@ -7,6 +7,7 @@ import {
 } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import type {
+	Notification as GeneratedNotification,
 	Report as GeneratedReport,
 	GetWorkspaceResponse,
 	WorkspaceSettings,
@@ -14,6 +15,7 @@ import type {
 import {
 	BoardSchema,
 	BootstrapAdminRequestSchema,
+	CreateNotificationRequestSchema,
 	CustomerSchema,
 	DeleteFileRequestSchema,
 	DeleteTaskCommentRequestSchema,
@@ -22,6 +24,7 @@ import {
 	GetWorkspaceRequestSchema,
 	ListAgentKeysRequestSchema,
 	ListFilesRequestSchema,
+	ListNotificationsRequestSchema,
 	ListReportsRequestSchema,
 	ListRolesRequestSchema,
 	ListTaskDiscussionRequestSchema,
@@ -44,6 +47,7 @@ import {
 	SaveTaskRequestSchema,
 	ScheduledPostSchema,
 	TaskSchema,
+	UpdateNotificationRequestSchema,
 	WorkspaceSettingsSchema,
 } from "./gen/office/v1/office_pb";
 
@@ -394,4 +398,41 @@ export async function downloadFile(id: string, name: string) {
 	} finally {
 		window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 	}
+}
+
+export type Notification = GeneratedNotification;
+export type NotificationDraft = {
+	requestId: string;
+	title: string;
+	body: string;
+	kind: string;
+	recipientIds: string[];
+	sourceKind: string;
+	sourceId: string;
+};
+export async function createNotification(input: NotificationDraft) {
+	return client.createNotification(
+		create(CreateNotificationRequestSchema, input),
+	);
+}
+export async function listNotifications(input: {
+	scope: string;
+	status: string;
+	pageSize: number;
+	offset: number;
+}) {
+	return client.listNotifications(
+		create(ListNotificationsRequestSchema, input),
+	);
+}
+export async function updateNotification(input: {
+	id: string;
+	expectedRevision: number;
+	action: string;
+	claimId: string;
+	note: string;
+}) {
+	return client.updateNotification(
+		create(UpdateNotificationRequestSchema, input),
+	);
 }

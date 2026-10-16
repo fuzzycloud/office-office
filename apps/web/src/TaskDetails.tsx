@@ -1,6 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
+import ActionIcon from "./ActionIcon";
 import {
 	deleteTaskComment,
 	getReport,
@@ -10,8 +11,8 @@ import {
 	saveTaskComment,
 	type Task,
 } from "./api";
-import ActionIcon from "./ActionIcon";
 import MemberAvatar from "./MemberAvatar";
+import { NotificationComposer } from "./Notifications";
 
 const time = (value: bigint) =>
 	new Intl.DateTimeFormat(undefined, {
@@ -56,6 +57,8 @@ export default function TaskDetails({
 	const [error, setError] = useState("");
 	const [conflict, setConflict] = useState(false);
 	const [reportId, setReportId] = useState("");
+	const [requestResponse, setRequestResponse] = useState(false);
+	const [notificationBusy, setNotificationBusy] = useState(false);
 	useEffect(() => {
 		const opener =
 			document.activeElement instanceof HTMLElement
@@ -156,7 +159,8 @@ export default function TaskDetails({
 			await refresh();
 		},
 	});
-	const busy = mutation.isPending || saveTaskMutation.isPending;
+	const busy =
+		mutation.isPending || saveTaskMutation.isPending || notificationBusy;
 	const comments = discussion.data?.comments || [];
 	const change = (key: keyof Task, value: string) =>
 		setDraft((current) => ({ ...current, [key]: value }));
@@ -193,6 +197,23 @@ export default function TaskDetails({
 						className="task-detail-content"
 						aria-label="Task description and discussion"
 					>
+						{currentUser.role !== "viewer" && !requestResponse && (
+							<button
+								type="button"
+								className="btn btn-outline btn-sm mb-4"
+								onClick={() => setRequestResponse(true)}
+							>
+								Request response
+							</button>
+						)}
+						{requestResponse && (
+							<NotificationComposer
+								members={members}
+								task={task}
+								onClose={() => setRequestResponse(false)}
+								onBusyChange={setNotificationBusy}
+							/>
+						)}
 						{editingTask ? (
 							<form
 								className="task-edit-form"
