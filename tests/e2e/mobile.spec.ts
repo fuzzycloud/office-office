@@ -67,6 +67,13 @@ test("390px navigation, board and discussion support keyboard closing and restor
 	await expect(dialog.getByText(draft, { exact: true })).toBeVisible();
 	await dialog.getByRole("tab", { name: "Activity", exact: true }).click();
 	await expect(dialog.getByRole("tabpanel")).toContainText(/comment/i);
+	// The new comment can appear before mutation-triggered refreshes finish.
+	// Escape is intentionally blocked while that write is still pending.
+	await expect(
+		dialog
+			.locator("header")
+			.getByRole("button", { name: "Close task details", exact: true }),
+	).toBeEnabled();
 	await page.keyboard.press("Escape");
 	await expect(dialog).toHaveCount(0);
 	await expect(opener).toBeFocused();
