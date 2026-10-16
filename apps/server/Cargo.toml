@@ -15,6 +15,8 @@ chrono = "0.4"
 connectrpc = { version = "0.8", features = ["server", "axum"] }
 jsonwebtoken = { version = "10.4", default-features = false, features = ["aws_lc_rs"] }
 katha = "=0.2.6"
+# Internal journal helper; Katha aggregates remain independent of the SQL driver.
+office-sqlite-journal = { path = "../../crates/sqlite-journal" }
 kathputli = "=0.2.1"
 rand = "0.8"
 rust-s3 = { version = "0.38.0", default-features = false, features = ["tokio-rustls-tls"] }

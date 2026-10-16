@@ -20,8 +20,8 @@ check:
     python3 scripts/check-versions.py
     just test-runtime
     cargo fmt --all -- --check
-    cargo clippy -p office-server --all-targets -- -D warnings
-    cargo test -p office-server
+    cargo clippy --workspace --all-targets -- -D warnings
+    cargo test --workspace
     pnpm check
     pnpm build
 

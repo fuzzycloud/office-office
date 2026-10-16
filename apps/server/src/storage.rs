@@ -9,6 +9,7 @@ use anyhow::{Context, Result, bail, ensure};
 use argon2::password_hash::PasswordHash;
 use fs2::FileExt;
 use katha::EventWrite;
+use office_sqlite_journal as journal;
 use rand::RngCore;
 use rusqlite::{Connection, params};
 use serde::{Serialize, de::DeserializeOwned};
@@ -215,15 +216,8 @@ impl Storage {
         if fresh {
             ensure!(version == 0, "new database has unexpected schema version");
             let tx = conn.transaction()?;
-            tx.execute_batch("CREATE TABLE events (
-                sequence INTEGER PRIMARY KEY,
-                event_id TEXT NOT NULL UNIQUE,
-                event_type TEXT NOT NULL,
-                event_version INTEGER NOT NULL,
-                occurred_at INTEGER NOT NULL,
-                payload TEXT NOT NULL
-            );
-            CREATE TABLE passwords (member_id TEXT PRIMARY KEY, hash TEXT NOT NULL);
+            journal::create_events_table(&tx)?;
+            tx.execute_batch("CREATE TABLE passwords (member_id TEXT PRIMARY KEY, hash TEXT NOT NULL);
             CREATE TABLE agent_secrets (key_id TEXT PRIMARY KEY, digest TEXT NOT NULL, owner_id TEXT NOT NULL);
             CREATE TABLE private_config (id INTEGER PRIMARY KEY CHECK (id = 1), signing_key BLOB NOT NULL, setup INTEGER NOT NULL CHECK (setup IN (0,1)));
             PRAGMA user_version = 1;")?;
@@ -251,42 +245,17 @@ impl Storage {
             signing_key.len() == 32 && (setup == 0 || setup == 1),
             "invalid private configuration"
         );
-        let mut events = Vec::new();
-        let mut next_sequence = 1;
-        {
-            let mut stmt = conn.prepare("SELECT sequence, event_id, event_type, event_version, occurred_at, payload FROM events ORDER BY sequence")?;
-            let rows = stmt.query_map([], |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, i64>(3)?,
-                    row.get::<_, i64>(4)?,
-                    row.get::<_, String>(5)?,
-                ))
-            })?;
-            for row in rows {
-                let (sequence, id, kind, event_version, occurred_at, payload) = row?;
-                ensure!(
-                    sequence == next_sequence,
-                    "event sequence gap at {next_sequence}"
-                );
-                ensure!(
-                    uuid::Uuid::parse_str(&id).is_ok(),
-                    "invalid event id at {sequence}"
-                );
-                ensure!(
-                    event_version == 1,
-                    "unsupported event version {event_version} at {sequence}"
-                );
-                ensure!(occurred_at > 0, "invalid event time at {sequence}");
-                events.push(
-                    parse_event(&kind, &payload)
-                        .with_context(|| format!("invalid event at {sequence}"))?,
-                );
-                next_sequence += 1;
-            }
-        }
+        let rows = journal::load_events(&conn)?;
+        let next_sequence = i64::try_from(rows.len())?
+            .checked_add(1)
+            .context("event sequence limit")?;
+        let events = rows
+            .into_iter()
+            .map(|row| {
+                parse_event(&row.event_type, &row.payload)
+                    .with_context(|| format!("invalid event at {}", row.sequence))
+            })
+            .collect::<Result<Vec<_>>>()?;
         let mut passwords = HashMap::new();
         {
             let mut stmt = conn.prepare("SELECT member_id, hash FROM passwords")?;
@@ -339,13 +308,11 @@ impl Storage {
         setup: bool,
     ) -> Result<()> {
         let tx = self.conn.transaction()?;
-        let mut sequence = self.next_sequence;
-        for event in events {
-            let (kind, payload) = event_parts(&event.data)?;
-            tx.execute("INSERT INTO events(sequence, event_id, event_type, event_version, occurred_at, payload) VALUES(?1, ?2, ?3, 1, ?4, ?5)",
-                params![sequence, event.id.to_string(), kind, crate::now(), payload])?;
-            sequence += 1;
-        }
+        let sequence =
+            journal::append_events_in_tx(&tx, self.next_sequence, events, crate::now(), |event| {
+                let (kind, payload) = event_parts(event)?;
+                Ok((kind.to_owned(), payload))
+            })?;
         tx.execute("DELETE FROM passwords", [])?;
         for (id, hash) in passwords {
             tx.execute(

@@ -1453,6 +1453,7 @@ dependencies = [
  "jsonwebtoken",
  "katha",
  "kathputli",
+ "office-sqlite-journal",
  "rand 0.8.8",
  "rmcp",
  "rusqlite",
@@ -1467,6 +1468,18 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "uuid",
+]
+
+[[package]]
+name = "office-sqlite-journal"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "katha",
+ "rusqlite",
+ "serde_json",
+ "tempfile",
  "uuid",
 ]
 
