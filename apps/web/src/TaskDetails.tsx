@@ -10,6 +10,7 @@ import {
 	saveTaskComment,
 	type Task,
 } from "./api";
+import ActionIcon from "./ActionIcon";
 import MemberAvatar from "./MemberAvatar";
 
 const time = (value: bigint) =>
@@ -180,10 +181,11 @@ export default function TaskDetails({
 					<button
 						className="btn btn-ghost btn-circle btn-sm"
 						aria-label="Close task details"
+						title="Close task details"
 						onClick={onClose}
 						disabled={busy}
 					>
-						×
+						<ActionIcon name="close" />
 					</button>
 				</header>
 				<div className="task-detail-layout">
@@ -340,6 +342,7 @@ export default function TaskDetails({
 												setEditingTask(true);
 											}}
 										>
+											<ActionIcon name="edit" />
 											Edit task
 										</button>
 									)}
@@ -373,6 +376,7 @@ export default function TaskDetails({
 								disabled={discussion.isFetching || busy}
 								onClick={() => void discussion.refetch()}
 							>
+								<ActionIcon name="refresh" />
 								Refresh
 							</button>
 						</div>
@@ -491,6 +495,7 @@ export default function TaskDetails({
 																		disabled={busy || conflict}
 																		onClick={() => mutation.mutate("delete")}
 																	>
+																		<ActionIcon name="trash" />
 																		Delete comment
 																	</button>
 																	<button
@@ -517,6 +522,7 @@ export default function TaskDetails({
 																			setError("");
 																		}}
 																	>
+																		<ActionIcon name="edit" />
 																		Edit
 																	</button>
 																	<button
@@ -528,6 +534,7 @@ export default function TaskDetails({
 																			setError("");
 																		}}
 																	>
+																		<ActionIcon name="trash" />
 																		Delete
 																	</button>
 																</>
@@ -693,6 +700,7 @@ export default function TaskDetails({
 							className="btn btn-ghost btn-sm float-right"
 							onClick={() => setReportId("")}
 						>
+							<ActionIcon name="close" />
 							Close report
 						</button>
 						{report.isPending ? (

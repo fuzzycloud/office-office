@@ -298,7 +298,7 @@ test("Gallery previews and downloads authenticated bytes, retries failures, rest
 	).toHaveCount(0);
 });
 
-test("Viewer can browse images and their own saved picture without attachment upload or delete", async ({
+test("Viewer can browse gallery pictures and reuse their own saved picture without upload or delete", async ({
 	office,
 	page,
 }) => {
@@ -386,7 +386,7 @@ test("Viewer can browse images and their own saved picture without attachment up
 			name: "Use Other member picture.png",
 			exact: true,
 		}),
-	).toHaveCount(0);
+	).toBeVisible();
 	await page
 		.getByRole("button", { name: "Use Viewer own picture.png", exact: true })
 		.click();
@@ -420,3 +420,226 @@ test("Viewer can browse images and their own saved picture without attachment up
 		dialog.getByRole("button", { name: "Delete", exact: true }),
 	).toHaveCount(0);
 });
+
+for (const source of [
+	{ module: "projects", contentType: "image/png", extension: "png" },
+	{ module: "reports", contentType: "image/jpeg", extension: "jpg" },
+	{ module: "profile", contentType: "image/webp", extension: "webp" },
+]) {
+	test(`Profile picker copies another member's ${source.module} image into an owned PNG`, async ({
+		office,
+		page,
+	}, testInfo) => {
+		const { token, user } = await office.bootstrap(false);
+		const originalId = `shared-${source.module}-image`;
+		const copiedId = `owned-${source.module}-profile-image`;
+		const filename = `Shared ${source.module} picture.${source.extension}`;
+		const files = [
+			{
+				...imageFile(originalId, filename, source.module, "another-member"),
+				contentType: source.contentType,
+			},
+			{
+				...imageFile(
+					"excluded-svg",
+					"Shared vector.svg",
+					"projects",
+					"another-member",
+				),
+				contentType: "image/svg+xml",
+			},
+		];
+		await installFilesRoute(page, token, files);
+		const selectedThumbnailRequests: string[] = [];
+		await page.route("**/api/files/*/preview?*", async (route) => {
+			expect(route.request().headers().authorization).toBe(`Bearer ${token}`);
+			const url = new URL(route.request().url());
+			expect(url.searchParams.get("size")).toBe("thumbnail");
+			selectedThumbnailRequests.push(url.pathname);
+			await route.fulfill({ contentType: "image/png", body: png });
+		});
+		let uploads = 0;
+		await page.route("**/api/files?*", async (route) => {
+			const request = route.request();
+			expect(request.method()).toBe("POST");
+			expect(request.headers().authorization).toBe(`Bearer ${token}`);
+			expect(request.headers()["content-type"]).toBe("image/png");
+			expect(new URL(request.url()).searchParams.get("module")).toBe("profile");
+			expect(request.postDataBuffer()).toEqual(png);
+			uploads += 1;
+			files.push(imageFile(copiedId, "Copied picture.png", "profile", user.id));
+			await route.fulfill({ json: { file: { id: copiedId } } });
+		});
+		const savedIds: string[] = [];
+		await page.route(
+			"**/rpc/office.v1.OfficeService/SaveProfile",
+			async (route) => {
+				expect(route.request().headers().authorization).toBe(`Bearer ${token}`);
+				const body = route.request().postDataJSON();
+				savedIds.push(body.avatarFileId);
+				await route.fulfill({
+					json: { member: { ...user, avatarFileId: body.avatarFileId } },
+				});
+			},
+		);
+		let deletes = 0;
+		await page.route(
+			"**/rpc/office.v1.OfficeService/DeleteFile",
+			async (route) => {
+				deletes += 1;
+				await route.fulfill({ json: {} });
+			},
+		);
+		await signInPage(page, token, "/settings");
+		await page
+			.getByRole("button", { name: "Choose existing picture", exact: true })
+			.click();
+		const picker = page.getByRole("region", {
+			name: "Profile picture gallery",
+			exact: true,
+		});
+		await expect(
+			picker.getByRole("button", { name: `Use ${filename}`, exact: true }),
+		).toBeVisible();
+		await expect(
+			picker.getByRole("button", {
+				name: "Use Shared vector.svg",
+				exact: true,
+			}),
+		).toHaveCount(0);
+		if (source.module === "projects") {
+			await page.screenshot({
+				path: testInfo.outputPath("profile-gallery-desktop.png"),
+				animations: "disabled",
+			});
+			await page.setViewportSize({ width: 390, height: 844 });
+			await picker.scrollIntoViewIfNeeded();
+			expect(
+				await page.evaluate(
+					() => document.documentElement.scrollWidth <= window.innerWidth,
+				),
+			).toBe(true);
+			await page.screenshot({
+				path: testInfo.outputPath("profile-gallery-mobile.png"),
+				animations: "disabled",
+			});
+		}
+		// Rendering may already fetch a thumbnail; selection must fetch fresh authenticated bytes for the copy.
+		const beforeSelection = selectedThumbnailRequests.filter((path) =>
+			path.includes(originalId),
+		).length;
+		await picker
+			.getByRole("button", { name: `Use ${filename}`, exact: true })
+			.click();
+		await expect(
+			page.getByText("Profile picture saved.", { exact: true }),
+		).toBeVisible();
+		expect(
+			selectedThumbnailRequests.filter((path) => path.includes(originalId))
+				.length,
+		).toBeGreaterThan(beforeSelection);
+		expect(uploads).toBe(1);
+		expect(savedIds).toEqual([copiedId]);
+		expect(savedIds).not.toContain(originalId);
+		expect(deletes).toBe(0);
+		expect(files.some((file) => file.id === originalId)).toBe(true);
+	});
+}
+
+for (const failure of ["thumbnail", "upload"]) {
+	test(`Profile picker ${failure} failure preserves the source and permits retry without saving`, async ({
+		office,
+		page,
+	}) => {
+		const { token, user } = await office.bootstrap(false);
+		const originalId = "shared-retry-image";
+		const copiedId = "owned-retried-image";
+		await installFilesRoute(page, token, [
+			imageFile(originalId, "Shared retry.png", "reports", "another-member"),
+		]);
+		let selecting = false;
+		let failed = false;
+		let uploads = 0;
+		await page.route("**/api/files/*/preview?*", async (route) => {
+			expect(route.request().headers().authorization).toBe(`Bearer ${token}`);
+			expect(new URL(route.request().url()).searchParams.get("size")).toBe(
+				"thumbnail",
+			);
+			if (selecting && failure === "thumbnail" && !failed) {
+				failed = true;
+				await route.fulfill({
+					status: 503,
+					body: "Thumbnail temporarily unavailable",
+				});
+				return;
+			}
+			await route.fulfill({ contentType: "image/png", body: png });
+		});
+		await page.route("**/api/files?*", async (route) => {
+			expect(route.request().headers().authorization).toBe(`Bearer ${token}`);
+			expect(new URL(route.request().url()).searchParams.get("module")).toBe(
+				"profile",
+			);
+			uploads += 1;
+			if (failure === "upload" && !failed) {
+				failed = true;
+				await route.fulfill({
+					status: 503,
+					body: "Profile upload temporarily unavailable",
+				});
+				return;
+			}
+			await route.fulfill({ json: { file: { id: copiedId } } });
+		});
+		const savedIds: string[] = [];
+		await page.route(
+			"**/rpc/office.v1.OfficeService/SaveProfile",
+			async (route) => {
+				const body = route.request().postDataJSON();
+				savedIds.push(body.avatarFileId);
+				await route.fulfill({
+					json: { member: { ...user, avatarFileId: body.avatarFileId } },
+				});
+			},
+		);
+		let deletes = 0;
+		await page.route(
+			"**/rpc/office.v1.OfficeService/DeleteFile",
+			async (route) => {
+				deletes += 1;
+				await route.fulfill({ json: {} });
+			},
+		);
+		await signInPage(page, token, "/settings");
+		await page
+			.getByRole("button", { name: "Choose existing picture", exact: true })
+			.click();
+		const usePicture = page.getByRole("button", {
+			name: "Use Shared retry.png",
+			exact: true,
+		});
+		await expect(usePicture).toBeVisible();
+		await expect(
+			page
+				.getByRole("region", { name: "Profile picture gallery", exact: true })
+				.getByRole("img", { name: "Shared retry.png" }),
+		).toHaveJSProperty("naturalWidth", 1);
+		selecting = true;
+		await usePicture.click();
+		await expect(page.getByRole("alert")).toContainText(
+			/temporarily unavailable/,
+		);
+		expect(failed).toBe(true);
+		expect(savedIds).toEqual([]);
+		expect(uploads).toBe(failure === "thumbnail" ? 0 : 1);
+		expect(deletes).toBe(0);
+		await expect(usePicture).toBeEnabled();
+		await usePicture.click();
+		await expect(
+			page.getByText("Profile picture saved.", { exact: true }),
+		).toBeVisible();
+		expect(savedIds).toEqual([copiedId]);
+		expect(uploads).toBe(failure === "thumbnail" ? 1 : 2);
+		expect(deletes).toBe(0);
+	});
+}

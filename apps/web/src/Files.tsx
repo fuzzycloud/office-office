@@ -1,8 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, useId, useState } from "react";
+import { type FormEvent, useId, useRef, useState } from "react";
+import ActionIcon from "./ActionIcon";
 import {
 	deleteFile,
 	downloadFile,
+	getFilePreviewBlob,
 	listFiles,
 	uploadFile,
 	type Workspace,
@@ -250,6 +252,7 @@ export default function Files({ workspace }: { workspace: Workspace }) {
 										{busy && (
 											<span className="loading loading-spinner loading-xs" />
 										)}
+										<ActionIcon name="upload" />
 										Upload file
 									</button>
 								</div>
@@ -301,6 +304,7 @@ export default function Files({ workspace }: { workspace: Workspace }) {
 													void run(() => downloadFile(item.id, item.name))
 												}
 											>
+												<ActionIcon name="download" />
 												Download
 											</button>
 											{canWrite &&
@@ -323,6 +327,7 @@ export default function Files({ workspace }: { workspace: Workspace }) {
 																})
 															}
 														>
+															<ActionIcon name="trash" />
 															Confirm delete
 														</button>
 														<button
@@ -340,6 +345,7 @@ export default function Files({ workspace }: { workspace: Workspace }) {
 														disabled={busy}
 														onClick={() => setPendingDelete(item.id)}
 													>
+														<ActionIcon name="trash" />
 														Delete
 													</button>
 												))}
@@ -383,12 +389,54 @@ export function ProfileUpload({
 	const [inputKey, setInputKey] = useState(0);
 	const fieldId = useId();
 	const [choosing, setChoosing] = useState(false);
+	const [search, setSearch] = useState("");
+	const preparedPictures = useRef(new Map<string, string>());
 	const queryClient = useQueryClient();
 	const query = useQuery({
-		queryKey: ["files", "profile", memberId],
-		queryFn: () => listFiles("profile", memberId),
+		queryKey: ["files", "profile-picker", memberId],
+		queryFn: () => listFiles(""),
 		retry: false,
 	});
+	const pictures = (query.data?.files || []).filter(
+		(item) =>
+			isGalleryImage(item) &&
+			item.name.toLowerCase().includes(search.toLowerCase()),
+	);
+	async function choosePicture(item: (typeof pictures)[number]) {
+		const ownProfile =
+			item.module === "profile" &&
+			item.recordId === memberId &&
+			item.uploadedBy === memberId;
+		let id = item.id;
+		if (!ownProfile) {
+			const cacheKey = `${memberId}:${item.id}`;
+			const preparedId = preparedPictures.current.get(cacheKey);
+			if (preparedId) id = preparedId;
+			else {
+				const blob = await getFilePreviewBlob(item.id, "thumbnail");
+				if (blob.type !== "image/png" || blob.size > 2 * 1024 * 1024)
+					throw new Error(
+						"This image could not be prepared as a profile picture.",
+					);
+				id = await uploadFile(
+					new File(
+						[blob],
+						`${Array.from(item.name.replace(/\.[^.]+$/, ""))
+							.slice(0, 60)
+							.join("")}-profile.png`,
+						{
+							type: "image/png",
+						},
+					),
+					"profile",
+				);
+				preparedPictures.current.set(cacheKey, id);
+				await queryClient.invalidateQueries({ queryKey: ["files"] });
+			}
+		}
+		await onUploaded(id);
+		setChoosing(false);
+	}
 	async function perform(action: () => Promise<void>, message: string) {
 		setBusy(true);
 		setError("");
@@ -441,16 +489,28 @@ export function ProfileUpload({
 				aria-expanded={choosing}
 				onClick={() => setChoosing((value) => !value)}
 			>
+				<ActionIcon name="image" />
 				Choose existing picture
 			</button>
 			{choosing && (
 				<section
 					className="grid gap-3 rounded-box border border-base-300 p-3"
-					aria-label="Your previous profile pictures"
+					aria-label="Profile picture gallery"
 				>
 					<p className="text-sm text-base-content/60">
-						Choose from your previous profile uploads.
+						Choose an image from your gallery. A profile-sized copy is saved
+						when needed; the original stays unchanged.
 					</p>
+					<label className="grid gap-1 text-sm">
+						<span>Search profile images</span>
+						<input
+							className="input input-bordered w-full"
+							type="search"
+							value={search}
+							onChange={(event) => setSearch(event.target.value)}
+							placeholder="Search by filename"
+						/>
+					</label>
 					{query.isPending ? (
 						<p role="status">Loading pictures…</p>
 					) : query.error ? (
@@ -466,49 +526,43 @@ export function ProfileUpload({
 								Retry pictures
 							</button>
 						</div>
-					) : query.data?.files.some(
-							(item) => item.uploadedBy === memberId && isGalleryImage(item),
-						) ? (
-						<ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-							{query.data.files
-								.filter(
-									(item) =>
-										item.uploadedBy === memberId && isGalleryImage(item),
-								)
-								.map((item) => (
-									<li key={item.id} className="min-w-0">
-										<div className="overflow-hidden rounded-box">
-											<FileImage key={item.id} id={item.id} name={item.name} />
-										</div>
-										<p className="mt-1 truncate text-xs" title={item.name}>
-											{item.name}
-										</p>
-										{currentFileId === item.id ? (
-											<p className="mt-2 text-sm font-medium">
-												Current picture
-											</p>
-										) : (
-											<button
-												type="button"
-												className="btn btn-outline btn-sm mt-2 w-full"
-												disabled={busy}
-												aria-label={`Use ${item.name}`}
-												onClick={() =>
-													void perform(async () => {
-														await onUploaded(item.id);
-														setChoosing(false);
-													}, "Profile picture saved.")
-												}
-											>
-												Use picture
-											</button>
-										)}
-									</li>
-								))}
+					) : pictures.length ? (
+						<ul className="grid grid-cols-2 gap-3">
+							{pictures.map((item) => (
+								<li key={item.id} className="min-w-0">
+									<div className="overflow-hidden rounded-box">
+										<FileImage key={item.id} id={item.id} name={item.name} />
+									</div>
+									<p className="mt-1 truncate text-xs" title={item.name}>
+										{item.name}
+									</p>
+									{currentFileId === item.id ? (
+										<p className="mt-2 text-sm font-medium">Current picture</p>
+									) : (
+										<button
+											type="button"
+											className="btn btn-outline btn-sm mt-2 w-full"
+											disabled={busy}
+											aria-label={`Use ${item.name}`}
+											onClick={() =>
+												void perform(
+													() => choosePicture(item),
+													"Profile picture saved.",
+												)
+											}
+										>
+											<ActionIcon name="check" />
+											Use picture
+										</button>
+									)}
+								</li>
+							))}
 						</ul>
 					) : (
 						<p className="text-sm text-base-content/60">
-							No previous pictures. Upload a profile picture to reuse it here.
+							{search
+								? "No matching images. Try another filename."
+								: "No gallery images yet. Upload a profile picture or add an image in Files."}
 						</p>
 					)}
 				</section>
@@ -520,6 +574,7 @@ export function ProfileUpload({
 					disabled={busy}
 					onClick={() => void perform(onRemove, "Profile picture removed.")}
 				>
+					<ActionIcon name="close" />
 					Remove uploaded picture
 				</button>
 			)}

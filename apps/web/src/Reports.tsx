@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import ActionIcon from "./ActionIcon";
 import { getReport, listReports, saveReport, type Report } from "./api";
 import type { Member, Project, Task } from "./api";
 
@@ -458,14 +459,16 @@ export default function Reports({
 								</div>
 								<button
 									type="button"
-									className="btn btn-ghost btn-sm"
+									className="btn btn-ghost btn-sm btn-square"
+									aria-label="Close"
+									title="Close"
 									disabled={saveMutation.isPending}
 									onClick={() => {
 										setDraft(null);
 										setEditing(false);
 									}}
 								>
-									Close
+									<ActionIcon name="close" />
 								</button>
 							</div>
 							<fieldset
@@ -647,6 +650,7 @@ export default function Reports({
 													)
 												}
 											>
+												<ActionIcon name="trash" />
 												Remove
 											</button>
 										</div>
@@ -708,6 +712,7 @@ export default function Reports({
 											disabled={saveMutation.isPending}
 											onClick={() => beginEdit(current)}
 										>
+											<ActionIcon name="edit" />
 											Edit report
 										</button>
 										<button

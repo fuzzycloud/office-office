@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import ActionIcon from "./ActionIcon";
 import {
 	deleteFile,
 	downloadFile,
@@ -96,6 +97,7 @@ function FileImageContent({
 							void query.refetch();
 						}}
 					>
+						<ActionIcon name="refresh" />
 						Retry preview
 					</button>
 				</div>
@@ -256,12 +258,14 @@ export function ImageGallery({
 					disabled={query.isFetching}
 					onClick={() => void query.refetch()}
 				>
+					<ActionIcon name="refresh" />
 					Refresh images
 				</button>
 				{["projects", "reports"].some((module) =>
 					workspace.permissions.includes(`${module}:write`),
 				) && (
 					<button type="button" className="btn btn-primary" onClick={onUpload}>
+						<ActionIcon name="upload" />
 						Upload files
 					</button>
 				)}
@@ -300,6 +304,7 @@ export function ImageGallery({
 												setSelected(file);
 											}}
 										>
+											<ActionIcon name="image" />
 											Preview
 										</button>
 									</div>
@@ -364,10 +369,12 @@ export function ImageGallery({
 						</div>
 						<button
 							type="button"
-							className="btn btn-ghost btn-sm"
+							className="btn btn-ghost btn-square btn-sm"
+							aria-label="Close"
+							title="Close"
 							onClick={close}
 						>
-							Close
+							<ActionIcon name="close" />
 						</button>
 					</div>
 					{selected && (
@@ -393,6 +400,7 @@ export function ImageGallery({
 									void act(() => downloadFile(selected.id, selected.name))
 								}
 							>
+								<ActionIcon name="download" />
 								Download
 							</button>
 						)}
@@ -425,6 +433,7 @@ export function ImageGallery({
 											})
 										}
 									>
+										<ActionIcon name="trash" />
 										Confirm delete
 									</button>
 									<button
@@ -443,6 +452,7 @@ export function ImageGallery({
 									disabled={busy}
 									onClick={() => setConfirmDelete(true)}
 								>
+									<ActionIcon name="trash" />
 									Delete
 								</button>
 							))}

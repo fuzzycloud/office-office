@@ -142,3 +142,23 @@ spoof rejection against the actual private S3-compatible store, alongside the
 existing upload/replay/role/deletion checks. Its temporary objects were removed.
 No stored thumbnail objects, schema migration, release or deployment are needed
 for source integration; the hosted office was not changed.
+
+
+## Gallery-to-profile UI fix — 2026-10-16
+
+The profile picker now lists all readable raster images. Own profile images reuse
+their IDs; other gallery images are fetched as a private bounded PNG thumbnail,
+uploaded to the authenticated member's profile, then selected. Originals stay
+unchanged and the server's own-profile validation remains in force. No backend,
+protobuf or database migration changed. Shared decorative action icons preserve
+accessible button names and existing delete confirmations.
+
+Frontend TypeScript/build passed, as did Biome for the picker/gallery/icon
+components and browser tests. The full isolated Chromium run passed all 43
+scenarios, including eight gallery cases. New explicit file-transport fixtures
+cover project/report/other-member profile selection, authenticated thumbnail and
+PNG upload, use of the new owned ID, no source deletion and preview/upload failure
+recovery. Own-profile reuse still performs no upload. Desktop and 390px picker
+screenshots were inspected; the picker uses two columns to keep action labels
+readable in the Settings panel. These fixture tests do not constitute another
+live S3 drill. No release or deployment was performed for this fix.

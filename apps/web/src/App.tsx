@@ -36,6 +36,7 @@ import {
 	type Workspace,
 } from "./api";
 import Files, { ProfileUpload } from "./Files";
+import ActionIcon from "./ActionIcon";
 import MemberAvatar from "./MemberAvatar";
 import Reports from "./Reports";
 import TaskDetails from "./TaskDetails";
@@ -847,6 +848,7 @@ function SecretReveal({
 							}
 						}}
 					>
+						<ActionIcon name="copy" />
 						Copy key
 					</button>
 				</div>
@@ -865,6 +867,7 @@ function SecretReveal({
 				</div>
 				<div className="modal-action">
 					<button className="btn btn-primary" onClick={onClose}>
+						<ActionIcon name="check" />
 						Done
 					</button>
 				</div>
@@ -1456,6 +1459,7 @@ function Team({
 											className="btn btn-ghost btn-sm"
 											onClick={() => onEdit(person)}
 										>
+											<ActionIcon name="edit" />
 											Edit
 										</button>
 									</td>
@@ -1623,6 +1627,7 @@ function Customers({
 											className="btn btn-ghost btn-sm"
 											onClick={() => onEdit(item)}
 										>
+											<ActionIcon name="edit" />
 											Edit details
 										</button>
 									</div>
@@ -1884,6 +1889,7 @@ function Projects({
 											className="btn btn-ghost btn-sm"
 											onClick={() => onEdit(selectedProject)}
 										>
+											<ActionIcon name="edit" />
 											Edit project
 										</button>
 									)}
@@ -2635,6 +2641,7 @@ function Social({
 												className="btn btn-ghost btn-sm"
 												onClick={() => onEdit(post)}
 											>
+												<ActionIcon name="edit" />
 												Edit
 											</button>
 										)}
@@ -3411,10 +3418,11 @@ function RecordDialog({
 					<button
 						className="btn btn-circle btn-ghost btn-sm"
 						aria-label="Close dialog"
+						title="Close dialog"
 						onClick={onClose}
 						disabled={busy}
 					>
-						×
+						<ActionIcon name="close" />
 					</button>
 				</div>
 				<p className="mt-2 text-sm text-base-content/60">

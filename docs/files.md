@@ -6,7 +6,7 @@ Office Office stores file bytes in a private S3-compatible bucket and metadata i
 
 Open **Files → Gallery** for a contact sheet of PNG, JPEG and WebP images across projects, reports and profile pictures. Search filenames or uploaders and filter by category or project. Thumbnails load near the visible viewport; opening an image loads a larger preview. Download keeps the original file, and deletion uses the same revision and role checks as the file list. SVG, GIF and non-image documents remain in Files and are not rendered as gallery images. A file with an image MIME label but invalid image bytes shows an unavailable preview rather than active content.
 
-Settings → Your profile → **Choose existing picture** reuses your own previously uploaded profile pictures. Selection saves the existing file ID without uploading another object. Project/report images and another member's pictures cannot be assigned as your profile image through this picker; the existing ownership rule is unchanged.
+Settings → Your profile → **Choose existing picture** searches all readable gallery images. Your own profile uploads reuse the existing file ID. Other images are fetched through the authenticated 384-pixel thumbnail endpoint and uploaded as a new PNG profile image belonging to you; the original file is unchanged. Profile saving still requires an active own-profile file, so a readable attachment or another member’s profile ID cannot be linked directly.
 
 ### Authenticated previews
 
