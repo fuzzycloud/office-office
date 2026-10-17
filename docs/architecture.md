@@ -121,11 +121,11 @@ its configuration builds once and gives tests isolated databases (`playwright.co
 
 ## Build constraints
 
-- **Pre-commit hook compiles:** not recorded
+- **Pre-commit hook compiles:** yes
 - **Cold build cost:** not recorded
 - **Concurrent builds safe:** no
 
-Keep Cargo builds serial on this machine (`AGENTS.md`). Dependencies are declared in
+The user confirmed on 2026-10-17 that the local pre-commit hook builds. Keep Cargo builds serial on this machine (`AGENTS.md`); do not overlap a commit hook with another Cargo build. Dependencies are declared in
 root/member `Cargo.toml`, `package.json`, and `apps/web/package.json`; lockfiles pin them.
 
 ## Development traps
