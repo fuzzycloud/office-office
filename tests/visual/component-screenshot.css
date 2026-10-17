@@ -1,0 +1,4 @@
+/* Keep page chrome from overlapping a tall component capture. */
+.navbar {
+	visibility: hidden;
+}

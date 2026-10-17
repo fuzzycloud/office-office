@@ -1,5 +1,164 @@
 import { expect, test } from "./fixtures";
 
+test("Browser assignments, structured mentions and replies reach notification polling", async ({
+	office,
+	page,
+}) => {
+	const { token } = await office.bootstrap();
+	const created = await office.rpc(
+		"SaveMember",
+		{
+			member: {
+				name: "Browser recipient",
+				kind: "agent",
+				role: "member",
+				status: "active",
+			},
+		},
+		token,
+	);
+	expect(created.ok()).toBeTruthy();
+	const { member, secret } = await created.json();
+	const exchange = await office.rpc("ExchangeAgentKey", { key: secret });
+	expect(exchange.ok()).toBeTruthy();
+	const { token: recipientToken } = await exchange.json();
+	const workspace = await (await office.rpc("GetWorkspace", {}, token)).json();
+	const task = workspace.tasks[0];
+	const manualNotifications: string[] = [];
+	page.on("request", (request) => {
+		if (request.url().endsWith("/CreateNotification"))
+			manualNotifications.push(request.url());
+	});
+	await page.goto("/");
+	await page.evaluate(
+		(value) => sessionStorage.setItem("office-office-session", value),
+		token,
+	);
+	await page.goto(`/projects?sourceKind=task&sourceId=${task.id}`);
+	const dialog = page.getByRole("dialog").filter({
+		has: page.getByRole("heading", { name: task.title, exact: true }),
+	});
+	await dialog.getByRole("button", { name: "Edit task", exact: true }).click();
+	await dialog.getByLabel("Owner", { exact: true }).selectOption(member.id);
+	await dialog.getByRole("button", { name: "Save task", exact: true }).click();
+	await expect(
+		dialog.getByRole("button", { name: "Edit task", exact: true }),
+	).toBeVisible();
+	const assigned = await (
+		await office.rpc("PollNotifications", {}, recipientToken)
+	).json();
+	expect(assigned.notifications).toEqual([
+		expect.objectContaining({
+			kind: "work_request",
+			sourceKind: "task",
+			sourceId: task.id,
+			recipientId: member.id,
+		}),
+	]);
+	await dialog
+		.getByRole("textbox", { name: "Add a comment", exact: true })
+		.fill("@Browser recipient is plain text");
+	await dialog
+		.getByRole("button", { name: "Post comment", exact: true })
+		.click();
+	await expect(
+		dialog.getByText("@Browser recipient is plain text", { exact: true }),
+	).toBeVisible();
+	const plain = await (
+		await office.rpc(
+			"PollNotifications",
+			{ afterCursor: assigned.nextCursor },
+			recipientToken,
+		)
+	).json();
+	expect(plain.notifications ?? []).toEqual([]);
+	await dialog
+		.getByRole("textbox", { name: "Add a comment", exact: true })
+		.fill("Please investigate this browser question");
+	await dialog
+		.getByRole("button", { name: /Mentions, response requests and references/ })
+		.click();
+	await dialog
+		.getByLabel("Find teammate to mention", { exact: true })
+		.fill(member.name);
+	await dialog.getByLabel(`@${member.name} (AI)`, { exact: true }).check();
+	await dialog
+		.getByLabel(`Request response from ${member.name}`, { exact: true })
+		.check();
+	await dialog
+		.getByRole("button", { name: "Post comment", exact: true })
+		.click();
+	const parent = dialog
+		.getByRole("article")
+		.filter({ hasText: "Please investigate this browser question" });
+	await expect(parent).toBeVisible();
+	const selected = await (
+		await office.rpc(
+			"PollNotifications",
+			{ afterCursor: plain.nextCursor },
+			recipientToken,
+		)
+	).json();
+	expect(selected.notifications).toHaveLength(2);
+	expect(
+		selected.notifications.map((n: { kind: string }) => n.kind).sort(),
+	).toEqual(["notice", "response_request"]);
+	const sourceId = selected.notifications[0].sourceId;
+	for (const notification of selected.notifications) {
+		expect(notification).toMatchObject({
+			sourceKind: "task_comment",
+			sourceId,
+			sourceRevision: 1,
+			recipientId: member.id,
+		});
+	}
+	const beforeReply = await (
+		await office.rpc("PollNotifications", {}, token)
+	).json();
+	await page.evaluate(
+		(value) => sessionStorage.setItem("office-office-session", value),
+		recipientToken,
+	);
+	await page.goto(`/projects?sourceKind=task&sourceId=${task.id}`);
+	await parent.getByRole("button", { name: "Reply", exact: true }).click();
+	await dialog
+		.getByRole("textbox", { name: "Reply to comment", exact: true })
+		.fill("The browser answer is ready");
+	await dialog
+		.getByRole("button", { name: "Post comment", exact: true })
+		.click();
+	await expect(
+		dialog.getByText("The browser answer is ready", { exact: true }),
+	).toBeVisible();
+	const discussion = await (
+		await office.rpc("ListTaskDiscussion", { taskId: task.id }, token)
+	).json();
+	const reply = discussion.comments.find(
+		(c: { body: string }) => c.body === "The browser answer is ready",
+	);
+	expect(reply.parentId).toBe(sourceId);
+	const delivered = await (
+		await office.rpc(
+			"PollNotifications",
+			{ afterCursor: beforeReply.nextCursor },
+			token,
+		)
+	).json();
+	expect(delivered.notifications).toEqual([
+		expect.objectContaining({
+			kind: "notice",
+			sourceKind: "task_comment",
+			sourceId: reply.id,
+			sourceRevision: 1,
+			body: reply.body,
+		}),
+	]);
+	expect(
+		manualNotifications,
+		"Source writes generate attention through the shared engine",
+	).toEqual([]);
+});
+
 test("Task replies preserve member IDs, explicit response requests and exact report revisions", async ({
 	office,
 	page,

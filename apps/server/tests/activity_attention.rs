@@ -583,3 +583,98 @@ async fn failed_durable_feed_append_rolls_back_records_notifications_and_cursors
     );
     service.close().await.unwrap();
 }
+
+#[tokio::test]
+async fn reply_and_parent_notice_commit_atomically_and_survive_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("reply-attention.sqlite3");
+    let service = OfficePreviewService::open(&path).await.unwrap();
+    let admin = bootstrap(&service).await;
+    let (_, author_token) = agent(&service, &admin.token).await;
+    let task = project_task(&service, &admin.token, "").await;
+    let parent = service
+        .agent_save_task_comment(
+            &admin.token,
+            SaveTaskCommentRequest {
+                task_id: task.id.clone(),
+                body: "Question for a teammate".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let before = feed(&service, &admin.token, "", 100).await;
+    let before_notifications = service
+        .poll_notifications(&admin.token, PollNotificationsRequest::default())
+        .await
+        .unwrap();
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    conn.execute_batch("CREATE TRIGGER reject_reply_notice BEFORE INSERT ON events WHEN NEW.event_type='notification' BEGIN SELECT RAISE(ABORT, 'test reply notice write failure'); END;").unwrap();
+    let request = SaveTaskCommentRequest {
+        task_id: task.id.clone(),
+        body: "An atomic reply".into(),
+        parent_id: parent.id,
+        ..Default::default()
+    };
+    assert_eq!(
+        service
+            .agent_save_task_comment(&author_token, request.clone())
+            .await
+            .unwrap_err()
+            .code,
+        connectrpc::ErrorCode::Internal
+    );
+    assert_eq!(
+        service
+            .task_discussion(&admin.token, &task.id)
+            .await
+            .unwrap()
+            .comments
+            .len(),
+        1
+    );
+    assert_eq!(feed(&service, &admin.token, "", 100).await, before);
+    assert_eq!(
+        service
+            .poll_notifications(&admin.token, PollNotificationsRequest::default())
+            .await
+            .unwrap(),
+        before_notifications
+    );
+    conn.execute_batch("DROP TRIGGER reject_reply_notice;")
+        .unwrap();
+    let reply = service
+        .agent_save_task_comment(&author_token, request)
+        .await
+        .unwrap();
+    let notices = service
+        .poll_notifications(&admin.token, PollNotificationsRequest::default())
+        .await
+        .unwrap();
+    assert_eq!(notices.notifications.len(), 1);
+    assert_eq!(notices.notifications[0].source_id, reply.id);
+    assert_eq!(notices.notifications[0].source_kind, "task_comment");
+    assert_eq!(notices.notifications[0].source_revision, 1);
+    assert_eq!(notices.notifications[0].kind, "notice");
+    let committed_feed = feed(&service, &admin.token, "", 100).await;
+    service.close().await.unwrap();
+    drop(service);
+    let service = OfficePreviewService::open(&path).await.unwrap();
+    assert_eq!(
+        service
+            .poll_notifications(&admin.token, PollNotificationsRequest::default())
+            .await
+            .unwrap(),
+        notices
+    );
+    assert_eq!(feed(&service, &admin.token, "", 100).await, committed_feed);
+    assert!(
+        service
+            .task_discussion(&admin.token, &task.id)
+            .await
+            .unwrap()
+            .comments
+            .contains(&reply)
+    );
+    service.close().await.unwrap();
+}

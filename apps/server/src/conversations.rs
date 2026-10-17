@@ -693,6 +693,61 @@ impl WorkspaceActor {
                 },
             )?;
         }
+        // A reply informs its parent author once. It does not ask them to run
+        // again, and an explicitly selected recipient already receives attention.
+        if revision == 1 {
+            let parent_author = match source_kind {
+                "task_comment" => self
+                    .state
+                    .comments
+                    .iter()
+                    .find(|c| c.id == source_id)
+                    .and_then(|reply| self.state.comments.iter().find(|c| c.id == reply.parent_id))
+                    .map(|c| &c.author_id),
+                "project_message" => self
+                    .state
+                    .project_messages
+                    .iter()
+                    .find(|m| m.id == source_id)
+                    .and_then(|reply| {
+                        self.state
+                            .project_messages
+                            .iter()
+                            .find(|m| m.id == reply.parent_id)
+                    })
+                    .map(|m| &m.author_id),
+                _ => None,
+            };
+            let recipient = parent_author
+                .filter(|id| *id != &actor.id && !mentions.contains(id) && !responses.contains(id))
+                // Derived attention must not prevent a reply to an inactive author.
+                // Explicit recipients above continue to require active membership.
+                .filter(|id| {
+                    self.state.members.iter().any(|m| {
+                        m.id == **id
+                            && m.status == "active"
+                            && Self::permit(&Principal { member: m.clone() }, "projects", false)
+                                .is_ok()
+                    })
+                })
+                .cloned();
+            if let Some(recipient) = recipient {
+                self.create_notification_as(
+                    actor,
+                    CreateNotificationRequest {
+                        request_id: format!("{source_kind}:{source_id}:{revision}:reply"),
+                        title: "New reply".into(),
+                        body: body.into(),
+                        kind: "notice".into(),
+                        recipient_ids: vec![recipient],
+                        source_kind: source_kind.into(),
+                        source_id: source_id.into(),
+                        source_revision: revision,
+                        ..Default::default()
+                    },
+                )?;
+            }
+        }
         Ok(())
     }
     pub(super) fn list_project_discussion_as(

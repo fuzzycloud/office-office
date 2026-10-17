@@ -10,7 +10,7 @@ import {
 	useState,
 } from "react";
 import * as v from "valibot";
-import ActionIcon from "./ActionIcon";
+import ActionIcon, { type ActionIconName } from "./ActionIcon";
 import {
 	type Board,
 	bootstrapAdmin,
@@ -105,17 +105,17 @@ type SaveInput =
 	| { kind: "project"; value: Project }
 	| { kind: "post"; value: ScheduledPost }
 	| { kind: "settings"; value: Workspace["settings"] };
-const nav: { id: Page; label: string; icon: string }[] = [
-	{ id: "overview", label: "Overview", icon: "⌂" },
-	{ id: "notifications", label: "Notifications", icon: "♧" },
-	{ id: "team", label: "Team", icon: "♧" },
-	{ id: "customers", label: "Customers", icon: "◎" },
-	{ id: "projects", label: "Projects", icon: "▤" },
-	{ id: "files", label: "Files", icon: "▱" },
-	{ id: "reports", label: "Reports", icon: "⌕" },
-	{ id: "roles", label: "Roles & permissions", icon: "♙" },
-	{ id: "social", label: "Social queue", icon: "◷" },
-	{ id: "settings", label: "Settings", icon: "⚙" },
+const nav: { id: Page; label: string; icon: ActionIconName }[] = [
+	{ id: "overview", label: "Overview", icon: "dashboard" },
+	{ id: "notifications", label: "Notifications", icon: "bell" },
+	{ id: "team", label: "Team", icon: "users" },
+	{ id: "customers", label: "Customers", icon: "contact" },
+	{ id: "projects", label: "Projects", icon: "folderKanban" },
+	{ id: "files", label: "Files", icon: "files" },
+	{ id: "reports", label: "Reports", icon: "chart" },
+	{ id: "roles", label: "Roles & permissions", icon: "shield" },
+	{ id: "social", label: "Social queue", icon: "calendarClock" },
+	{ id: "settings", label: "Settings", icon: "settings" },
 ];
 const themes = [
 	"light",
@@ -598,7 +598,7 @@ export default function App() {
 								className="btn btn-square btn-ghost"
 								aria-label="Open navigation"
 							>
-								☰
+								<ActionIcon name="menu" />
 							</label>
 						</div>
 						<div className="flex-1">
@@ -612,7 +612,8 @@ export default function App() {
 						<div className="flex-none gap-2">
 							<NotificationBell workspace={data} />
 							<div className="badge badge-success badge-outline gap-1">
-								● {data.demoMode ? "Sample data" : "Office data"} ·{" "}
+								<ActionIcon name="status" size={10} />{" "}
+								{data.demoMode ? "Sample data" : "Office data"} ·{" "}
 								{data.persistentStorage ? "SQLite saved" : "In-memory"}
 							</div>
 							<div className="dropdown dropdown-end">
@@ -677,7 +678,7 @@ export default function App() {
 						<div
 							className={`alert mb-6 border text-sm shadow-sm ${data.demoMode ? "border-warning/20 bg-warning/10" : "border-info/20 bg-info/10"}`}
 						>
-							<span aria-hidden="true">ⓘ</span>
+							<ActionIcon name="info" />
 							{data.demoMode ? (
 								<span>
 									<b>Sample starter data loaded.</b>{" "}
@@ -702,7 +703,7 @@ export default function App() {
 						</div>
 						{me.role === "viewer" && (
 							<div className="alert mb-6 border border-info/20 bg-info/10 text-sm">
-								<span aria-hidden="true">ⓘ</span>
+								<ActionIcon name="info" />
 								<span>
 									You can read workspace records and manage your own
 									notifications. Your administrator manages other workspace
@@ -856,12 +857,7 @@ export default function App() {
 											aria-current={page === item.id ? "page" : undefined}
 											onClick={() => navigate(item.id)}
 										>
-											<span
-												className="w-6 text-center text-lg"
-												aria-hidden="true"
-											>
-												{item.icon}
-											</span>
+											<ActionIcon name={item.icon} className="w-6" />
 											{item.label}
 											{item.id === "projects" && counts.projects > 0 && (
 												<span className="badge badge-sm ml-auto">
@@ -890,7 +886,7 @@ export default function App() {
 									aria-label="Sign out"
 									onClick={signOut}
 								>
-									↗
+									<ActionIcon name="logout" />
 								</button>
 							</div>
 						</div>
@@ -970,7 +966,7 @@ function SecretReveal({
 					</p>
 				)}
 				<div className="alert mt-4 border border-info/20 bg-info/10 text-sm">
-					<span>⌁</span>
+					<ActionIcon name="key" />
 					<span>
 						Use this key as the bearer credential for your MCP client. Access
 						follows the AI user’s role. Do not put the key in browser storage or
@@ -1008,7 +1004,7 @@ function FullError({
 		<main className="grid min-h-screen place-items-center p-5">
 			<section className="card w-full max-w-lg border border-base-300 bg-base-100 shadow">
 				<div className="card-body items-center text-center">
-					<span className="text-3xl">⌁</span>
+					<ActionIcon name="alert" size={32} />
 					<h1 className="card-title">We couldn’t open the workspace</h1>
 					<p className="text-base-content/70">{message}</p>
 					<div className="card-actions mt-2">
@@ -1178,7 +1174,7 @@ function AuthPage({
 							</div>
 							{!persistentStorage && (
 								<div className="alert border border-warning/20 bg-warning/10 text-sm">
-									<span>ⓘ</span>
+									<ActionIcon name="info" />
 									<span>
 										This in-memory workspace resets when the server restarts.
 									</span>
@@ -1186,7 +1182,7 @@ function AuthPage({
 							)}
 							{persistentStorage && (
 								<div className="alert border border-info/20 bg-info/10 text-sm">
-									<span>ⓘ</span>
+									<ActionIcon name="info" />
 									<span>
 										Workspace records are saved in SQLite. External connectors
 										and social posting are not available yet.
@@ -1466,7 +1462,7 @@ function Empty({
 	return (
 		<div className="rounded-box border border-dashed border-base-300 bg-base-200/50 p-7 text-center">
 			<div className="mx-auto grid size-10 place-items-center rounded-full bg-base-200 text-lg">
-				⌁
+				<ActionIcon name="empty" />
 			</div>
 			<h3 className="mt-3 font-semibold">{title}</h3>
 			<p className="mx-auto mt-1 max-w-md text-sm text-base-content/60">
@@ -1502,7 +1498,8 @@ function Team({
 				action={
 					canEdit && (
 						<button className="btn btn-primary" onClick={onAdd}>
-							＋ Add member
+							<ActionIcon name="plus" />
+							Add member
 						</button>
 					)
 				}
@@ -1681,14 +1678,15 @@ function Customers({
 				action={
 					canEdit && (
 						<button className="btn btn-primary" onClick={onAdd}>
-							＋ Add customer
+							<ActionIcon name="plus" />
+							Add customer
 						</button>
 					)
 				}
 			/>
 			<div className="mb-4 flex flex-wrap items-center justify-between gap-3">
 				<label className="input input-bordered flex w-full max-w-md items-center gap-2 bg-base-100">
-					<span aria-hidden="true">⌕</span>
+					<ActionIcon name="search" />
 					<input
 						value={search}
 						onChange={(e) => setSearch(e.target.value)}
@@ -1935,7 +1933,8 @@ function Projects({
 				action={
 					canEdit && (
 						<button className="btn btn-primary" onClick={onAdd}>
-							＋ New project
+							<ActionIcon name="plus" />
+							New project
 						</button>
 					)
 				}
@@ -2032,7 +2031,8 @@ function Projects({
 											className="btn btn-primary btn-sm"
 											onClick={() => startTask()}
 										>
-											＋ Add task
+											<ActionIcon name="plus" />
+											Add task
 										</button>
 									)}
 								</div>
@@ -2104,7 +2104,8 @@ function Projects({
 											setBoardEditor((value) => !value);
 										}}
 									>
-										＋ New board
+										<ActionIcon name="plus" />
+										New board
 									</button>
 								)}
 							</div>
@@ -2411,7 +2412,8 @@ function Projects({
 														className="add-task-link"
 														onClick={() => startTask(column)}
 													>
-														＋ Add task
+														<ActionIcon name="plus" />
+														Add task
 													</button>
 												)}
 											</section>
@@ -2687,7 +2689,7 @@ function Social({
 			<div
 				className={`alert mb-5 border text-sm ${persistentStorage ? "border-info/20 bg-info/10" : "border-warning/20 bg-warning/10"}`}
 			>
-				<span>ⓘ</span>
+				<ActionIcon name="info" />
 				<span>
 					{demoMode
 						? "Channels and scheduled times are sample records. Posts are never published from this workspace."
@@ -2705,7 +2707,8 @@ function Social({
 					canEdit &&
 					connections.length > 0 && (
 						<button className="btn btn-primary" onClick={onAdd}>
-							＋ Compose post
+							<ActionIcon name="plus" />
+							Compose post
 						</button>
 					)
 				}
@@ -3131,7 +3134,7 @@ function Settings({
 						<div
 							className={`alert mt-2 border text-sm ${persistentStorage ? "border-info/20 bg-info/10" : "border-warning/20 bg-warning/10"}`}
 						>
-							<span>ⓘ</span>
+							<ActionIcon name="info" />
 							<span>
 								{demoMode
 									? "This workspace includes sample records."
@@ -3155,7 +3158,7 @@ function Settings({
 						<div
 							className={`alert border text-sm ${persistentStorage ? "border-info/20 bg-info/10" : "border-warning/20 bg-warning/10"}`}
 						>
-							<span>ⓘ</span>
+							<ActionIcon name="info" />
 							<span>
 								{!persistentStorage ? (
 									<>

@@ -49,6 +49,11 @@ The browser uses TanStack Router file-based routes for section URLs, browser bac
 
 The protobuf service is the shared domain boundary for the browser and agents. Project workspaces support multiple boards with custom columns and tasks, owners, priorities and due dates. Task details include comments and a separate activity timeline for humans and agents. Comments support member-ID mentions, replies, exact file/report references, explicit response requests, revision-checked edits and event-based soft deletion. Projects also have a lightweight discussion area, with linked task creation. See [tasks and discussions](docs/tasks.md). The MCP adapter uses the same actor commands and permission checks. Sample records are created by an explicit engine-command scenario, not by pre-filling projections, direct database inserts or frontend fixtures. Tests can call the typed engine without starting an HTTP server. See [starter data and engine testing](docs/demo.md). Run `just check` for Rust, frontend and runtime checks (including Bats and ShellCheck for container startup); `just test-runtime` runs those startup checks alone; `just generate` lints protobuf and regenerates the TypeScript client. Do not edit generated clients by hand. `just test-e2e` builds the UI and server and runs isolated browser/HTTP scenarios against disposable SQLite offices, including task discussions, reports, permissions, restart persistence and MCP access. See [automated testing](docs/testing.md) for setup, focused runs and failure reports.
 
+UI icons use Lucide React with consistent SVG sizing and accessible button names.
+`pnpm test:visual` compares approved desktop/mobile light/dark screenshots for the
+main office screens; `pnpm test:visual:update` prepares intentional baseline
+changes for review. See [visual regression checks](docs/testing.md#visual-regression-checks).
+
 The internal [`office-sqlite-journal`](crates/sqlite-journal/README.md) helper uses rusqlite to put Katha event writes and private credential tables in the same SQLite transaction; it does not use `katha-sqlx`. This preserves the one-writer model and atomic commit boundary. It is not a claim of production readiness: retention, export, request throttling, a public authentication perimeter and hosted recovery monitoring remain to be completed.
 
 ## Team profiles
@@ -108,7 +113,7 @@ MIT OR Apache-2.0. See LICENSE-MIT and LICENSE-APACHE.
 
 The Notifications board provides member-addressed notices and explicit response
 requests, separate read/handled states and personal inboxes for humans and AI.
-Task assignment creates an assignee request; structured mentions create notices, and discussions can explicitly request a response. The header bell separates unread items, unresolved requests and recent activity. A watcher can poll durable changes with
+Task assignment creates an assignee request; structured mentions and replies to other members create notices, and discussions can explicitly request a response. The header bell separates unread items, unresolved requests and recent activity. A watcher can poll durable changes with
 a saved cursor and atomically claim requests using existing AI credentials. See
 [notification and watcher setup](docs/notifications.md).
 

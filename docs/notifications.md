@@ -154,3 +154,27 @@ The app exposes notification delivery and atomic claims, not exactly-once
 external execution. Durable local processing and runtime reconciliation remain
 the watcher's responsibility. Polling sends no email, Slack or Telegram message;
 runtime/profile mapping and messaging adapters stay outside this application.
+
+## Board actions and watcher wake-ups
+
+Saving a new assignment or changing its assignee creates an automatic
+`work_request`. Selecting a real member in the structured mention picker creates
+an informational `notice`; plain text such as `@tara` is not a member identity.
+Use **Request response** for an explicit question that a watcher may dispatch.
+
+A new task-comment or project-message reply creates one `notice` for its active
+parent author. Self replies, unchanged saves and text edits do not repeat it. If
+that author is already explicitly mentioned or response-selected, the selected
+workflow provides the notification instead. Inactive parent authors are skipped
+for derived notices; explicitly selecting an inactive recipient still fails.
+
+Watchers must store informational notices without waking a runtime. Only their
+configured explicit request kinds are eligible for claim/dispatch. Claims mean
+picked up for handling, never completed. Always reconcile current notification
+state before acting on immutable poll snapshots. This prevents routine agent
+replies from launching a notification loop.
+
+These behaviors apply to new source commands after upgrade. Existing comments
+and assignments are not replayed into new requests, so already manually forwarded
+work is not dispatched again. This does not require a watcher to manufacture
+notifications that the application should produce.

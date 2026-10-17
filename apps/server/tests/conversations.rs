@@ -70,6 +70,299 @@ async fn reviewer(service: &Arc<OfficePreviewService>, token: &str) -> (String, 
 }
 
 #[tokio::test]
+async fn new_replies_notify_parent_authors_once_without_requesting_work() {
+    let service = Arc::new(OfficePreviewService::new());
+    let admin = setup(&service).await;
+    let (_, member_token) = reviewer(&service, &admin.token).await;
+    let workspace = service.workspace(&admin.token).await.unwrap();
+    let task = &workspace.tasks[0];
+    for source_kind in ["task_comment", "project_message"] {
+        let (method, field, parent_body) = if source_kind == "task_comment" {
+            (
+                "SaveTaskComment",
+                "comment",
+                json!({"taskId":task.id,"body":"Parent question"}),
+            )
+        } else {
+            (
+                "SaveProjectMessage",
+                "message",
+                json!({"message":{"projectId":task.project_id,"body":"Parent question"}}),
+            )
+        };
+        let parent = ok(&service, method, &admin.token, parent_body).await[field].clone();
+        let reply_body = if source_kind == "task_comment" {
+            json!({"taskId":task.id,"body":"A new reply","parentId":parent["id"]})
+        } else {
+            json!({"message":{"projectId":task.project_id,"body":"A new reply","parentId":parent["id"]}})
+        };
+        let reply = ok(&service, method, &member_token, reply_body).await[field].clone();
+        let history = ok(&service, "PollNotifications", &admin.token, json!({})).await;
+        let notices: Vec<_> = history
+            .get("notifications")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter(|n| n["sourceKind"] == source_kind && n["sourceId"] == reply["id"])
+            .collect();
+        assert_eq!(
+            notices.len(),
+            1,
+            "new {source_kind} reply notifies its parent author"
+        );
+        assert_eq!(
+            notices[0]["kind"], "notice",
+            "reply must not request a runtime run"
+        );
+        assert_eq!(notices[0]["sourceRevision"], 1);
+        assert_eq!(notices[0]["body"], "A new reply");
+        let cursor = history["nextCursor"].clone();
+        let no_op = if source_kind == "task_comment" {
+            json!({"taskId":task.id,"commentId":reply["id"],"expectedRevision":1,"body":"A new reply","parentId":parent["id"]})
+        } else {
+            json!({"message":reply,"expectedRevision":1})
+        };
+        assert_eq!(
+            ok(&service, method, &member_token, no_op).await[field]["revision"],
+            1
+        );
+        let edit = if source_kind == "task_comment" {
+            json!({"taskId":task.id,"commentId":reply["id"],"expectedRevision":1,"body":"Edited reply","parentId":parent["id"]})
+        } else {
+            let mut edited = reply.clone();
+            edited["body"] = json!("Edited reply");
+            json!({"message":edited,"expectedRevision":1})
+        };
+        assert_eq!(
+            ok(&service, method, &member_token, edit).await[field]["revision"],
+            2
+        );
+        let later = ok(
+            &service,
+            "PollNotifications",
+            &admin.token,
+            json!({"afterCursor":cursor}),
+        )
+        .await;
+        assert!(
+            later
+                .get("notifications")
+                .is_none_or(|n| n.as_array().unwrap().is_empty()),
+            "no-op saves and body edits do not notify the parent again"
+        );
+    }
+}
+
+#[tokio::test]
+async fn reply_attention_excludes_self_and_coalesces_explicit_parent_recipients() {
+    let service = Arc::new(OfficePreviewService::new());
+    let admin = setup(&service).await;
+    let (_, member_token) = reviewer(&service, &admin.token).await;
+    let workspace = service.workspace(&admin.token).await.unwrap();
+    let task = &workspace.tasks[0];
+    for source_kind in ["task_comment", "project_message"] {
+        let (method, field) = if source_kind == "task_comment" {
+            ("SaveTaskComment", "comment")
+        } else {
+            ("SaveProjectMessage", "message")
+        };
+        let save = |mut body: Value| {
+            if source_kind == "task_comment" {
+                body["taskId"] = json!(task.id);
+                body
+            } else {
+                body["projectId"] = json!(task.project_id);
+                json!({"message":body})
+            }
+        };
+        let parent = ok(
+            &service,
+            method,
+            &admin.token,
+            save(json!({"body":"Parent"})),
+        )
+        .await[field]
+            .clone();
+        for (recipient_field, kind) in [
+            ("mentionIds", "notice"),
+            ("responseRecipientIds", "response_request"),
+        ] {
+            let mut body = json!({"body":"Explicit parent recipient","parentId":parent["id"]});
+            body[recipient_field] = json!([admin.user.id, admin.user.id]);
+            let reply = ok(&service, method, &member_token, save(body)).await[field].clone();
+            let history = ok(&service, "PollNotifications", &admin.token, json!({})).await;
+            let notices: Vec<_> = history["notifications"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|n| n["sourceId"] == reply["id"])
+                .collect();
+            assert_eq!(
+                notices.len(),
+                1,
+                "explicit {recipient_field} replaces derived reply attention"
+            );
+            assert_eq!(notices[0]["kind"], kind);
+            assert_eq!(notices[0]["sourceKind"], source_kind);
+            assert_eq!(notices[0]["sourceRevision"], 1);
+        }
+        let self_reply = ok(
+            &service,
+            method,
+            &admin.token,
+            save(json!({"body":"Replying to myself","parentId":parent["id"]})),
+        )
+        .await[field]
+            .clone();
+        let all = ok(
+            &service,
+            "ListNotifications",
+            &admin.token,
+            json!({"scope":"all","pageSize":100}),
+        )
+        .await;
+        assert!(
+            !all["notifications"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|n| n["sourceId"] == self_reply["id"]),
+            "self replies do not create attention"
+        );
+    }
+}
+
+#[tokio::test]
+async fn disabled_parent_authors_do_not_block_replies_but_explicit_recipients_remain_validated() {
+    let service = Arc::new(OfficePreviewService::new());
+    let admin = setup(&service).await;
+    let (member_id, member_token) = reviewer(&service, &admin.token).await;
+    let workspace = service.workspace(&admin.token).await.unwrap();
+    let task = &workspace.tasks[0];
+    let comment = ok(
+        &service,
+        "SaveTaskComment",
+        &member_token,
+        json!({"taskId":task.id,"body":"Parent"}),
+    )
+    .await["comment"]
+        .clone();
+    let message = ok(
+        &service,
+        "SaveProjectMessage",
+        &member_token,
+        json!({"message":{"projectId":task.project_id,"body":"Parent"}}),
+    )
+    .await["message"]
+        .clone();
+    let mut member = serde_json::to_value(
+        workspace
+            .members
+            .iter()
+            .find(|m| m.id == member_id)
+            .unwrap(),
+    )
+    .unwrap();
+    member["status"] = json!("inactive");
+    ok(
+        &service,
+        "SaveMember",
+        &admin.token,
+        json!({"member":member}),
+    )
+    .await;
+    let before =
+        ok(&service, "PollNotifications", &admin.token, json!({})).await["nextCursor"].clone();
+    for source_kind in ["task_comment", "project_message"] {
+        let (method, body) = if source_kind == "task_comment" {
+            (
+                "SaveTaskComment",
+                json!({"taskId":task.id,"body":"Reply to disabled author","parentId":comment["id"]}),
+            )
+        } else {
+            (
+                "SaveProjectMessage",
+                json!({"message":{"projectId":task.project_id,"body":"Reply to disabled author","parentId":message["id"]}}),
+            )
+        };
+        ok(&service, method, &admin.token, body.clone()).await;
+        for field in ["mentionIds", "responseRecipientIds"] {
+            let mut invalid = body.clone();
+            if source_kind == "task_comment" {
+                invalid[field] = json!([member_id]);
+            } else {
+                invalid["message"][field] = json!([member_id]);
+            }
+            assert_eq!(
+                rpc(&service, method, &admin.token, invalid).await.0,
+                StatusCode::BAD_REQUEST
+            );
+        }
+    }
+    let all = ok(
+        &service,
+        "ListNotifications",
+        &admin.token,
+        json!({"scope":"all","pageSize":100}),
+    )
+    .await;
+    assert!(
+        all.get("notifications").is_none_or(|n| n
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|n| n["recipientId"] != member_id)),
+        "no unroutable notice is created for the disabled author"
+    );
+    let after = ok(
+        &service,
+        "PollNotifications",
+        &admin.token,
+        json!({"afterCursor":before}),
+    )
+    .await;
+    assert!(
+        after
+            .get("notifications")
+            .is_none_or(|n| n.as_array().unwrap().is_empty())
+    );
+    let comments = ok(
+        &service,
+        "ListTaskDiscussion",
+        &admin.token,
+        json!({"taskId":task.id}),
+    )
+    .await;
+    assert_eq!(
+        comments["comments"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|c| c["body"] == "Reply to disabled author")
+            .count(),
+        1,
+        "invalid explicit recipients roll back the comment"
+    );
+    let messages = ok(
+        &service,
+        "ListProjectDiscussion",
+        &admin.token,
+        json!({"projectId":task.project_id}),
+    )
+    .await;
+    assert_eq!(
+        messages["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|m| m["body"] == "Reply to disabled author")
+            .count(),
+        1,
+        "invalid explicit recipients roll back the message"
+    );
+}
+
+#[tokio::test]
 async fn project_replies_convert_once_and_preserve_bidirectional_source_links() {
     let service = Arc::new(OfficePreviewService::new());
     let admin = setup(&service).await;

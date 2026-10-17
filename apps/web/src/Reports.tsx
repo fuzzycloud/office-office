@@ -301,7 +301,7 @@ export default function Reports({
 						disabled={saveMutation.isPending}
 						onClick={() => beginNew()}
 					>
-						＋ New report
+						<ActionIcon name="plus" /> New report
 					</button>
 				)}
 			</div>
@@ -835,7 +835,7 @@ export default function Reports({
 						</div>
 					) : (
 						<div className="report-empty report-reader-empty">
-							<span aria-hidden="true">⌕</span>
+							<ActionIcon name="search" size={32} />
 							<h3>Choose a report to read</h3>
 							<p>
 								Select a report from the library, or start a new one to record
