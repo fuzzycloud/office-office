@@ -41,11 +41,15 @@ jobs:
       - run: cargo test --locked --workspace
       - run: pnpm check
       - name: Check browser test sources
-        run: pnpm exec biome check tests/e2e playwright.config.ts
+        run: pnpm exec biome check tests/e2e tests/visual playwright.config.ts playwright.visual.config.ts
       - name: Install browser for end-to-end tests
         run: pnpm exec playwright install --with-deps chromium
       - name: Exercise the full isolated browser suite
         run: pnpm test:e2e
+      - name: Compare approved UI screenshots
+        run: pnpm test:visual
+      - name: Check generated file route tree
+        run: git diff --exit-code -- apps/web/src/routeTree.gen.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:

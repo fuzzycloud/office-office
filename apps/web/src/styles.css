@@ -313,6 +313,9 @@ textarea {
 	margin-top: 0.65rem;
 }
 .add-task-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
 	width: 100%;
 	margin-top: 0.55rem;
 	padding: 0.45rem;

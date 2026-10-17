@@ -24,7 +24,9 @@ use uuid::Uuid;
 pub mod proto {
     connectrpc::include_generated!();
 }
+mod activity;
 pub mod browser_session;
+mod conversations;
 mod demo;
 pub mod files;
 mod notifications;
@@ -251,6 +253,14 @@ struct State {
     connections: Vec<SocialConnection>,
     posts: Vec<ScheduledPost>,
     activity: Vec<Activity>,
+    feed_entries: Vec<ActivityEntry>,
+    project_messages: Vec<ProjectMessage>,
+    report_reviews: Vec<ReportReview>,
+    report_history: Vec<Report>,
+    comment_history: Vec<TaskComment>,
+    project_message_history: Vec<ProjectMessage>,
+    report_review_history: Vec<ReportReview>,
+    file_history: Vec<FileRecord>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct DemoInitialized {
@@ -260,6 +270,9 @@ struct DemoInitialized {
 // Events contain workspace records, including personal notifications. Credentials and signing keys live off-log.
 #[derive(Clone)]
 enum Event {
+    FeedEntry(ActivityEntry),
+    ProjectMessage(ProjectMessage),
+    ReportReview(ReportReview),
     Notification(Notification),
     DemoInitialized(DemoInitialized),
     Member(Member),
@@ -279,6 +292,8 @@ enum Event {
 }
 #[derive(Clone)]
 enum Edit {
+    ProjectMessage(ProjectMessage),
+    ReportReview(ReportReview),
     DemoInitialized(DemoInitialized),
     Member(Member),
     Customer(Customer),
@@ -307,6 +322,8 @@ impl Aggregate<State, Edit, Event> for Projection {
     }
     fn execute(&self, _state: &State, command: &Edit) -> anyhow::Result<Vec<Event>> {
         Ok(vec![match command {
+            Edit::ProjectMessage(v) => Event::ProjectMessage(v.clone()),
+            Edit::ReportReview(v) => Event::ReportReview(v.clone()),
             Edit::DemoInitialized(v) => Event::DemoInitialized(v.clone()),
             Edit::Member(v) => Event::Member(v.clone()),
             Edit::Customer(v) => Event::Customer(v.clone()),
@@ -324,6 +341,15 @@ impl Aggregate<State, Edit, Event> for Projection {
     }
     fn apply(&self, mut state: State, event: &Event) -> State {
         match event {
+            Event::FeedEntry(v) => state.feed_entries.push(v.clone()),
+            Event::ProjectMessage(v) => {
+                state.project_message_history.push(v.clone());
+                upsert(&mut state.project_messages, v.clone(), |x| &x.id);
+            }
+            Event::ReportReview(v) => {
+                state.report_review_history.push(v.clone());
+                upsert(&mut state.report_reviews, v.clone(), |x| &x.id);
+            }
             Event::Notification(v) => {
                 upsert(&mut state.notifications, v.clone(), |x| &x.id);
                 state.notification_changes.push(v.clone());
@@ -343,6 +369,7 @@ impl Aggregate<State, Edit, Event> for Projection {
                 upsert(&mut state.tasks, task, |x| &x.id);
             }
             Event::TaskComment(v) => {
+                state.comment_history.push(v.clone());
                 upsert(&mut state.comments, v.clone(), |x| &x.id);
                 if let Some(task) = state.tasks.iter_mut().find(|t| t.id == v.task_id) {
                     task.comment_count = state
@@ -353,8 +380,14 @@ impl Aggregate<State, Edit, Event> for Projection {
                 }
             }
             Event::TaskActivity(v) => state.task_activity.insert(0, v.clone()),
-            Event::Report(v) => upsert(&mut state.reports, v.clone(), |x| &x.id),
-            Event::File(v) => upsert(&mut state.files, v.clone(), |x| &x.id),
+            Event::Report(v) => {
+                state.report_history.push(v.clone());
+                upsert(&mut state.reports, v.clone(), |x| &x.id);
+            }
+            Event::File(v) => {
+                state.file_history.push(v.clone());
+                upsert(&mut state.files, v.clone(), |x| &x.id);
+            }
             Event::AgentKey(v) => upsert(&mut state.agent_keys, v.clone(), |x| &x.id),
             Event::Connection(v) => upsert(&mut state.connections, v.clone(), |x| &x.id),
             Event::Post(v) => upsert(&mut state.posts, v.clone(), |x| &x.id),
@@ -374,6 +407,11 @@ fn upsert<T>(items: &mut Vec<T>, value: T, key: impl Fn(&T) -> &String) {
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum EngineCommand {
+    SaveProjectMessage(SaveProjectMessageRequest),
+    DeleteProjectMessage(DeleteProjectMessageRequest),
+    CreateTaskFromMessage(CreateTaskFromMessageRequest),
+    RequestReportReview(RequestReportReviewRequest),
+    DecideReportReview(DecideReportReviewRequest),
     CreateNotification(CreateNotificationRequest),
     UpdateNotification(UpdateNotificationRequest),
     SaveMember(SaveMemberRequest),
@@ -394,6 +432,11 @@ pub enum EngineCommand {
 
 #[derive(Serialize, Deserialize)]
 pub enum EngineOutcome {
+    SaveProjectMessage(SaveProjectMessageResponse),
+    DeleteProjectMessage(DeleteProjectMessageResponse),
+    CreateTaskFromMessage(CreateTaskFromMessageResponse),
+    RequestReportReview(RequestReportReviewResponse),
+    DecideReportReview(DecideReportReviewResponse),
     Notifications(CreateNotificationResponse),
     Notification(UpdateNotificationResponse),
     Member(SaveMemberResponse),
@@ -412,6 +455,31 @@ pub enum EngineOutcome {
 }
 
 enum Command {
+    ResolveSource(
+        String,
+        ResolveSourceRequest,
+        oneshot::Sender<Result<ResolveSourceResponse, ConnectError>>,
+    ),
+    ListActivity(
+        String,
+        ListActivityRequest,
+        oneshot::Sender<Result<ListActivityResponse, ConnectError>>,
+    ),
+    PollActivity(
+        String,
+        PollActivityRequest,
+        oneshot::Sender<Result<PollActivityResponse, ConnectError>>,
+    ),
+    ListProjectDiscussion(
+        String,
+        ListProjectDiscussionRequest,
+        oneshot::Sender<Result<ListProjectDiscussionResponse, ConnectError>>,
+    ),
+    ListReportReviews(
+        String,
+        ListReportReviewsRequest,
+        oneshot::Sender<Result<ListReportReviewsResponse, ConnectError>>,
+    ),
     ListNotifications(
         String,
         ListNotificationsRequest,
@@ -734,6 +802,8 @@ impl WorkspaceActor {
             );
         }
         self.validate_notification_replay()?;
+        self.validate_activity_replay()?;
+        self.validate_conversations_replay()?;
         ids.clear();
         for key in &self.state.agent_keys {
             ensure!(
@@ -852,6 +922,9 @@ impl WorkspaceActor {
     fn commit(&mut self, edit: Edit, actor: &str, summary: &str) {
         for event in Projection.execute(&self.state, &edit).expect("valid edit") {
             let name = match &event {
+                Event::FeedEntry(_) => "feed_entry_recorded",
+                Event::ProjectMessage(_) => "project_message_saved",
+                Event::ReportReview(_) => "report_review_saved",
                 Event::Notification(_) => "notification_changed",
                 Event::DemoInitialized(_) => "demo_initialized",
                 Event::Member(_) => "member_saved",
@@ -972,6 +1045,32 @@ impl WorkspaceActor {
         if !deleting {
             required(&request.body, "comment body", 10000)?;
         }
+        if !deleting {
+            let project_id = self
+                .state
+                .tasks
+                .iter()
+                .find(|t| t.id == request.task_id)
+                .unwrap()
+                .project_id
+                .clone();
+            self.validate_conversation_fields(
+                actor,
+                &project_id,
+                &request.mention_ids,
+                &request.references,
+                &request.response_recipient_ids,
+            )?;
+            if !request.parent_id.is_empty()
+                && !self
+                    .state
+                    .comments
+                    .iter()
+                    .any(|c| c.id == request.parent_id && c.task_id == request.task_id)
+            {
+                return Err(bad("parent comment must belong to the same task"));
+            }
+        }
         let mut comment;
         let kind;
         if request.comment_id.is_empty() {
@@ -1006,6 +1105,17 @@ impl WorkspaceActor {
             if comment.revision != request.expected_revision || comment.deleted {
                 return Err(ConnectError::aborted("comment revision conflict"));
             }
+            if !deleting && comment.parent_id != request.parent_id {
+                return Err(bad("comment parent cannot change"));
+            }
+            if !deleting
+                && comment.body == request.body.trim()
+                && comment.mention_ids == request.mention_ids
+                && comment.references == request.references
+                && comment.response_recipient_ids == request.response_recipient_ids
+            {
+                return Ok(comment);
+            }
             comment.revision = comment
                 .revision
                 .checked_add(1)
@@ -1021,13 +1131,33 @@ impl WorkspaceActor {
         } else {
             request.body.trim().into()
         };
+        if !deleting {
+            comment.parent_id = request.parent_id.clone();
+            comment.mention_ids = request.mention_ids.clone();
+            comment.references = request.references.clone();
+            comment.response_recipient_ids = request.response_recipient_ids.clone();
+        }
         comment.deleted = deleting;
         comment.updated_at = now().max(comment.created_at);
-        self.commit(
+        self.commit_actor(
             Edit::TaskComment(comment.clone()),
-            &actor.name,
+            actor,
             "Task comment updated",
         );
+        if deleting {
+            self.reconcile_conversation_attention(actor, "task_comment", &comment.id, None)?;
+        }
+        if !deleting {
+            self.notify_conversation_as(
+                actor,
+                "task_comment",
+                &comment.id,
+                comment.revision,
+                &comment.body,
+                &comment.mention_ids,
+                &comment.response_recipient_ids,
+            )?;
+        }
         self.record_task_activity(
             &request.task_id,
             actor,
@@ -1184,7 +1314,7 @@ impl WorkspaceActor {
             } else {
                 vec![]
             },
-            activity: if can("settings") {
+            activity: if user.role == "admin" {
                 self.state.activity.clone()
             } else {
                 vec![]
@@ -1244,27 +1374,33 @@ impl WorkspaceActor {
         };
         self.passwords.insert(member.id.clone(), hash);
         self.setup = true;
-        self.commit(
+        self.commit_actor(
             Edit::Member(member.clone()),
-            &member.name,
+            &Principal {
+                member: member.clone(),
+            },
             "Workspace administrator created",
         );
-        self.commit(
+        self.commit_actor(
             Edit::Settings(WorkspaceSettings {
                 workspace_name: request.workspace_name.trim().into(),
                 ..self.state.settings.clone()
             }),
-            &member.name,
+            &Principal {
+                member: member.clone(),
+            },
             "Workspace settings saved",
         );
         let (token, expires_at) = self.claims(&member, None)?;
         if request.load_demo_data {
-            self.commit(
+            self.commit_actor(
                 Edit::DemoInitialized(DemoInitialized {
                     scenario: "office-preview".into(),
                     version: 1,
                 }),
-                &member.name,
+                &Principal {
+                    member: member.clone(),
+                },
                 "Sample workspace initialized",
             );
             demo::register(self, &token).await?;
@@ -1363,7 +1499,8 @@ impl WorkspaceActor {
         if m.kind == "agent" && !request.password.is_empty() {
             return Err(bad("agent members cannot have passwords"));
         }
-        if !request.password.is_empty() {
+        let password_changed = !request.password.is_empty();
+        if password_changed {
             if !(12..=128).contains(&request.password.len()) {
                 return Err(bad("password must be 12 to 128 bytes"));
             }
@@ -1374,7 +1511,21 @@ impl WorkspaceActor {
             m.status = "pending".into();
         }
         self.validate_member_avatar(&m)?;
-        self.commit(Edit::Member(m.clone()), &actor.name, "Team member saved");
+        self.commit_actor(Edit::Member(m.clone()), &actor, "Team member saved");
+        if password_changed {
+            self.record_feed_entry(
+                &actor,
+                ActivityEntry {
+                    kind: "member_credentials_changed".into(),
+                    summary: "Member login credentials updated".into(),
+                    module: "team".into(),
+                    source_kind: "member".into(),
+                    source_id: m.id.clone(),
+                    admin_only: true,
+                    ..Default::default()
+                },
+            );
+        }
         let (agent_key, secret) = if new_agent {
             let (key, secret) = self.issue_agent_key(&actor, &m, &m.name, 90);
             (Some(key), secret)
@@ -1400,11 +1551,7 @@ impl WorkspaceActor {
         self.validate_avatar_file(&actor, &request.avatar_file_id, &request.avatar_url)?;
         member.avatar_url = request.avatar_url;
         member.avatar_file_id = request.avatar_file_id;
-        self.commit(
-            Edit::Member(member.clone()),
-            &actor.name,
-            "Member profile saved",
-        );
+        self.commit_profile_actor(member.clone(), &actor, "Member profile saved");
         Ok(SaveProfileResponse {
             member: Some(display_member(member)).into(),
             ..Default::default()
@@ -1439,7 +1586,7 @@ impl WorkspaceActor {
         } else if !self.state.customers.iter().any(|v| v.id == c.id) {
             return Err(bad("unknown customer id"));
         }
-        self.commit(Edit::Customer(c.clone()), &actor.name, "Customer saved");
+        self.commit_actor(Edit::Customer(c.clone()), &actor, "Customer saved");
         Ok(SaveCustomerResponse {
             customer: Some(c).into(),
             ..Default::default()
@@ -1477,9 +1624,9 @@ impl WorkspaceActor {
         } else if !self.state.projects.iter().any(|v| v.id == p.id) {
             return Err(bad("unknown project id"));
         }
-        self.commit(Edit::Project(p.clone()), &actor.name, "Project saved");
+        self.commit_actor(Edit::Project(p.clone()), &actor, "Project saved");
         if !self.state.boards.iter().any(|v| v.project_id == p.id) {
-            self.commit(
+            self.commit_actor(
                 Edit::Board(Board {
                     id: id(),
                     project_id: p.id.clone(),
@@ -1487,7 +1634,7 @@ impl WorkspaceActor {
                     columns: DEFAULT_COLUMNS.iter().map(|v| (*v).into()).collect(),
                     ..Default::default()
                 }),
-                &actor.name,
+                &actor,
                 "Project board created",
             );
         }
@@ -1538,11 +1685,7 @@ impl WorkspaceActor {
             }
         }
         board.name = board.name.trim().into();
-        self.commit(
-            Edit::Board(board.clone()),
-            &actor.name,
-            "Project board saved",
-        );
+        self.commit_actor(Edit::Board(board.clone()), actor, "Project board saved");
         Ok(board)
     }
     fn save_task_as(&mut self, actor: &Principal, mut task: Task) -> Result<Task, ConnectError> {
@@ -1580,6 +1723,9 @@ impl WorkspaceActor {
             return Err(bad("unknown assignee"));
         }
         if task.id.is_empty() {
+            if !task.source_message_id.is_empty() || task.source_message_revision != 0 {
+                return Err(bad("use CreateTaskFromMessage to link a source message"));
+            }
             task.id = id();
         } else {
             let old = self
@@ -1588,6 +1734,14 @@ impl WorkspaceActor {
                 .iter()
                 .find(|v| v.id == task.id)
                 .ok_or_else(|| bad("unknown task id"))?;
+            if old.source_message_id != task.source_message_id
+                || old.source_message_revision != task.source_message_revision
+            {
+                return Err(bad("task source message cannot change"));
+            }
+            if old.project_id != task.project_id && !old.source_message_id.is_empty() {
+                return Err(bad("message-linked task cannot change projects"));
+            }
             if old.project_id != task.project_id
                 && self
                     .state
@@ -1606,7 +1760,8 @@ impl WorkspaceActor {
             .filter(|c| c.task_id == task.id && !c.deleted)
             .count() as u32;
         let previous = self.state.tasks.iter().find(|t| t.id == task.id).cloned();
-        self.commit(Edit::Task(task.clone()), &actor.name, "Project task saved");
+        self.commit_actor(Edit::Task(task.clone()), actor, "Project task saved");
+        self.task_assignment_attention(actor, &task, previous.as_ref())?;
         match previous {
             None => self.record_task_activity(&task.id, actor, "task_created", "Task created"),
             Some(old) => {
@@ -1827,6 +1982,13 @@ impl WorkspaceActor {
             report.author_id = old.author_id.clone();
             report.author_name = old.author_name.clone();
             report.created_at = old.created_at;
+            report.title = report.title.trim().into();
+            report.revision = old.revision;
+            report.updated_at = old.updated_at;
+            report.updated_by = old.updated_by.clone();
+            if &report == old {
+                return Ok(old.clone());
+            }
             report.revision = old
                 .revision
                 .checked_add(1)
@@ -1835,7 +1997,8 @@ impl WorkspaceActor {
         report.title = report.title.trim().into();
         report.updated_at = now();
         report.updated_by = actor.name.clone();
-        self.commit(Edit::Report(report.clone()), &actor.name, "Report saved");
+        self.commit_actor(Edit::Report(report.clone()), actor, "Report saved");
+        self.cancel_stale_report_reviews(actor, &report.id, report.revision)?;
         Ok(report)
     }
     fn admin(&self, token: &str) -> Result<Principal, ConnectError> {
@@ -1913,11 +2076,7 @@ impl WorkspaceActor {
         };
         self.agent_secrets
             .insert(key.id.clone(), (sha256(&secret), member.id.clone()));
-        self.commit(
-            Edit::AgentKey(key.clone()),
-            &actor.name,
-            "Agent key created",
-        );
+        self.commit_actor(Edit::AgentKey(key.clone()), actor, "Agent key created");
         (key, secret)
     }
     fn rotate_agent_key(
@@ -1943,7 +2102,7 @@ impl WorkspaceActor {
         for mut key in previous {
             key.revoked = true;
             self.agent_secrets.remove(&key.id);
-            self.commit(Edit::AgentKey(key), &actor.name, "Agent key rotated");
+            self.commit_actor(Edit::AgentKey(key), &actor, "Agent key rotated");
         }
         let (key, secret) = self.issue_agent_key(&actor, &member, &member.name, 90);
         Ok(RotateAgentKeyResponse {
@@ -1967,11 +2126,7 @@ impl WorkspaceActor {
             .ok_or_else(|| bad("unknown agent key"))?;
         key.revoked = true;
         self.agent_secrets.remove(&key.id);
-        self.commit(
-            Edit::AgentKey(key.clone()),
-            &actor.name,
-            "Agent key revoked",
-        );
+        self.commit_actor(Edit::AgentKey(key.clone()), &actor, "Agent key revoked");
         Ok(RevokeAgentKeyResponse {
             key: Some(key).into(),
             ..Default::default()
@@ -2068,7 +2223,7 @@ impl WorkspaceActor {
             return Err(bad("unknown post id"));
         }
         p.author_id = actor.id.clone();
-        self.commit(Edit::Post(p.clone()), &actor.name, "Social draft saved");
+        self.commit_actor(Edit::Post(p.clone()), &actor, "Social draft saved");
         Ok(SavePostResponse {
             post: Some(p).into(),
             ..Default::default()
@@ -2085,9 +2240,9 @@ impl WorkspaceActor {
         required(&s.workspace_name, "workspace name", 120)?;
         allowed(&s.default_theme, &THEMES, "theme")?;
         required(&s.timezone, "timezone", 80)?;
-        self.commit(
+        self.commit_actor(
             Edit::Settings(s.clone()),
-            &actor.name,
+            &actor,
             "Workspace settings saved",
         );
         Ok(SaveSettingsResponse {
@@ -2102,9 +2257,29 @@ impl WorkspaceActor {
     ) -> Result<EngineOutcome, ConnectError> {
         let token = token.to_owned();
         match command {
+            EngineCommand::SaveProjectMessage(v) => self
+                .user(&token)
+                .and_then(|actor| self.save_project_message_as(&actor, v))
+                .map(EngineOutcome::SaveProjectMessage),
+            EngineCommand::DeleteProjectMessage(v) => self
+                .user(&token)
+                .and_then(|actor| self.delete_project_message_as(&actor, v))
+                .map(EngineOutcome::DeleteProjectMessage),
+            EngineCommand::CreateTaskFromMessage(v) => self
+                .user(&token)
+                .and_then(|actor| self.create_task_from_message_as(&actor, v))
+                .map(EngineOutcome::CreateTaskFromMessage),
+            EngineCommand::RequestReportReview(v) => self
+                .user(&token)
+                .and_then(|actor| self.request_report_review_as(&actor, v))
+                .map(EngineOutcome::RequestReportReview),
+            EngineCommand::DecideReportReview(v) => self
+                .user(&token)
+                .and_then(|actor| self.decide_report_review_as(&actor, v))
+                .map(EngineOutcome::DecideReportReview),
             EngineCommand::CreateNotification(v) => self
                 .user(&token)
-                .and_then(|actor| self.create_notification_as(&actor, v))
+                .and_then(|actor| self.create_notification_command_as(&actor, v))
                 .map(EngineOutcome::Notifications),
             EngineCommand::UpdateNotification(v) => self
                 .user(&token)
@@ -2207,9 +2382,9 @@ impl WorkspaceActor {
                     demo: true,
                     ..Default::default()
                 };
-                self.commit(
+                self.commit_actor(
                     Edit::Connection(channel.clone()),
-                    &actor.name,
+                    &actor,
                     "Sample social channel created",
                 );
                 Ok(EngineOutcome::SampleSocialChannel(channel))
@@ -2249,6 +2424,36 @@ impl Actor for WorkspaceActor {
                     persistent_storage: self.storage.is_some(),
                     ..Default::default()
                 }));
+            }
+            Command::ResolveSource(t, request, tx) => {
+                let _ = tx.send(
+                    self.user(&t)
+                        .and_then(|actor| self.resolve_source_as(&actor, request)),
+                );
+            }
+            Command::ListActivity(t, request, tx) => {
+                let _ = tx.send(
+                    self.user(&t)
+                        .and_then(|actor| self.list_activity_as(&actor, request)),
+                );
+            }
+            Command::PollActivity(t, request, tx) => {
+                let _ = tx.send(
+                    self.user(&t)
+                        .and_then(|actor| self.poll_activity_as(&actor, request)),
+                );
+            }
+            Command::ListProjectDiscussion(t, request, tx) => {
+                let _ = tx.send(
+                    self.user(&t)
+                        .and_then(|actor| self.list_project_discussion_as(&actor, request)),
+                );
+            }
+            Command::ListReportReviews(t, request, tx) => {
+                let _ = tx.send(
+                    self.user(&t)
+                        .and_then(|actor| self.list_report_reviews_as(&actor, request)),
+                );
             }
             Command::Bootstrap(v, tx) => {
                 let before = self.snapshot();
@@ -2340,7 +2545,22 @@ impl Actor for WorkspaceActor {
             Command::GetReport(t, v, tx) => {
                 let result = self
                     .user(&t)
-                    .and_then(|actor| self.get_report_as(&actor, &v.id))
+                    .and_then(|actor| {
+                        if v.revision == 0 {
+                            self.get_report_as(&actor, &v.id)
+                        } else {
+                            Self::permit(&actor, "reports", false).and_then(|_| {
+                                self.state
+                                    .report_history
+                                    .iter()
+                                    .find(|r| r.id == v.id && r.revision == v.revision)
+                                    .cloned()
+                                    .ok_or_else(|| {
+                                        ConnectError::not_found("report revision not found")
+                                    })
+                            })
+                        }
+                    })
                     .map(|report| GetReportResponse {
                         report: Some(report).into(),
                         ..Default::default()
@@ -2648,6 +2868,106 @@ fn bearer(ctx: &RequestContext) -> Result<String, ConnectError> {
         .map(str::to_owned)
         .ok_or_else(|| ConnectError::unauthenticated("bearer token required"))
 }
+
+impl OfficePreviewService {
+    pub async fn resolve_source(
+        &self,
+        token: &str,
+        request: ResolveSourceRequest,
+    ) -> Result<ResolveSourceResponse, ConnectError> {
+        self.ask(|tx| Command::ResolveSource(token.into(), request, tx))
+            .await
+    }
+    pub async fn get_report(
+        &self,
+        token: &str,
+        request: GetReportRequest,
+    ) -> Result<GetReportResponse, ConnectError> {
+        self.ask(|tx| Command::GetReport(token.into(), request, tx))
+            .await
+    }
+    pub async fn list_project_discussion(
+        &self,
+        token: &str,
+        request: ListProjectDiscussionRequest,
+    ) -> Result<ListProjectDiscussionResponse, ConnectError> {
+        self.ask(|tx| Command::ListProjectDiscussion(token.into(), request, tx))
+            .await
+    }
+    pub async fn list_report_reviews(
+        &self,
+        token: &str,
+        request: ListReportReviewsRequest,
+    ) -> Result<ListReportReviewsResponse, ConnectError> {
+        self.ask(|tx| Command::ListReportReviews(token.into(), request, tx))
+            .await
+    }
+    pub async fn save_project_message(
+        &self,
+        token: &str,
+        request: SaveProjectMessageRequest,
+    ) -> Result<SaveProjectMessageResponse, ConnectError> {
+        let EngineOutcome::SaveProjectMessage(response) = self
+            .execute(token, EngineCommand::SaveProjectMessage(request))
+            .await?
+        else {
+            unreachable!()
+        };
+        Ok(response)
+    }
+    pub async fn delete_project_message(
+        &self,
+        token: &str,
+        request: DeleteProjectMessageRequest,
+    ) -> Result<DeleteProjectMessageResponse, ConnectError> {
+        let EngineOutcome::DeleteProjectMessage(response) = self
+            .execute(token, EngineCommand::DeleteProjectMessage(request))
+            .await?
+        else {
+            unreachable!()
+        };
+        Ok(response)
+    }
+    pub async fn create_task_from_message(
+        &self,
+        token: &str,
+        request: CreateTaskFromMessageRequest,
+    ) -> Result<CreateTaskFromMessageResponse, ConnectError> {
+        let EngineOutcome::CreateTaskFromMessage(response) = self
+            .execute(token, EngineCommand::CreateTaskFromMessage(request))
+            .await?
+        else {
+            unreachable!()
+        };
+        Ok(response)
+    }
+    pub async fn request_report_review(
+        &self,
+        token: &str,
+        request: RequestReportReviewRequest,
+    ) -> Result<RequestReportReviewResponse, ConnectError> {
+        let EngineOutcome::RequestReportReview(response) = self
+            .execute(token, EngineCommand::RequestReportReview(request))
+            .await?
+        else {
+            unreachable!()
+        };
+        Ok(response)
+    }
+    pub async fn decide_report_review(
+        &self,
+        token: &str,
+        request: DecideReportReviewRequest,
+    ) -> Result<DecideReportReviewResponse, ConnectError> {
+        let EngineOutcome::DecideReportReview(response) = self
+            .execute(token, EngineCommand::DecideReportReview(request))
+            .await?
+        else {
+            unreachable!()
+        };
+        Ok(response)
+    }
+}
 impl OfficeService for OfficePreviewService {
     async fn get_setup_status<'a>(
         &'a self,
@@ -2889,6 +3209,136 @@ impl OfficeService for OfficePreviewService {
         Response::ok(
             OfficePreviewService::update_notification(self, &bearer(&ctx)?, req.to_owned_message())
                 .await?,
+        )
+    }
+    async fn resolve_source<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, ResolveSourceRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<ResolveSourceResponse> + Send + use<'a>> {
+        Response::ok(
+            OfficePreviewService::resolve_source(self, &bearer(&ctx)?, req.to_owned_message())
+                .await?,
+        )
+    }
+    async fn list_activity<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, ListActivityRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<ListActivityResponse> + Send + use<'a>> {
+        Response::ok(
+            OfficePreviewService::list_activity(self, &bearer(&ctx)?, req.to_owned_message())
+                .await?,
+        )
+    }
+    async fn poll_activity<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, PollActivityRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<PollActivityResponse> + Send + use<'a>> {
+        Response::ok(
+            OfficePreviewService::poll_activity(self, &bearer(&ctx)?, req.to_owned_message())
+                .await?,
+        )
+    }
+    async fn list_project_discussion<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, ListProjectDiscussionRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<ListProjectDiscussionResponse> + Send + use<'a>>
+    {
+        Response::ok(
+            OfficePreviewService::list_project_discussion(
+                self,
+                &bearer(&ctx)?,
+                req.to_owned_message(),
+            )
+            .await?,
+        )
+    }
+    async fn list_report_reviews<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, ListReportReviewsRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<ListReportReviewsResponse> + Send + use<'a>> {
+        Response::ok(
+            OfficePreviewService::list_report_reviews(self, &bearer(&ctx)?, req.to_owned_message())
+                .await?,
+        )
+    }
+    async fn save_project_message<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, SaveProjectMessageRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<SaveProjectMessageResponse> + Send + use<'a>>
+    {
+        Response::ok(
+            OfficePreviewService::save_project_message(
+                self,
+                &bearer(&ctx)?,
+                req.to_owned_message(),
+            )
+            .await?,
+        )
+    }
+    async fn delete_project_message<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, DeleteProjectMessageRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<DeleteProjectMessageResponse> + Send + use<'a>>
+    {
+        Response::ok(
+            OfficePreviewService::delete_project_message(
+                self,
+                &bearer(&ctx)?,
+                req.to_owned_message(),
+            )
+            .await?,
+        )
+    }
+    async fn create_task_from_message<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, CreateTaskFromMessageRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<CreateTaskFromMessageResponse> + Send + use<'a>>
+    {
+        Response::ok(
+            OfficePreviewService::create_task_from_message(
+                self,
+                &bearer(&ctx)?,
+                req.to_owned_message(),
+            )
+            .await?,
+        )
+    }
+    async fn request_report_review<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, RequestReportReviewRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<RequestReportReviewResponse> + Send + use<'a>>
+    {
+        Response::ok(
+            OfficePreviewService::request_report_review(
+                self,
+                &bearer(&ctx)?,
+                req.to_owned_message(),
+            )
+            .await?,
+        )
+    }
+    async fn decide_report_review<'a>(
+        &'a self,
+        ctx: RequestContext,
+        req: ServiceRequest<'_, DecideReportReviewRequest>,
+    ) -> ServiceResult<impl connectrpc::Encodable<DecideReportReviewResponse> + Send + use<'a>>
+    {
+        Response::ok(
+            OfficePreviewService::decide_report_review(
+                self,
+                &bearer(&ctx)?,
+                req.to_owned_message(),
+            )
+            .await?,
         )
     }
     async fn list_reports<'a>(

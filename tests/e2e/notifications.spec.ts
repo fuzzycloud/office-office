@@ -348,3 +348,92 @@ test("Request response from task details creates a task-linked inbox item", asyn
 		]),
 	);
 });
+
+test("Header bell keeps unread separate from attention and supports keyboard dismissal", async ({
+	office,
+	page,
+}) => {
+	const { token, user } = await office.bootstrap(false);
+	const response = await office.rpc(
+		"CreateNotification",
+		{
+			requestId: "bell-response",
+			title: "Bell response needed",
+			body: "Please review this request",
+			kind: "response_request",
+			recipientIds: [user.id],
+		},
+		token,
+	);
+	expect(response.ok()).toBeTruthy();
+	await page.addInitScript(
+		(value) => sessionStorage.setItem("office-office-session", value),
+		token,
+	);
+	await page.goto("/");
+	const bell = page.getByRole("button", { name: /Notifications, 1 unread/ });
+	await expect(bell).toBeVisible();
+	await bell.click();
+	const panel = page.getByRole("dialog", { name: "Office notifications" });
+	await expect(
+		panel.getByRole("heading", { name: "Needs attention", exact: true }),
+	).toBeVisible();
+	await expect(
+		panel.getByRole("heading", { name: "Recent activity", exact: true }),
+	).toBeVisible();
+	await panel.getByRole("button", { name: "Mark read", exact: true }).click();
+	await expect(
+		page.getByRole("button", { name: /Notifications, 0 unread/ }),
+	).toBeVisible();
+	await expect(
+		panel.getByText("Bell response needed", { exact: true }),
+	).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(panel).toHaveCount(0);
+	await expect(
+		page.getByRole("button", { name: /Notifications, 0 unread/ }),
+	).toBeFocused();
+});
+
+test("Office activity history shows durable business changes with source navigation", async ({
+	office,
+	page,
+}) => {
+	const { token } = await office.bootstrap(false);
+	await office.rpc(
+		"SaveCustomer",
+		{
+			customer: {
+				name: "Activity customer",
+				company: "Example",
+				status: "lead",
+			},
+		},
+		token,
+	);
+	await page.addInitScript(
+		(value) => sessionStorage.setItem("office-office-session", value),
+		token,
+	);
+	await page.goto("/notifications");
+	await page
+		.getByRole("button", { name: "Office activity", exact: true })
+		.click();
+	const history = page.getByRole("region", {
+		name: "Office activity history",
+		exact: true,
+	});
+	await expect(
+		history.getByText("Customer saved", { exact: true }),
+	).toBeVisible();
+	const entry = history
+		.getByRole("listitem")
+		.filter({ hasText: "Customer saved" });
+	await entry
+		.getByRole("link", { name: "Open related work", exact: true })
+		.click();
+	await expect(page).toHaveURL(/\/customers\?sourceKind=customer&sourceId=/);
+	await expect(
+		page.getByText("Activity customer", { exact: true }),
+	).toBeVisible();
+});

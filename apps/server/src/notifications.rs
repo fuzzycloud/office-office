@@ -24,8 +24,21 @@ pub(super) fn valid_notification(v: &Notification) -> bool {
         && v.body.len() <= 10000
         && KINDS.contains(&v.kind.as_str())
         && STATUSES.contains(&v.status.as_str())
-        && ["", "task", "project", "report", "file"].contains(&v.source_kind.as_str())
+        && [
+            "",
+            "task",
+            "project",
+            "report",
+            "file",
+            "task_comment",
+            "project_message",
+            "report_review",
+        ]
+        .contains(&v.source_kind.as_str())
         && (v.source_kind.is_empty() == v.source_id.is_empty())
+        && (!v.source_kind.is_empty() || v.source_revision == 0)
+        && (!["task_comment", "project_message", "report_review"].contains(&v.source_kind.as_str())
+            || v.source_revision > 0)
         && v.revision > 0
         && v.sequence > 0
         && v.created_sequence > 0
@@ -37,6 +50,17 @@ pub(super) fn valid_notification(v: &Notification) -> bool {
         && v.note.len() <= 2000
         && required(&v.request_id, "request id", 128).is_ok()
         && v.claim_id.len() <= 128
+        && ((v.result_kind.is_empty() && v.result_id.is_empty() && v.result_revision == 0)
+            || ([
+                "report",
+                "file",
+                "task_comment",
+                "project_message",
+                "report_review",
+            ]
+            .contains(&v.result_kind.as_str())
+                && !v.result_id.is_empty()
+                && v.result_revision > 0))
         && (v.status != "claimed" || !v.claim_id.is_empty())
 }
 fn page_size(value: u32) -> Result<usize, ConnectError> {
@@ -76,6 +100,7 @@ impl WorkspaceActor {
                         && old.kind == change.kind
                         && old.source_kind == change.source_kind
                         && old.source_id == change.source_id
+                        && old.source_revision == change.source_revision
                         && old.created_at == change.created_at,
                     "invalid notification revision"
                 );
@@ -133,8 +158,120 @@ impl WorkspaceActor {
         }
         Ok(())
     }
+    pub(super) fn notification_reference(
+        &self,
+        actor: &Principal,
+        kind: &str,
+        source: &str,
+        revision: u32,
+    ) -> Result<(), ConnectError> {
+        if revision == 0 && ["", "task", "project", "report", "file"].contains(&kind) {
+            return self.notification_source(actor, kind, source);
+        }
+        self.validate_record_reference(
+            actor,
+            &RecordReference {
+                kind: kind.into(),
+                id: source.into(),
+                revision,
+                ..Default::default()
+            },
+        )
+    }
+    pub(super) fn record_notification_feedback(
+        &mut self,
+        actor: &Principal,
+        notification: &Notification,
+        action: &str,
+    ) {
+        let context = if notification.source_kind.is_empty() {
+            None
+        } else {
+            self.resolve_source_as(
+                actor,
+                ResolveSourceRequest {
+                    kind: notification.source_kind.clone(),
+                    id: notification.source_id.clone(),
+                    revision: notification.source_revision,
+                    ..Default::default()
+                },
+            )
+            .ok()
+        };
+        self.record_feed_entry(
+            actor,
+            ActivityEntry {
+                module: context
+                    .as_ref()
+                    .map(|v| v.module.clone())
+                    .unwrap_or_default(),
+                project_id: context.map(|v| v.project_id).unwrap_or_default(),
+                kind: format!("notification_{action}"),
+                summary: format!("Notification {action}"),
+                source_kind: "notification".into(),
+                source_id: notification.id.clone(),
+                source_revision: notification.revision,
+                audience_ids: vec![
+                    notification.sender_id.clone(),
+                    notification.recipient_id.clone(),
+                ],
+                ..Default::default()
+            },
+        );
+    }
+    pub(super) fn task_assignment_attention(
+        &mut self,
+        actor: &Principal,
+        task: &Task,
+        previous: Option<&Task>,
+    ) -> Result<(), ConnectError> {
+        if previous.is_some_and(|old| old.assignee_id == task.assignee_id) {
+            return Ok(());
+        }
+        let obsolete: Vec<_> = self
+            .state
+            .notifications
+            .iter()
+            .filter(|n| {
+                n.source_kind == "task"
+                    && n.source_id == task.id
+                    && n.request_id.starts_with("task-assignment:")
+                    && ["pending", "claimed"].contains(&n.status.as_str())
+            })
+            .cloned()
+            .collect();
+        for mut n in obsolete {
+            n.status = "cancelled".into();
+            n.note = "Task assignment changed".into();
+            n.updated_at = now();
+            n.updated_by = actor.id.clone();
+            n.revision = n
+                .revision
+                .checked_add(1)
+                .ok_or_else(|| bad("notification revision limit"))?;
+            n.sequence = self.state.notification_changes.len() as u64 + 1;
+            self.record_notification(n.clone());
+            self.record_notification_feedback(actor, &n, "cancelled");
+        }
+        if !task.assignee_id.is_empty() {
+            self.create_notification_as(
+                actor,
+                CreateNotificationRequest {
+                    request_id: format!("task-assignment:{}:{}", task.id, id()),
+                    title: "Task assigned".into(),
+                    body: task.title.clone(),
+                    kind: "work_request".into(),
+                    recipient_ids: vec![task.assignee_id.clone()],
+                    source_kind: "task".into(),
+                    source_id: task.id.clone(),
+                    ..Default::default()
+                },
+            )?;
+        }
+        Ok(())
+    }
     // Notification details do not enter the workspace-wide activity feed.
-    fn record_notification(&mut self, notification: Notification) {
+    pub(super) fn record_notification(&mut self, notification: Notification) {
         let event = Event::Notification(notification);
         self.log.push(EventWrite {
             id: Uuid::new_v4(),
@@ -145,6 +282,31 @@ impl WorkspaceActor {
             metadata: None,
         });
         self.state = Projection.apply(std::mem::take(&mut self.state), &event);
+    }
+    pub(super) fn create_notification_command_as(
+        &mut self,
+        actor: &Principal,
+        request: CreateNotificationRequest,
+    ) -> Result<CreateNotificationResponse, ConnectError> {
+        let reserved = [
+            "task_comment:",
+            "project_message:",
+            "task-assignment:",
+            "review:",
+        ]
+        .iter()
+        .any(|prefix| request.request_id.starts_with(prefix));
+        // Existing immutable creations may still be retried after an upgrade. The
+        // ordinary creator compares the complete original payload before returning.
+        let existing = self.state.notification_changes.iter().any(|n| {
+            n.sender_id == actor.id && n.request_id == request.request_id && n.revision == 1
+        });
+        if reserved && !existing {
+            return Err(bad(
+                "notification request id prefix is reserved for server workflows",
+            ));
+        }
+        self.create_notification_as(actor, request)
     }
     pub(super) fn create_notification_as(
         &mut self,
@@ -191,6 +353,7 @@ impl WorkspaceActor {
                             && n.kind == request.kind
                             && n.source_kind == request.source_kind
                             && n.source_id == request.source_id
+                            && n.source_revision == request.source_revision
                     });
             return if same {
                 Ok(CreateNotificationResponse {
@@ -203,7 +366,13 @@ impl WorkspaceActor {
                 ))
             };
         }
-        self.notification_source(actor, &request.source_kind, &request.source_id)?;
+        self.notification_reference(
+            actor,
+            &request.source_kind,
+            &request.source_id,
+            request.source_revision,
+        )?;
+        self.validate_review_notification_source_as(actor, &request)?;
         // Validate the whole fanout before staging any event.
         for recipient in &request.recipient_ids {
             let member = self
@@ -212,12 +381,13 @@ impl WorkspaceActor {
                 .iter()
                 .find(|m| m.id == *recipient && m.status == "active")
                 .ok_or_else(|| bad("active recipient required"))?;
-            self.notification_source(
+            self.notification_reference(
                 &Principal {
                     member: member.clone(),
                 },
                 &request.source_kind,
                 &request.source_id,
+                request.source_revision,
             )?;
         }
         let mut notifications = Vec::with_capacity(request.recipient_ids.len());
@@ -235,6 +405,7 @@ impl WorkspaceActor {
                 kind: request.kind.clone(),
                 source_kind: request.source_kind.clone(),
                 source_id: request.source_id.clone(),
+                source_revision: request.source_revision,
                 status: "pending".into(),
                 created_at: timestamp,
                 updated_at: timestamp,
@@ -246,6 +417,7 @@ impl WorkspaceActor {
                 ..Default::default()
             };
             self.record_notification(notification.clone());
+            self.record_notification_feedback(actor, &notification, "created");
             notifications.push(notification);
         }
         Ok(CreateNotificationResponse {
@@ -358,9 +530,19 @@ impl WorkspaceActor {
         if request.action == "read" && (!request.note.is_empty() || !request.claim_id.is_empty()) {
             return Err(bad("read does not accept note or claim id"));
         }
-        if request.action == "read" && (!request.note.is_empty() || !request.claim_id.is_empty()) {
-            return Err(bad("read does not accept note or claim id"));
+        if request.action != "acknowledge"
+            && (!request.result_kind.is_empty()
+                || !request.result_id.is_empty()
+                || request.result_revision != 0)
+        {
+            return Err(bad("only acknowledgement accepts a result reference"));
         }
+        self.validate_notification_result(
+            actor,
+            &request.result_kind,
+            &request.result_id,
+            request.result_revision,
+        )?;
         let mut notification = self
             .state
             .notifications
@@ -375,6 +557,7 @@ impl WorkspaceActor {
         } else if notification.recipient_id != actor.id {
             return Err(denied());
         }
+        self.validate_notification_response_as(actor, &notification, &request)?;
         if request.action == "claim" {
             required(&request.claim_id, "claim id", 128)?;
         }
@@ -391,6 +574,9 @@ impl WorkspaceActor {
                 notification.status == "acknowledged"
                     && notification.claim_id == request.claim_id
                     && notification.note == request.note
+                    && notification.result_kind == request.result_kind
+                    && notification.result_id == request.result_id
+                    && notification.result_revision == request.result_revision
             }
             "dismiss" => notification.status == "dismissed" && notification.note == request.note,
             "cancel" => notification.status == "cancelled" && notification.note == request.note,
@@ -424,6 +610,9 @@ impl WorkspaceActor {
                     return Err(ConnectError::aborted("notification claim conflict"));
                 }
                 notification.status = "acknowledged".into();
+                notification.result_kind = request.result_kind.clone();
+                notification.result_id = request.result_id.clone();
+                notification.result_revision = request.result_revision;
             }
             "dismiss" | "cancel" => {
                 if !["pending", "claimed"].contains(&notification.status.as_str()) {
@@ -451,6 +640,7 @@ impl WorkspaceActor {
         notification.updated_at = now();
         notification.updated_by = actor.id.clone();
         self.record_notification(notification.clone());
+        self.record_notification_feedback(actor, &notification, &request.action);
         Ok(UpdateNotificationResponse {
             notification: Some(notification).into(),
             ..Default::default()

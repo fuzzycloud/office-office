@@ -61,8 +61,18 @@ The reverse proxy must preserve the HTTP `Host` (or HTTP/2 authority) for the pu
 | `office_add_task_comment` | Add a comment with server-owned agent identity | `projects:write` |
 | `office_edit_task_comment` | Edit this user's comment using its current revision | `projects:write` |
 | `office_delete_task_comment` | Soft-delete this user's comment using its current revision | `projects:write` |
+| `office_list_project_discussion` | Read project messages/replies | `projects:read` |
+| `office_save_project_message` | Create/edit a message with structured recipients and references | `projects:write`; own author or Admin for edits |
+| `office_delete_project_message` | Revision-checked soft deletion | `projects:write`; own author or Admin |
+| `office_create_task_from_message` | Create one task with bidirectional provenance; retry-safe for matching payload | Admin/Manager |
+| `office_request_report_review` | Nominate reviewers for an exact current report revision | `reports:write` |
+| `office_decide_report_review` | Approve or request changes against the assigned revision | Designated reviewer with `reports:write` |
+| `office_list_report_reviews` | Read revision-specific review history | `reports:read` |
+| `office_list_activity` | Paginated authorized business changes and private participant feedback | Current role/source access |
+| `office_poll_activity` | Incremental feed with `activity:v1:N` cursor | Current role/source access |
+| `office_resolve_source` | Authorize a source and locate its parent task/project/report | Current role/source access |
 | `office_list_reports` | Search paginated report summaries | `reports:read` or `reports:write` |
-| `office_get_report` | Read report findings, sources and current revision | `reports:read` or `reports:write` |
+| `office_get_report` | Read report findings, sources and optional exact historical revision | `reports:read` or `reports:write` |
 | `office_save_report` | Create a research edition or save a revision-aware replacement | `reports:write` |
 
 Read the workspace first to discover project IDs, board IDs and column names. Send a blank ID to create a board or task; use an existing ID to update one. Task references, dates, assignees and columns are validated by the server. Save tools replace the supplied record, so include existing fields you want to keep. Creation with a blank ID is not idempotent: read the workspace before retrying a request whose result is uncertain. Writes do not publish posts, send invoices or trigger provider actions.
@@ -103,6 +113,20 @@ inbox/sent records), `office_poll_notifications` (own-recipient immutable change
 and string cursor), `office_create_notification` (idempotent recipient fanout)
 and `office_update_notification` (read/claim/acknowledge/dismiss/cancel with revision
 checks). Only Admin can list `scope: all`. Fetching never acknowledges; ordinary
-comments never notify or execute agents. See [the notification/watcher contract](notifications.md)
+unstructured comments never notify or execute agents. Structured member-ID mentions create informational notices; explicit response requests remain separate. See [the notification/watcher contract](notifications.md)
 for a two/five-minute polling loop, durable local cursor handling and claim/crash
 reconciliation. The Office service does not invoke local profiles itself.
+
+## Structured conversation fields
+
+Task-comment add/edit tools accept `parent_id`, `mention_ids`, `references` and
+`response_recipient_ids`. Project messages carry the same fields in their message
+record. A reference includes `kind` (`report` or `file`), `id` and a positive
+`revision`. Select real active member IDs; a literal `@display-name` has no identity
+semantics. Unchanged recipients on a text edit are not notified again.
+
+Report review tools record independent decisions; they do not publish reports.
+An acknowledgement may include `result_kind`, `result_id`, `result_revision` for an
+actual reply/report/review. Read, claim and resolution feedback is visible to the
+request sender in their authorized activity feed. It is not evidence that an
+external process started unless that client actually reports its work.

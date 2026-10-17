@@ -46,7 +46,9 @@ export default function MemberAvatar({
 	const [failedUrl, setFailedUrl] = useState<string | null>(null);
 	const failed = avatarUrl === failedUrl;
 	return (
-		<div className={`avatar ${!avatarUrl || failed ? "placeholder" : ""}`}>
+		<div
+			className={`avatar ${!avatarUrl || failed ? "avatar-placeholder" : ""}`}
+		>
 			{avatarUrl && !failed ? (
 				<img
 					className={`${className} rounded-full object-cover`}
@@ -60,7 +62,7 @@ export default function MemberAvatar({
 			) : (
 				<div
 					role="img"
-					className={`${className} rounded-full bg-secondary text-secondary-content`}
+					className={`${className} grid place-items-center rounded-full bg-secondary text-secondary-content`}
 					aria-label={`${name} initials`}
 				>
 					<span aria-hidden="true">{initials(name)}</span>

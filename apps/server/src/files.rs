@@ -140,7 +140,7 @@ impl WorkspaceActor {
         allowed(module, &["projects", "reports", "profile"], "file module")?;
         if module == "profile" {
             Self::permit(&actor, "team", false)?;
-            if write && record != actor.id {
+            if write && record != actor.id && actor.role != "admin" {
                 return Err(denied());
             }
             if !self.state.members.iter().any(|m| m.id == record) {
@@ -184,11 +184,15 @@ impl WorkspaceActor {
         if file.sha256.len() != 64 || !file.sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err(bad("invalid file digest"));
         }
-        file.uploaded_by = actor.id;
+        file.uploaded_by = actor.id.clone();
         file.created_at = Utc::now().to_rfc3339();
         file.deleted = false;
         file.revision = 1;
-        self.commit(Edit::File(file.clone()), &actor.name, "File uploaded");
+        self.commit_actor(
+            Edit::File(file.clone()),
+            &self.user(&token)?,
+            "File uploaded",
+        );
         Ok(file)
     }
     pub(super) fn get_file_as(&self, token: &str, id: &str) -> Result<FileRecord, ConnectError> {
@@ -243,7 +247,7 @@ impl WorkspaceActor {
         let mut file = self.get_file_as(&token, &request.id)?;
         let actor = self.user(&token)?;
         if file.module == "profile" {
-            if file.uploaded_by != actor.id && actor.role != "admin" {
+            if file.uploaded_by != actor.id && file.record_id != actor.id && actor.role != "admin" {
                 return Err(denied());
             }
         } else {
@@ -256,7 +260,7 @@ impl WorkspaceActor {
         }
         file.deleted = true;
         file.revision += 1;
-        self.commit(Edit::File(file.clone()), &actor.name, "File deleted");
+        self.commit_actor(Edit::File(file.clone()), &actor, "File deleted");
         let members: Vec<_> = self
             .state
             .members
@@ -266,9 +270,9 @@ impl WorkspaceActor {
             .collect();
         for mut member in members {
             member.avatar_file_id.clear();
-            self.commit(
+            self.commit_actor(
                 Edit::Member(member),
-                &actor.name,
+                &actor,
                 "Deleted profile image removed",
             );
         }
@@ -301,7 +305,7 @@ impl WorkspaceActor {
                 && !f.deleted
         }) {
             return Err(bad(
-                "profile image must be an active image uploaded by this member",
+                "profile image must be an active image in this member's profile",
             ));
         }
         Ok(())
@@ -1053,6 +1057,104 @@ mod tests {
         );
         service.close().await.unwrap();
     }
+    #[tokio::test]
+    async fn administrator_can_upload_a_picture_for_another_member_only() {
+        let service =
+            OfficePreviewService::new().with_file_storage(Arc::new(MemoryStore::default()));
+        let admin = bootstrap(&service).await;
+        let created = ai(&service, &admin.token, "member").await;
+        let member_token = service
+            .exchange_agent_key(&created.secret)
+            .await
+            .unwrap()
+            .token;
+        let target = service
+            .workspace(&member_token)
+            .await
+            .unwrap()
+            .current_user
+            .unwrap();
+        let file = service
+            .upload_file(
+                &admin.token,
+                "profile",
+                &target.id,
+                "portrait.png",
+                "image/png",
+                png(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(file.record_id, target.id);
+        assert_eq!(file.uploaded_by, admin.user.unwrap().id);
+        let mut updated = target;
+        updated.avatar_file_id = file.id.clone();
+        service
+            .execute(
+                &admin.token,
+                EngineCommand::SaveMember(SaveMemberRequest {
+                    member: Some(updated).into(),
+                    ..Default::default()
+                }),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            service
+                .workspace(&member_token)
+                .await
+                .unwrap()
+                .current_user
+                .unwrap()
+                .avatar_file_id,
+            file.id
+        );
+        // The profile owner can remove an image prepared by an administrator.
+        service
+            .execute(
+                &member_token,
+                EngineCommand::DeleteFile(DeleteFileRequest {
+                    id: file.id.clone(),
+                    expected_revision: file.revision,
+                    ..Default::default()
+                }),
+            )
+            .await
+            .unwrap();
+        assert!(
+            service
+                .workspace(&member_token)
+                .await
+                .unwrap()
+                .current_user
+                .unwrap()
+                .avatar_file_id
+                .is_empty()
+        );
+        let other = ai(&service, &admin.token, "viewer").await;
+        let other_token = service
+            .exchange_agent_key(&other.secret)
+            .await
+            .unwrap()
+            .token;
+        assert_eq!(
+            service
+                .upload_file(
+                    &other_token,
+                    "profile",
+                    &file.record_id,
+                    "portrait.png",
+                    "image/png",
+                    png()
+                )
+                .await
+                .unwrap_err()
+                .code,
+            connectrpc::ErrorCode::PermissionDenied
+        );
+        service.close().await.unwrap();
+    }
+
     #[tokio::test]
     async fn viewer_can_upload_own_validated_avatar_but_cannot_write_attachments() {
         let store = Arc::new(MemoryStore::default());

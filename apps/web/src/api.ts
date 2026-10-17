@@ -14,6 +14,16 @@ import type {
 } from "./gen/office/v1/office_pb";
 import {
 	BoardSchema,
+	DeleteProjectMessageRequestSchema,
+	ResolveSourceRequestSchema,
+	ListActivityRequestSchema,
+	ListProjectDiscussionRequestSchema,
+	SaveProjectMessageRequestSchema,
+	ProjectMessageSchema,
+	CreateTaskFromMessageRequestSchema,
+	ListReportReviewsRequestSchema,
+	RequestReportReviewRequestSchema,
+	DecideReportReviewRequestSchema,
 	CreateNotificationRequestSchema,
 	CustomerSchema,
 	DeleteFileRequestSchema,
@@ -173,6 +183,8 @@ export type Task = {
 	priority: string;
 	dueDate: string;
 	commentCount?: number;
+	sourceMessageId?: string;
+	sourceMessageRevision?: number;
 };
 export type AgentKey = {
 	id: string;
@@ -393,9 +405,9 @@ export async function listReports(input: {
 		}),
 	);
 }
-export async function getReport(id: string) {
+export async function getReport(id: string, revision = 0) {
 	const response = await client.getReport(
-		create(GetReportRequestSchema, { id }),
+		create(GetReportRequestSchema, { id, revision }),
 	);
 	if (!response.report)
 		throw new Error("The report response is missing its report.");
@@ -451,6 +463,10 @@ export async function saveTaskComment(input: {
 	commentId: string;
 	body: string;
 	expectedRevision: number;
+	parentId?: string;
+	mentionIds?: string[];
+	references?: RecordReference[];
+	responseRecipientIds?: string[];
 }) {
 	return client.saveTaskComment(create(SaveTaskCommentRequestSchema, input));
 }
@@ -581,5 +597,101 @@ export async function updateNotification(input: {
 }) {
 	return client.updateNotification(
 		create(UpdateNotificationRequestSchema, input),
+	);
+}
+
+export type RecordReference = { kind: string; id: string; revision: number };
+export async function listActivity(offset = 0, pageSize = 20) {
+	return client.listActivity(
+		create(ListActivityRequestSchema, { offset, pageSize }),
+	);
+}
+export async function listProjectDiscussion(projectId: string) {
+	return client.listProjectDiscussion(
+		create(ListProjectDiscussionRequestSchema, { projectId }),
+	);
+}
+export async function saveProjectMessage(
+	input: {
+		id?: string;
+		projectId: string;
+		body: string;
+		parentId: string;
+		mentionIds: string[];
+		references: RecordReference[];
+		responseRecipientIds: string[];
+	},
+	expectedRevision = 0,
+) {
+	return client.saveProjectMessage(
+		create(SaveProjectMessageRequestSchema, {
+			message: create(ProjectMessageSchema, input),
+			expectedRevision,
+		}),
+	);
+}
+export async function createTaskFromMessage(
+	messageId: string,
+	expectedRevision: number,
+	task: Task,
+) {
+	return client.createTaskFromMessage(
+		create(CreateTaskFromMessageRequestSchema, {
+			messageId,
+			expectedRevision,
+			task: create(TaskSchema, task),
+		}),
+	);
+}
+export async function listReportReviews(reportId: string) {
+	return client.listReportReviews(
+		create(ListReportReviewsRequestSchema, { reportId }),
+	);
+}
+export async function requestReportReview(
+	reportId: string,
+	reportRevision: number,
+	reviewerIds: string[],
+	requestId: string,
+	note: string,
+) {
+	return client.requestReportReview(
+		create(RequestReportReviewRequestSchema, {
+			reportId,
+			reportRevision,
+			reviewerIds,
+			requestId,
+			note,
+		}),
+	);
+}
+export async function decideReportReview(
+	reviewId: string,
+	expectedRevision: number,
+	status: string,
+	note: string,
+) {
+	return client.decideReportReview(
+		create(DecideReportReviewRequestSchema, {
+			reviewId,
+			expectedRevision,
+			status,
+			note,
+		}),
+	);
+}
+
+export async function resolveSource(kind: string, id: string, revision = 0) {
+	return client.resolveSource(
+		create(ResolveSourceRequestSchema, { kind, id, revision }),
+	);
+}
+
+export async function deleteProjectMessage(
+	messageId: string,
+	expectedRevision: number,
+) {
+	return client.deleteProjectMessage(
+		create(DeleteProjectMessageRequestSchema, { messageId, expectedRevision }),
 	);
 }

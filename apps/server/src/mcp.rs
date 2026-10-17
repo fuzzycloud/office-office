@@ -152,7 +152,20 @@ fn tools() -> Vec<Tool> {
         .destructive(true)
         .idempotent(false)
         .open_world(false);
-    vec![
+    let reference = json!({"type":"object","properties":{"kind":{"type":"string","enum":["report","file"]},"id":{"type":"string"},"revision":{"type":"integer","minimum":1}},"required":["kind","id","revision"],"additionalProperties":false});
+    let ids = json!({"type":"array","items":{"type":"string"},"maxItems":20});
+    let message = json!({"type":"object","properties":{"id":{"type":"string"},"project_id":{"type":"string"},"body":{"type":"string","maxLength":10000},"parent_id":{"type":"string"},"mention_ids":ids,"response_recipient_ids":ids,"references":{"type":"array","items":reference,"maxItems":20}},"required":["project_id","body"],"additionalProperties":false});
+    let mut result = vec![
+        Tool::new("office_resolve_source", "Resolve an authorized activity or notification source to its parent task, project or exact report revision. No private notification context is exposed to other members.", schema(json!({"type":"object","properties":{"kind":{"type":"string"},"id":{"type":"string"},"revision":{"type":"integer","minimum":0}},"required":["kind","id"],"additionalProperties":false}))).with_annotations(read.clone()),
+        Tool::new("office_list_activity", "Read authorized durable business activity and private participant feedback. Offset pagination, newest first. Does not mark notifications read.", schema(json!({"type":"object","properties":{"module":{"type":"string"},"project_id":{"type":"string"},"source_kind":{"type":"string"},"source_id":{"type":"string"},"page_size":{"type":"integer","minimum":1,"maximum":100},"offset":{"type":"integer","minimum":0}},"required":[],"additionalProperties":false}))).with_annotations(read.clone()),
+        Tool::new("office_poll_activity", "Poll durable authorized activity. Cursor is a separate activity:v1 namespace. No notification or read side effects.", schema(json!({"type":"object","properties":{"after_cursor":{"type":"string"},"page_size":{"type":"integer","minimum":1,"maximum":100}},"required":[],"additionalProperties":false}))).with_annotations(read.clone()),
+        Tool::new("office_list_project_discussion", "Read a project discussion including retained soft-deleted placeholders.", schema(json!({"type":"object","properties":{"project_id":{"type":"string"}},"required":["project_id"],"additionalProperties":false}))).with_annotations(read.clone()),
+        Tool::new("office_save_project_message", "Create or revision-check edit a project message. Stable member IDs select mentions and explicit response requests. Ordinary messages never launch a runtime.", schema(json!({"type":"object","properties":{"message":message,"expected_revision":{"type":"integer","minimum":0}},"required":["message"],"additionalProperties":false}))).with_annotations(write.clone()),
+        Tool::new("office_delete_project_message", "Soft-delete your own project message, or any message as Admin, using its current revision.", schema(json!({"type":"object","properties":{"message_id":{"type":"string"},"expected_revision":{"type":"integer","minimum":1}},"required":["message_id","expected_revision"],"additionalProperties":false}))).with_annotations(write.clone()),
+        Tool::new("office_create_task_from_message", "Manager or Admin explicitly converts a project message to one linked task. Same-message retries return the linked task; no runtime is launched.", schema(json!({"type":"object","properties":{"message_id":{"type":"string"},"expected_revision":{"type":"integer","minimum":1},"task":{"type":"object"}},"required":["message_id","expected_revision","task"],"additionalProperties":false}))).with_annotations(write.clone()),
+        Tool::new("office_request_report_review", "Request review of the current exact report revision by stable reviewer IDs. Use a stable request_id for retries.", schema(json!({"type":"object","properties":{"report_id":{"type":"string"},"report_revision":{"type":"integer","minimum":1},"reviewer_ids":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":20},"request_id":{"type":"string"},"note":{"type":"string","maxLength":2000}},"required":["report_id","report_revision","reviewer_ids","request_id"],"additionalProperties":false}))).with_annotations(write.clone()),
+        Tool::new("office_decide_report_review", "Assigned reviewer records approved or changes_requested; requester or Admin may cancel. Stale report revisions cannot be approved.", schema(json!({"type":"object","properties":{"review_id":{"type":"string"},"expected_revision":{"type":"integer","minimum":1},"status":{"type":"string","enum":["approved","changes_requested","cancelled"]},"note":{"type":"string","maxLength":2000}},"required":["review_id","expected_revision","status"],"additionalProperties":false}))).with_annotations(write.clone()),
+        Tool::new("office_list_report_reviews", "Read exact-revision report review records with optional report, revision and status filters.", schema(json!({"type":"object","properties":{"report_id":{"type":"string"},"report_revision":{"type":"integer","minimum":1},"status":{"type":"string","enum":["pending","approved","changes_requested","cancelled"]}},"required":[],"additionalProperties":false}))).with_annotations(read.clone()),
         Tool::new("office_create_notification", "Send a durable notice or explicit response/work/review request to active member IDs. Requires Member, Manager or Admin role. Use a stable request_id for retry safety. No agent is invoked; a local watcher handles explicit requests. Source references are validated and original records are unchanged.", schema(json!({"type":"object","properties":{"request_id":{"type":"string","minLength":1,"maxLength":128},"title":{"type":"string","minLength":1,"maxLength":200},"body":{"type":"string","maxLength":10000},"kind":{"type":"string","enum":["notice","response_request","work_request","review_request","blocker"],"default":"notice"},"recipient_ids":{"type":"array","items":{"type":"string","minLength":1},"minItems":1,"maxItems":20},"source_kind":{"type":"string","enum":["task","project","report","file"]},"source_id":{"type":"string"}},"required":["request_id","title","recipient_ids"],"additionalProperties":false}))).with_annotations(ToolAnnotations::new().read_only(false).destructive(false).idempotent(true).open_world(false)),
         Tool::new("office_list_notifications", "Read current notifications in your inbox or sent list; only Admin may use all. Lists are paginated and do not mark read or acknowledge. Use poll for a durable change cursor, or pending/claimed current lists to reconcile local work after interruption.", schema(json!({"type":"object","properties":{"scope":{"type":"string","enum":["inbox","sent","all"],"default":"inbox"},"status":{"type":"string","enum":["pending","claimed","acknowledged","dismissed","cancelled"]},"page_size":{"type":"integer","minimum":1,"maximum":100,"default":50},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}))).with_annotations(read.clone()),
         Tool::new("office_poll_notifications", "Poll only your own recipient notification changes after a saved decimal string cursor (start at 0). No read/ack side effects. Returns immutable change snapshots, nextCursor and hasMore; drain pages before sleeping. Safely persist changes locally before advancing your cursor. Reconcile current inbox before acting on old pending snapshots. Ordinary notices do not authorize agent execution.", schema(json!({"type":"object","properties":{"after_cursor":{"type":"string","pattern":"^[0-9]+$","default":"0"},"page_size":{"type":"integer","minimum":1,"maximum":100,"default":50}},"additionalProperties":false}))).with_annotations(read.clone()),
@@ -215,9 +228,65 @@ fn tools() -> Vec<Tool> {
         )
         .with_raw_output_schema(schema(json!({"type":"object","properties":{"report":{"type":"object"}},"required":["report"]})))
         .with_annotations(write),
-    ]
+    ];
+    for tool in &mut result {
+        if tool.name == "office_create_task_from_message" {
+            tool.annotations = Some(
+                ToolAnnotations::new()
+                    .read_only(false)
+                    .destructive(false)
+                    .idempotent(true)
+                    .open_world(false),
+            );
+        }
+        let input = Arc::make_mut(&mut tool.input_schema);
+        if let Some(properties) = input.get_mut("properties").and_then(Value::as_object_mut) {
+            match tool.name.as_ref() {
+                "office_create_notification" => {
+                    properties.insert(
+                        "source_revision".into(),
+                        json!({"type":"integer","minimum":0}),
+                    );
+                    properties.insert("source_kind".into(), json!({"type":"string","enum":["task","project","report","file","task_comment","project_message","report_review"]}));
+                }
+                "office_update_notification" => {
+                    properties.insert("result_kind".into(), json!({"type":"string","enum":["report","file","task_comment","project_message","report_review"]}));
+                    properties.insert("result_id".into(), json!({"type":"string"}));
+                    properties.insert(
+                        "result_revision".into(),
+                        json!({"type":"integer","minimum":1}),
+                    );
+                }
+                "office_add_task_comment" | "office_edit_task_comment" => {
+                    properties.insert("parent_id".into(), json!({"type":"string"}));
+                    properties.insert("mention_ids".into(), ids.clone());
+                    properties.insert("response_recipient_ids".into(), ids.clone());
+                    properties.insert(
+                        "references".into(),
+                        json!({"type":"array","items":reference,"maxItems":20}),
+                    );
+                }
+                "office_save_task" => {
+                    properties.insert("source_message_id".into(), json!({"type":"string"}));
+                    properties.insert(
+                        "source_message_revision".into(),
+                        json!({"type":"integer","minimum":0}),
+                    );
+                }
+                "office_get_report" => {
+                    properties.insert("revision".into(), json!({"type":"integer","minimum":1}));
+                }
+                _ => {}
+            }
+        }
+    }
+    result
 }
 
+fn request_arg<T: serde::de::DeserializeOwned>(args: &JsonObject) -> Result<T, String> {
+    serde_json::from_value(Value::Object(args.clone()))
+        .map_err(|error| format!("Invalid request: {error}"))
+}
 fn string_arg(args: &JsonObject, name: &str) -> Result<String, String> {
     match args.get(name) {
         None => Ok(String::new()),
@@ -351,6 +420,139 @@ impl ServerHandler for OfficeMcp {
     ) -> Result<CallToolResponse, McpError> {
         let args = request.arguments.unwrap_or_default();
         let answer = match request.name.as_ref() {
+            "office_resolve_source" => match request_arg(&args) {
+                Err(error) => failure(error),
+                Ok(request) => match self.service.resolve_source(&self.token, request).await {
+                    Ok(response) => success(json!(response)),
+                    Err(error) => {
+                        failure(error.message.unwrap_or_else(|| "Source unavailable".into()))
+                    }
+                },
+            },
+            "office_list_activity" => match request_arg(&args) {
+                Err(error) => failure(error),
+                Ok(request) => match self.service.list_activity(&self.token, request).await {
+                    Ok(response) => success(
+                        json!({"entries":response.entries,"totalCount":response.total_count,"nextOffset":response.next_offset}),
+                    ),
+                    Err(error) => failure(error.message.unwrap_or_else(|| {
+                        "Request failed; check permissions and current record revisions.".into()
+                    })),
+                },
+            },
+            "office_poll_activity" => match request_arg(&args) {
+                Err(error) => failure(error),
+                Ok(request) => match self.service.poll_activity(&self.token, request).await {
+                    Ok(response) => success(
+                        json!({"entries":response.entries,"nextCursor":response.next_cursor,"hasMore":response.has_more}),
+                    ),
+                    Err(error) => failure(error.message.unwrap_or_else(|| {
+                        "Request failed; check permissions and current record revisions.".into()
+                    })),
+                },
+            },
+            "office_list_project_discussion" => match request_arg(&args) {
+                Err(error) => failure(error),
+                Ok(request) => match self
+                    .service
+                    .list_project_discussion(&self.token, request)
+                    .await
+                {
+                    Ok(response) => success(json!({"messages":response.messages})),
+                    Err(error) => failure(error.message.unwrap_or_else(|| {
+                        "Request failed; check permissions and current record revisions.".into()
+                    })),
+                },
+            },
+            "office_save_project_message" => match request_arg(&args) {
+                Err(error) => failure(error),
+                Ok(request) => match self
+                    .service
+                    .save_project_message(&self.token, request)
+                    .await
+                {
+                    Ok(response) => success(
+                        serde_json::to_value(response)
+                            .map_err(|_| McpError::internal_error("Response unavailable", None))?,
+                    ),
+                    Err(error) => failure(error.message.unwrap_or_else(|| {
+                        "Request failed; check permissions and current record revisions.".into()
+                    })),
+                },
+            },
+            "office_delete_project_message" => match request_arg(&args) {
+                Err(error) => failure(error),
+                Ok(request) => match self
+                    .service
+                    .delete_project_message(&self.token, request)
+                    .await
+                {
+                    Ok(response) => success(
+                        serde_json::to_value(response)
+                            .map_err(|_| McpError::internal_error("Response unavailable", None))?,
+                    ),
+                    Err(error) => failure(error.message.unwrap_or_else(|| {
+                        "Request failed; check permissions and current record revisions.".into()
+                    })),
+                },
+            },
+            "office_create_task_from_message" => match request_arg(&args) {
+                Err(error) => failure(error),
+                Ok(request) => match self
+                    .service
+                    .create_task_from_message(&self.token, request)
+                    .await
+                {
+                    Ok(response) => success(
+                        serde_json::to_value(response)
+                            .map_err(|_| McpError::internal_error("Response unavailable", None))?,
+                    ),
+                    Err(error) => failure(error.message.unwrap_or_else(|| {
+                        "Request failed; check permissions and current record revisions.".into()
+                    })),
+                },
+            },
+            "office_request_report_review" => match request_arg(&args) {
+                Err(error) => failure(error),
+                Ok(request) => match self
+                    .service
+                    .request_report_review(&self.token, request)
+                    .await
+                {
+                    Ok(response) => success(
+                        serde_json::to_value(response)
+                            .map_err(|_| McpError::internal_error("Response unavailable", None))?,
+                    ),
+                    Err(error) => failure(error.message.unwrap_or_else(|| {
+                        "Request failed; check permissions and current record revisions.".into()
+                    })),
+                },
+            },
+            "office_decide_report_review" => match request_arg(&args) {
+                Err(error) => failure(error),
+                Ok(request) => match self
+                    .service
+                    .decide_report_review(&self.token, request)
+                    .await
+                {
+                    Ok(response) => success(
+                        serde_json::to_value(response)
+                            .map_err(|_| McpError::internal_error("Response unavailable", None))?,
+                    ),
+                    Err(error) => failure(error.message.unwrap_or_else(|| {
+                        "Request failed; check permissions and current record revisions.".into()
+                    })),
+                },
+            },
+            "office_list_report_reviews" => match request_arg(&args) {
+                Err(error) => failure(error),
+                Ok(request) => match self.service.list_report_reviews(&self.token, request).await {
+                    Ok(response) => success(json!({"reviews":response.reviews})),
+                    Err(error) => failure(error.message.unwrap_or_else(|| {
+                        "Request failed; check permissions and current record revisions.".into()
+                    })),
+                },
+            },
             "office_create_notification" => {
                 let parsed = (|| -> Result<_, String> {
                     let recipients = args
@@ -373,6 +575,7 @@ impl ServerHandler for OfficeMcp {
                             recipient_ids: recipients,
                             source_kind: string_arg(&args, "source_kind")?,
                             source_id: string_arg(&args, "source_id")?,
+                            source_revision: uint_arg(&args, "source_revision", 0)?,
                             ..Default::default()
                         },
                     )
@@ -439,6 +642,9 @@ impl ServerHandler for OfficeMcp {
                             action: string_arg(&args, "action")?,
                             claim_id: string_arg(&args, "claim_id")?,
                             note: string_arg(&args, "note")?,
+                            result_kind: string_arg(&args, "result_kind")?,
+                            result_id: string_arg(&args, "result_id")?,
+                            result_revision: uint_arg(&args, "result_revision", 0)?,
                             ..Default::default()
                         },
                     )
@@ -689,6 +895,8 @@ impl ServerHandler for OfficeMcp {
                             value => value.to_owned(),
                         },
                         due_date: string_arg(&args, "due_date")?,
+                        source_message_id: string_arg(&args, "source_message_id")?,
+                        source_message_revision: uint_arg(&args, "source_message_revision", 0)?,
                         ..Default::default()
                     })
                 })();
@@ -746,6 +954,22 @@ impl ServerHandler for OfficeMcp {
                         comment_id,
                         body: string_arg(&args, "body")?,
                         expected_revision: revision,
+                        parent_id: string_arg(&args, "parent_id")?,
+                        mention_ids: args
+                            .get("mention_ids")
+                            .map(|v| serde_json::from_value(v.clone()).map_err(|e| e.to_string()))
+                            .transpose()?
+                            .unwrap_or_default(),
+                        response_recipient_ids: args
+                            .get("response_recipient_ids")
+                            .map(|v| serde_json::from_value(v.clone()).map_err(|e| e.to_string()))
+                            .transpose()?
+                            .unwrap_or_default(),
+                        references: args
+                            .get("references")
+                            .map(|v| serde_json::from_value(v.clone()).map_err(|e| e.to_string()))
+                            .transpose()?
+                            .unwrap_or_default(),
                         ..Default::default()
                     })
                 })();
@@ -824,13 +1048,10 @@ impl ServerHandler for OfficeMcp {
                     }
                 }
             }
-            "office_get_report" => match string_arg(&args, "id") {
-                Err(message) => failure(message),
-                Ok(id) => match self.service.agent_get_report(&self.token, &id).await {
-                    Ok(report) => match serde_json::to_value(report) {
-                        Ok(value) => success(json!({"report":value})),
-                        Err(_) => failure("Report response unavailable."),
-                    },
+            "office_get_report" => match request_arg(&args) {
+                Err(error) => failure(error),
+                Ok(request) => match self.service.get_report(&self.token, request).await {
+                    Ok(response) => success(json!({"report":response.report})),
                     Err(error) => report_error(error),
                 },
             },
@@ -1631,10 +1852,35 @@ mod tests {
             json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}),
         )
         .await;
+        let names: std::collections::HashSet<_> = listed["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|tool| tool["name"].as_str().unwrap())
+            .collect();
+        for expected in [
+            "office_get_workspace",
+            "office_save_task",
+            "office_list_activity",
+            "office_poll_activity",
+            "office_resolve_source",
+            "office_list_project_discussion",
+            "office_save_project_message",
+            "office_delete_project_message",
+            "office_create_task_from_message",
+            "office_request_report_review",
+            "office_decide_report_review",
+            "office_list_report_reviews",
+        ] {
+            assert!(
+                names.contains(expected),
+                "missing tool {expected}: {listed}"
+            );
+        }
         assert_eq!(
+            names.len(),
             listed["result"]["tools"].as_array().unwrap().len(),
-            22,
-            "{listed}"
+            "tool names must be unique"
         );
         let (_, read) = mcp(&app, Some(&secret), None, json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"office_get_workspace","arguments":{"project_id":project_id}}})).await;
         assert_eq!(read["result"]["isError"], false, "{read}");
@@ -1786,5 +2032,160 @@ mod tests {
             &third["result"]["structuredContent"]["comment"]["authorId"],
             first_id
         );
+    }
+    async fn tool_ok(app: &Router, token: &str, name: &str, arguments: Value) -> Value {
+        let (status, response) = mcp(app, Some(token), None, json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":name,"arguments":arguments}})).await;
+        assert_eq!(status, StatusCode::OK, "{response}");
+        assert_eq!(response["result"]["isError"], false, "{name}: {response}");
+        response["result"]["structuredContent"].clone()
+    }
+    #[tokio::test]
+    async fn raw_key_tools_share_conversations_exact_reviews_activity_and_source_policy() {
+        let service = Arc::new(OfficePreviewService::new());
+        let app = app(service);
+        let (admin, sender, _) = key(&app, "member").await;
+        let reviewer = rpc(
+            &app,
+            "SaveMember",
+            Some(&admin),
+            json!({"member":{"name":"Reviewer","kind":"agent","role":"manager","status":"active"}}),
+        )
+        .await;
+        let raw_key = reviewer["secret"].as_str().unwrap();
+        let reviewer_id = &reviewer["member"]["id"];
+        let workspace = rpc(&app, "GetWorkspace", Some(&sender), json!({})).await;
+        let project_id = &workspace["projects"][0]["id"];
+        let board = workspace["boards"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| &b["projectId"] == project_id)
+            .unwrap();
+        let sender_id = &workspace["currentUser"]["id"];
+        let message = tool_ok(&app,raw_key,"office_save_project_message",json!({"message":{"project_id":project_id,"body":"Please inspect the brief","mention_ids":[sender_id],"response_recipient_ids":[sender_id]}})).await;
+        assert_eq!(message["message"]["authorId"], *reviewer_id);
+        let message_id = &message["message"]["id"];
+        let listed = tool_ok(
+            &app,
+            &sender,
+            "office_list_project_discussion",
+            json!({"project_id":project_id}),
+        )
+        .await;
+        assert!(
+            listed["messages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|m| &m["id"] == message_id)
+        );
+        let resolved = tool_ok(
+            &app,
+            &sender,
+            "office_resolve_source",
+            json!({"kind":"project_message","id":message_id,"revision":1}),
+        )
+        .await;
+        assert_eq!(resolved["projectId"], *project_id);
+        let (_, member_denied) = mcp(&app, Some(&sender), None, json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"office_create_task_from_message","arguments":{"message_id":message_id,"expected_revision":1,"task":{"project_id":project_id,"board_id":board["id"],"column":board["columns"][0],"title":"Investigate brief","priority":"medium"}}}})).await;
+        assert_eq!(
+            member_denied["result"]["isError"], true,
+            "Members cannot grant conversion: {member_denied}"
+        );
+        let converted = tool_ok(&app,raw_key,"office_create_task_from_message",json!({"message_id":message_id,"expected_revision":1,"task":{"project_id":project_id,"board_id":board["id"],"column":board["columns"][0],"title":"Investigate brief","priority":"medium","assignee_id":sender_id}})).await;
+        let retry = tool_ok(&app,raw_key,"office_create_task_from_message",json!({"message_id":message_id,"expected_revision":1,"task":{"project_id":project_id,"board_id":board["id"],"column":board["columns"][0],"title":"Investigate brief","priority":"medium","assignee_id":sender_id}})).await;
+        assert_eq!(retry["task"]["id"], converted["task"]["id"]);
+        let task = &converted["task"];
+        let saved = tool_ok(&app,&sender,"office_save_task",json!({"id":task["id"],"project_id":task["projectId"],"board_id":task["boardId"],"column":task["column"],"title":"Investigate revised brief","priority":"medium","assignee_id":sender_id,"source_message_id":task["sourceMessageId"],"source_message_revision":task["sourceMessageRevision"]})).await;
+        assert_eq!(saved["task"]["sourceMessageId"], *message_id);
+        let comment = tool_ok(
+            &app,
+            &sender,
+            "office_add_task_comment",
+            json!({"task_id":task["id"],"body":"Acknowledged","mention_ids":[reviewer_id]}),
+        )
+        .await;
+        let context = tool_ok(
+            &app,
+            raw_key,
+            "office_resolve_source",
+            json!({"kind":"task_comment","id":comment["comment"]["id"],"revision":1}),
+        )
+        .await;
+        assert_eq!(context["taskId"], task["id"]);
+        let report = tool_ok(
+            &app,
+            &admin,
+            "office_save_report",
+            json!({"title":"Exact edition","body":"Original findings","project_id":project_id}),
+        )
+        .await;
+        let report_id = &report["report"]["id"];
+        let review = tool_ok(&app,&admin,"office_request_report_review",json!({"report_id":report_id,"report_revision":1,"reviewer_ids":[reviewer_id],"request_id":"mcp-exact-review"})).await;
+        let decided = tool_ok(&app,raw_key,"office_decide_report_review",json!({"review_id":review["reviews"][0]["id"],"expected_revision":1,"status":"approved","note":"Sources checked"})).await;
+        assert_eq!(decided["review"]["status"], "approved");
+        let reviews = tool_ok(
+            &app,
+            &sender,
+            "office_list_report_reviews",
+            json!({"report_id":report_id,"report_revision":1}),
+        )
+        .await;
+        assert_eq!(reviews["reviews"][0]["status"], "approved");
+        tool_ok(&app,&admin,"office_save_report",json!({"id":report_id,"expected_revision":1,"title":"Exact edition","body":"Updated findings","project_id":project_id})).await;
+        let historical = tool_ok(
+            &app,
+            raw_key,
+            "office_get_report",
+            json!({"id":report_id,"revision":1}),
+        )
+        .await;
+        assert_eq!(historical["report"]["body"], "Original findings");
+        let entries = tool_ok(
+            &app,
+            raw_key,
+            "office_list_activity",
+            json!({"project_id":project_id,"page_size":100}),
+        )
+        .await;
+        assert!(
+            entries["entries"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|v| v["sourceKind"] == "project_message")
+        );
+        let polled = tool_ok(
+            &app,
+            raw_key,
+            "office_poll_activity",
+            json!({"after_cursor":"activity:v1:0","page_size":100}),
+        )
+        .await;
+        assert!(
+            polled["nextCursor"]
+                .as_str()
+                .unwrap()
+                .starts_with("activity:v1:")
+        );
+        let empty = tool_ok(
+            &app,
+            raw_key,
+            "office_poll_activity",
+            json!({"after_cursor":polled["nextCursor"]}),
+        )
+        .await;
+        assert_eq!(empty["entries"], json!([]));
+        let viewer = rpc(
+            &app,
+            "SaveMember",
+            Some(&admin),
+            json!({"member":{"name":"Viewer","kind":"agent","role":"viewer","status":"active"}}),
+        )
+        .await;
+        let (_,denied) = mcp(&app,viewer["secret"].as_str(),None,json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"office_save_project_message","arguments":{"message":{"project_id":project_id,"body":"Not authorized"}}}})).await;
+        assert_eq!(denied["result"]["isError"], true, "{denied}");
+        let (_,invalid) = mcp(&app,Some(raw_key),None,json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"office_save_project_message","arguments":{"message":{"project_id":project_id,"body":"Invalid exact link","references":[{"kind":"report","id":report_id,"revision":99}]}}}})).await;
+        assert_eq!(invalid["result"]["isError"], true, "{invalid}");
     }
 }

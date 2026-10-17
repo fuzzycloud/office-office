@@ -38,6 +38,9 @@ fn decode<T: DeserializeOwned>(json: &str) -> Result<T> {
 }
 fn event_parts(event: &Event) -> Result<(&'static str, String)> {
     Ok(match event {
+        Event::FeedEntry(v) => ("feed_entry", encode(v)?),
+        Event::ProjectMessage(v) => ("project_message", encode(v)?),
+        Event::ReportReview(v) => ("report_review", encode(v)?),
         Event::Notification(v) => ("notification", encode(v)?),
         Event::DemoInitialized(v) => ("demo_initialized", encode(v)?),
         Event::Member(v) => ("member", encode(v)?),
@@ -58,6 +61,9 @@ fn event_parts(event: &Event) -> Result<(&'static str, String)> {
 }
 fn parse_event(kind: &str, json: &str) -> Result<Event> {
     let event = match kind {
+        "feed_entry" => Event::FeedEntry(decode(json)?),
+        "project_message" => Event::ProjectMessage(decode(json)?),
+        "report_review" => Event::ReportReview(decode(json)?),
         "notification" => Event::Notification(decode(json)?),
         "demo_initialized" => Event::DemoInitialized(decode(json)?),
         "member" => Event::Member(decode(json)?),
@@ -77,6 +83,26 @@ fn parse_event(kind: &str, json: &str) -> Result<Event> {
         _ => bail!("unsupported event type: {kind}"),
     };
     let valid = match &event {
+        Event::FeedEntry(v) => super::activity::valid_entry(v),
+        Event::ProjectMessage(v) => {
+            !v.id.is_empty()
+                && !v.project_id.is_empty()
+                && !v.author_id.is_empty()
+                && v.revision > 0
+                && v.created_at > 0
+                && v.updated_at >= v.created_at
+                && (!v.deleted || v.body.is_empty())
+        }
+        Event::ReportReview(v) => {
+            !v.id.is_empty()
+                && !v.report_id.is_empty()
+                && v.report_revision > 0
+                && !v.requester_id.is_empty()
+                && !v.reviewer_id.is_empty()
+                && v.revision > 0
+                && v.created_at > 0
+                && v.updated_at >= v.created_at
+        }
         Event::Notification(v) => super::notifications::valid_notification(v),
         Event::DemoInitialized(v) => v.scenario == "office-preview" && v.version == 1,
         Event::Member(v) => {

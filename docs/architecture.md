@@ -1,10 +1,17 @@
+---
+governs:
+  paths: [apps/server/**, apps/web/**, crates/sqlite-journal/**, proto/**]
+  shapes: [placement, build-constraints]
+  verify: source
+---
+
 # Architecture
 
 Office Office is a shared business workspace for humans and AI. It provides office records and a social publishing queue; external clients and runtimes remain responsible for agent execution and runtime conversations. Hermes is one possible integration, alongside clients such as Claude Code and Codex. Targets, strategy, pricing history and progress remain part of the product direction.
 
 ## Service boundary
 
-The React application uses TanStack Router for section URLs and the generated ConnectRPC client for data. Route entry revalidates the shared TanStack Query cache rather than retaining React-only page state indefinitely; browser history and direct section reloads are supported. See [navigation and refresh](navigation.md). Axum serves the RPC service under `/rpc`, the UI and a health route. Protobuf is the transport contract. The browser and agents use the same RPC policy; UI checks are convenience, not an authorization boundary. The Streamable HTTP MCP adapter at `/mcp` calls the same actor commands and authorization policy.
+The React application uses TanStack Router file-based routes for section URLs and the generated ConnectRPC client for data. Route entry revalidates the shared TanStack Query cache rather than retaining React-only page state indefinitely; browser history and direct section reloads are supported. See [navigation and refresh](navigation.md). Axum serves the RPC service under `/rpc`, the UI and a health route. Protobuf is the transport contract. The browser and agents use the same RPC policy; UI checks are convenience, not an authorization boundary. The Streamable HTTP MCP adapter at `/mcp` calls the same actor commands and authorization policy.
 
 ## Durable default
 
@@ -56,7 +63,7 @@ Runtime conversations, messaging-channel integrations and execution belong to ex
 
 ### Shared user authentication and remaining policy work
 
-v0.3.0 implements explicit human/AI members and key exchange. `kind` defaults to human for legacy members; new AI members need no password/email, and user type is immutable. Keys bind to an active AI member with a separate issuer. Stable member IDs identify comment/report authors and task activity. Project memberships, task/board revision checks, command idempotency and structured generic activity attribution remain planned. Existing project filters and reference validation are not project authorization.
+v0.3.0 implements explicit human/AI members and key exchange. `kind` defaults to human for legacy members; new AI members need no password/email, and user type is immutable. Keys bind to an active AI member with a separate issuer. Stable member IDs identify comment/report authors and task activity. Project memberships, task/board revision checks, general command idempotency remain planned. New activity entries have structured actor IDs; notifications and message-to-task conversion provide bounded retry protection. Existing project filters and reference validation are not project authorization.
 
 Humans and AI are users in one member/role model. Humans authenticate with email/password; AI users exchange a member-bound key for a short-lived access token. Both flows resolve a common principal using the current fixed role across RPC and MCP. Project grants remain future work. Revoking a key or disabling a member invalidates its outstanding sessions on subsequent calls. Stable actor identity is separate from assignment and key issuance. See [agent team access](agent-team-access.md) for migration rules, token constraints and acceptance tests. The remaining project-isolation and reliability requirements are not current behavior.
 
@@ -71,23 +78,63 @@ If an external dispatcher is installed later, Ready can explicitly request work 
 GHCR images are published only for version tags and remain previews; the public repository does not configure an operator-specific deployment. See [hosting](hosting.md) for the deployment boundary. The UI uses React and Vite; the service uses Rust, Axum and ConnectRPC. The protobuf contract is in `proto/office/v1/office.proto`; `just generate` regenerates clients. Use pnpm for frontend work and follow the root `AGENTS.md` for focused checks. Never hand-edit generated clients.
 
 
-### Planned work conversations and personal attention
+### Work conversations, attention and activity
 
-Task comments are the current work-conversation surface. A notification board now
-provides personal recipient/sent lists, explicit task-linked response requests and
-immutable cursor polling through RPC/MCP. Creation fanout, read markers, claims
-and resolution commit through the same actor/event/SQLite path. Polling does not
-mark read or acknowledge, and notification bodies do not leak into the workspace
-activity feed. See [notifications and watchers](notifications.md). Stable-ID inline
-mentions, revision-specific file/report links, one project discussion area and
-richer review/decision inbox workflows remain planned. Read markers are separate from unresolved requests;
-ordinary comments and mentions never launch execution. Our first optional adapter
-uses office events, a local watcher and configured Hermes profiles, with replies
-and visible status written back through authenticated APIs. No Hermes-specific
-identity or persona is added to the app. See [work conversations and needs
-attention](work-conversations.md) for delivery order, policy and acceptance cases;
-the remaining additions are not shipped functionality.
+Task comments and project messages use stable member-ID mentions, reply-to IDs,
+exact file/report references and explicit response requests. A project message can
+create a linked task while preserving the source message/revision. Report reviewers
+make an explicit decision against an exact report revision; newer revisions cancel
+pending obsolete reviews without changing historical decisions.
+
+Member-addressed notifications and an append-only authorized activity feed are
+separate projections committed with their source command in the same actor/SQLite
+transaction. `PollNotifications` retains its decimal, recipient-only snapshot cursor.
+`PollActivity` uses `activity:v1:N` and includes role-authorized business changes plus
+private sender/recipient read, claim and result feedback. Reads and polling create
+no events. New feed entries have stable server-derived actor IDs; legacy unstructured
+activity is retained for Admins without inventing historical identities. See
+[notifications and watchers](notifications.md) and [work conversations](work-conversations.md).
+
+Ordinary comments, mentions and assignments do not launch execution. External
+watchers remain responsible for routing, runtime attempts, heartbeats and safe
+recovery. No Hermes-specific identity or persona is added to the application.
 
 ## Human browser authentication
 
 The `/auth` HTTP adapter calls the same bootstrap/login actor commands, sets a stateless seven-day HttpOnly cookie and returns user metadata without a bearer token. Session recovery validates the existing cookie; logout clears it. Cookie-to-bearer middleware covers RPC and file endpoints, with CSRF and Origin checks, while MCP remains an explicit-bearer interface. Hosted cookies require HTTPS; loopback development can use HTTP. Browser session changes clear cached records and invalidate results from the previous identity. No storage schema changes or refresh-session records are introduced. See [security boundaries](security.md) for stateless logout limitations.
+
+## Placement and checks
+
+| Change | Location | Source |
+| --- | --- | --- |
+| Actor commands, authorization, RPC/MCP and durable projections | `apps/server/src` | `apps/server/Cargo.toml` |
+| SQLite journal transaction helpers | `crates/sqlite-journal` | `Cargo.toml` |
+| React views, file routes and generated RPC client | `apps/web` | `pnpm-workspace.yaml`, `apps/web/package.json` |
+| Transport contract | `proto/office/v1/office.proto` | `buf.gen.yaml`, `Justfile` |
+| Container recovery and startup | `deploy/entrypoint.sh` | `Dockerfile`, `Justfile` |
+
+`Justfile` defines the gate: version consistency, runtime ShellCheck/Bats, Cargo formatting,
+Clippy and workspace tests, frontend check and build. Browser automation is `just test-e2e`;
+its configuration builds once and gives tests isolated databases (`playwright.config.ts`,
+`tests/e2e`). Run `just generate` after protobuf edits; generated clients are not hand-edited
+(`AGENTS.md`).
+
+## Build constraints
+
+- **Pre-commit hook compiles:** yes
+- **Cold build cost:** not recorded
+- **Concurrent builds safe:** no
+
+The user confirmed on 2026-10-17 that the local pre-commit hook builds. Keep Cargo builds serial on this machine (`AGENTS.md`); do not overlap a commit hook with another Cargo build. Dependencies are declared in
+root/member `Cargo.toml`, `package.json`, and `apps/web/package.json`; lockfiles pin them.
+
+## Development traps
+
+| Trap | Convention and source |
+| --- | --- |
+| AI assignment is not agent execution | External clients own execution; see product boundaries in `AGENTS.md`. |
+| Demo and persistence are separate choices | `OFFICE_DEMO_MODE` selects temporary storage; sample registration also works with durable SQLite (`apps/server/src/lib.rs`). |
+| A profile image belongs to its target member | Gallery images are copied into a profile-scoped upload; never borrow another member's private profile reference (`apps/server/src/files.rs`). |
+| Read markers do not resolve work | Pending attention persists until an explicit resolution (`apps/server/src/notifications.rs`). |
+| Project IDs do not grant isolation | Authorization currently uses module roles; project membership ACLs are deferred (`docs/roles.md`). |
+| Operator scripts contain private settings | Deployment configuration stays outside the public repository (`docs/hosting.md`). |

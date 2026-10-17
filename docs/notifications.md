@@ -4,7 +4,7 @@ Office Office stores durable, member-addressed notifications. Open
 **Notifications** for your inbox and sent items; Admins can also inspect All.
 Select actual active members in **Send notification**. Task details also offer
 **Request response**, which links the request to that task. Typing `@Prachi` in an
-ordinary comment does not send a notification: use the recipient picker. No
+ordinary comment is plain text: select the actual member in the structured mention picker to notify them. No
 notification starts a runtime inside Office Office.
 
 Kinds are `notice`, `response_request`, `work_request`, `review_request` and
@@ -17,8 +17,7 @@ supports. A request is not approval to send, publish, spend or change security.
 Admin, Manager and Member may send notifications. Viewer cannot send but can read
 and handle its own inbox. Humans and AI follow the same policy. The sender is
 derived from authentication. Senders can inspect Sent; only Admin can inspect
-All. Personal notification contents do not enter the workspace-wide activity
-feed. Disabled members and revoked/expired credentials cannot poll or update.
+All. Personal notification contents do not enter the workspace-wide activity feed. Feedback entries (created/read/claimed/acknowledged/dismissed/cancelled) are visible only to the sender and recipient, additionally constrained by source access. Disabled members and revoked/expired credentials cannot poll or update.
 
 Fetching does not mark read or acknowledge. **Mark read** only records `readAt`;
 it leaves a pending request pending. Recipient actions are:
@@ -30,7 +29,7 @@ it leaves a pending request pending. Recipient actions are:
 
 The sender or Admin can `cancel` a pending/claimed notification. Actions record
 the actor, timestamp, revision and optional note. They never change a linked
-task's column or a report's editorial status. Cancellation does not terminate an
+task's column or a report's editorial status. A notification backed by a report review must be resolved through `DecideReportReview`, preserving the authoritative review decision. Cancellation does not terminate an
 already-running local process; the watcher must reconcile that separately.
 
 Claims have **no automatic timeout or requeue**. An interrupted attempt remains
@@ -51,23 +50,48 @@ uses POST `/rpc/office.v1.OfficeService/<Method>` with JSON,
 | `CreateNotification` | Required retry-safe `requestId`, title, kind, recipient IDs and optional source reference. Returns one record per recipient. |
 | `ListNotifications` | Current records by `scope` (`inbox`, `sent`, Admin-only `all`), optional status, `pageSize`, `offset`. Returns `totalCount` and `nextOffset`; zero means the last page. |
 | `PollNotifications` | Immutable changes addressed to the authenticated member after a saved cursor. Read-only. |
-| `UpdateNotification` | `id`, `expectedRevision`, action, optional `claimId` and note. Returns the updated record. |
+| `UpdateNotification` | `id`, `expectedRevision`, action, optional `claimId`, note and exact `resultKind`/`resultId`/`resultRevision`. Returns the updated record. |
 
-Sending supports optional `sourceKind` (`task`, `project`, `report`, `file`) and
-`sourceId`. Sources and active recipients are validated before the entire fanout
+Sending supports optional `sourceKind` (`task`, `project`, `report`, `file`, `task_comment`, `project_message`, `report_review`), `sourceId` and `sourceRevision`. Sources and active recipients are validated before the entire fanout
 is committed. Retrying the same sender/request ID and payload returns the same
 creation records; changing that payload requires a new request ID. Retries do
-not re-open an acknowledged notification. Use List for current state.
+not re-open an acknowledged notification. New public request IDs cannot use the reserved workflow prefixes `task_comment:`, `project_message:`, `task-assignment:` or `review:`; use a caller-generated UUID instead. Use List for current state.
 
 Every update requires the current revision. A repeated identical claim with its
 original claim ID can recover a lost response without creating another claim.
 Other revision/state conflicts require a fresh read and reconciliation.
 
-UI source links currently open the relevant office section, not an individual
-record URL. APIs include the exact source ID for watcher context. Inline comment
-mentions, threaded project discussions and reply/result revision links remain
-planned. Project-specific grants are not implemented; current source validation
-uses module roles and record existence.
+The header bell shows unread items separately from unresolved attention. The full
+Notifications board keeps inbox, sent, Admin-only all, and paginated Office activity views. Source links use
+`ResolveSource` to authorize and locate a task, project discussion, file or exact
+report revision. Result links identify the actual reply/report/review, rather than
+assuming a claimed request has completed. Project-specific grants are not
+implemented; current source validation uses module roles and record existence.
+
+### Business activity
+
+`ListActivity` exposes recent authorized business changes with actor IDs, names,
+kinds, source IDs/revisions and timestamps. `PollActivity` returns ascending
+append-only entries with an independent `activity:v1:N` cursor, `nextCursor` and
+`hasMore`. Use an empty cursor for a new consumer. The cursor cannot be exchanged
+with `PollNotifications`; that existing recipient-only decimal contract is unchanged.
+Drain pages, persist the cursor with local queue insertion, and deduplicate entries
+by ID/sequence. Reconcile after a database reset or older restore rather than
+silently skipping history.
+
+The feed covers new domain writes and private notification feedback. It is not a
+backfilled claim about historical actors: older name-only workspace activity remains
+legacy history. Member/key/security changes are Admin-only; credentials are never
+included. Private notification feedback is participant-only. Reads, polling and
+health checks emit no activity. File deletion remains visible in authorized history,
+while downloads of deleted objects remain denied.
+
+New/reassigned tasks generate a `work_request` for their active assignee. Unassigning
+or reassigning cancels the old open assignment request; unchanged saves do not create
+another. Pending sample teammates receive no assignments until activated. Structured
+mentions create informational notices; explicit response requests are separate.
+Report review requests and decisions refer to an exact report revision. Deleting a conversation source cancels its open requests; removing an explicit response recipient cancels that generated request while retaining history. No activity
+or attention record starts an agent, changes card status or grants provider approval.
 
 ## Polling every two or five minutes
 
@@ -121,7 +145,7 @@ separately and keep separate local cursors/queues. Rotating a key does not chang
 the member identity. An invalid/future cursor after a database reset or older
 backup restore requires reconciliation; do not silently skip history.
 
-MCP equivalents are `office_create_notification`, `office_list_notifications`,
+MCP activity equivalents are `office_list_activity` and `office_poll_activity`; `office_resolve_source` provides authorized navigation context. Notification equivalents are `office_create_notification`, `office_list_notifications`,
 `office_poll_notifications` and `office_update_notification`. All return
 structured JSON and use the same actor, permissions and SQLite transaction as
 RPC. A watcher can call them without an LLM. See [MCP access](mcp.md).
@@ -130,3 +154,27 @@ The app exposes notification delivery and atomic claims, not exactly-once
 external execution. Durable local processing and runtime reconciliation remain
 the watcher's responsibility. Polling sends no email, Slack or Telegram message;
 runtime/profile mapping and messaging adapters stay outside this application.
+
+## Board actions and watcher wake-ups
+
+Saving a new assignment or changing its assignee creates an automatic
+`work_request`. Selecting a real member in the structured mention picker creates
+an informational `notice`; plain text such as `@tara` is not a member identity.
+Use **Request response** for an explicit question that a watcher may dispatch.
+
+A new task-comment or project-message reply creates one `notice` for its active
+parent author. Self replies, unchanged saves and text edits do not repeat it. If
+that author is already explicitly mentioned or response-selected, the selected
+workflow provides the notification instead. Inactive parent authors are skipped
+for derived notices; explicitly selecting an inactive recipient still fails.
+
+Watchers must store informational notices without waking a runtime. Only their
+configured explicit request kinds are eligible for claim/dispatch. Claims mean
+picked up for handling, never completed. Always reconcile current notification
+state before acting on immutable poll snapshots. This prevents routine agent
+replies from launching a notification loop.
+
+These behaviors apply to new source commands after upgrade. Existing comments
+and assignments are not replayed into new requests, so already manually forwarded
+work is not dispatched again. This does not require a watcher to manufacture
+notifications that the application should produce.

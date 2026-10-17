@@ -19,6 +19,13 @@ service OfficeService {
   rpc ListTaskDiscussion(ListTaskDiscussionRequest) returns (ListTaskDiscussionResponse);
   rpc SaveTaskComment(SaveTaskCommentRequest) returns (SaveTaskCommentResponse);
   rpc DeleteTaskComment(DeleteTaskCommentRequest) returns (DeleteTaskCommentResponse);
+  rpc ListProjectDiscussion(ListProjectDiscussionRequest) returns (ListProjectDiscussionResponse);
+  rpc SaveProjectMessage(SaveProjectMessageRequest) returns (SaveProjectMessageResponse);
+  rpc DeleteProjectMessage(DeleteProjectMessageRequest) returns (DeleteProjectMessageResponse);
+  rpc CreateTaskFromMessage(CreateTaskFromMessageRequest) returns (CreateTaskFromMessageResponse);
+  rpc ResolveSource(ResolveSourceRequest) returns (ResolveSourceResponse);
+  rpc ListActivity(ListActivityRequest) returns (ListActivityResponse);
+  rpc PollActivity(PollActivityRequest) returns (PollActivityResponse);
   rpc CreateNotification(CreateNotificationRequest) returns (CreateNotificationResponse);
   rpc ListNotifications(ListNotificationsRequest) returns (ListNotificationsResponse);
   rpc PollNotifications(PollNotificationsRequest) returns (PollNotificationsResponse);
@@ -26,6 +33,9 @@ service OfficeService {
   rpc ListReports(ListReportsRequest) returns (ListReportsResponse);
   rpc GetReport(GetReportRequest) returns (GetReportResponse);
   rpc SaveReport(SaveReportRequest) returns (SaveReportResponse);
+  rpc RequestReportReview(RequestReportReviewRequest) returns (RequestReportReviewResponse);
+  rpc DecideReportReview(DecideReportReviewRequest) returns (DecideReportReviewResponse);
+  rpc ListReportReviews(ListReportReviewsRequest) returns (ListReportReviewsResponse);
   rpc ListAgentKeys(ListAgentKeysRequest) returns (ListAgentKeysResponse);
   rpc CreateAgentKey(CreateAgentKeyRequest) returns (CreateAgentKeyResponse);
   rpc RevokeAgentKey(RevokeAgentKeyRequest) returns (RevokeAgentKeyResponse);
@@ -76,7 +86,7 @@ message SaveTaskRequest { Task task = 1; }
 message SaveTaskResponse { Task task = 1; }
 message ListReportsRequest { string query = 1; string status = 2; string project_id = 3; uint32 page_size = 4; uint32 offset = 5; }
 message ListReportsResponse { repeated Report reports = 1; uint32 total_count = 2; uint32 next_offset = 3; }
-message GetReportRequest { string id = 1; }
+message GetReportRequest { string id = 1; uint32 revision = 2; }
 message GetReportResponse { Report report = 1; }
 message SaveReportRequest { Report report = 1; uint32 expected_revision = 2; }
 message SaveReportResponse { Report report = 1; }
@@ -151,6 +161,8 @@ message Task {
   string priority = 8;
   string due_date = 9;
   uint32 comment_count = 10;
+  string source_message_id = 11;
+  uint32 source_message_revision = 12;
 }
 message ReportSource { string title = 1; string url = 2; }
 message Report {
@@ -218,6 +230,10 @@ message TaskComment {
   uint32 revision = 8;
   bool deleted = 9;
   string actor_kind = 10;
+  string parent_id = 11;
+  repeated string mention_ids = 12;
+  repeated RecordReference references = 13;
+  repeated string response_recipient_ids = 14;
 }
 message TaskActivity {
   string id = 1;
@@ -231,7 +247,7 @@ message TaskActivity {
 }
 message ListTaskDiscussionRequest { string task_id = 1; }
 message ListTaskDiscussionResponse { repeated TaskComment comments = 1; repeated TaskActivity activity = 2; }
-message SaveTaskCommentRequest { string task_id = 1; string comment_id = 2; string body = 3; uint32 expected_revision = 4; }
+message SaveTaskCommentRequest { string task_id = 1; string comment_id = 2; string body = 3; uint32 expected_revision = 4; string parent_id = 5; repeated string mention_ids = 6; repeated RecordReference references = 7; repeated string response_recipient_ids = 8; }
 message SaveTaskCommentResponse { TaskComment comment = 1; }
 message DeleteTaskCommentRequest { string task_id = 1; string comment_id = 2; uint32 expected_revision = 3; }
 message DeleteTaskCommentResponse { TaskComment comment = 1; }
@@ -277,6 +293,10 @@ message Notification {
   string updated_by = 17;
   string note = 18;
   uint64 created_sequence = 19;
+  uint32 source_revision = 20;
+  string result_kind = 21;
+  string result_id = 22;
+  uint32 result_revision = 23;
 }
 message CreateNotificationRequest {
   string request_id = 1;
@@ -286,6 +306,7 @@ message CreateNotificationRequest {
   repeated string recipient_ids = 5;
   string source_kind = 6;
   string source_id = 7;
+  uint32 source_revision = 8;
 }
 message CreateNotificationResponse { repeated Notification notifications = 1; }
 message ListNotificationsRequest { string scope = 1; string status = 2; uint32 page_size = 3; uint32 offset = 4; }
@@ -293,5 +314,78 @@ message ListNotificationsResponse { repeated Notification notifications = 1; uin
 // Decimal cursor. Poll returns immutable change snapshots and never marks read.
 message PollNotificationsRequest { string after_cursor = 1; uint32 page_size = 2; }
 message PollNotificationsResponse { repeated Notification notifications = 1; string next_cursor = 2; bool has_more = 3; }
-message UpdateNotificationRequest { string id = 1; uint32 expected_revision = 2; string action = 3; string claim_id = 4; string note = 5; }
+message UpdateNotificationRequest { string id = 1; uint32 expected_revision = 2; string action = 3; string claim_id = 4; string note = 5; string result_kind = 6; string result_id = 7; uint32 result_revision = 8; }
 message UpdateNotificationResponse { Notification notification = 1; }
+
+// Stable references identify an exact retained revision of reports and files.
+message RecordReference { string kind = 1; string id = 2; uint32 revision = 3; }
+message ProjectMessage {
+  string id = 1;
+  string project_id = 2;
+  string body = 3;
+  string author_id = 4;
+  string author_name = 5;
+  int64 created_at = 6;
+  int64 updated_at = 7;
+  uint32 revision = 8;
+  bool deleted = 9;
+  string actor_kind = 10;
+  string parent_id = 11;
+  repeated string mention_ids = 12;
+  repeated RecordReference references = 13;
+  repeated string response_recipient_ids = 14;
+  string linked_task_id = 15;
+}
+message ListProjectDiscussionRequest { string project_id = 1; }
+message ListProjectDiscussionResponse { repeated ProjectMessage messages = 1; }
+message SaveProjectMessageRequest { ProjectMessage message = 1; uint32 expected_revision = 2; }
+message SaveProjectMessageResponse { ProjectMessage message = 1; }
+message DeleteProjectMessageRequest { string message_id = 1; uint32 expected_revision = 2; }
+message DeleteProjectMessageResponse { ProjectMessage message = 1; }
+message CreateTaskFromMessageRequest { string message_id = 1; uint32 expected_revision = 2; Task task = 3; }
+message CreateTaskFromMessageResponse { ProjectMessage message = 1; Task task = 2; }
+message ReportReview {
+  string id = 1;
+  string report_id = 2;
+  uint32 report_revision = 3;
+  string requester_id = 4;
+  string reviewer_id = 5;
+  string status = 6;
+  string note = 7;
+  uint32 revision = 8;
+  int64 created_at = 9;
+  int64 updated_at = 10;
+  string request_id = 11;
+}
+message RequestReportReviewRequest { string report_id = 1; uint32 report_revision = 2; repeated string reviewer_ids = 3; string request_id = 4; string note = 5; }
+message RequestReportReviewResponse { repeated ReportReview reviews = 1; }
+message DecideReportReviewRequest { string review_id = 1; uint32 expected_revision = 2; string status = 3; string note = 4; }
+message DecideReportReviewResponse { ReportReview review = 1; }
+message ListReportReviewsRequest { string report_id = 1; string status = 2; uint32 report_revision = 3; }
+message ListReportReviewsResponse { repeated ReportReview reviews = 1; }
+
+// Global durable business feed; recipient notification polling remains separate.
+message ActivityEntry {
+  string id = 1;
+  uint64 sequence = 2;
+  string kind = 3;
+  string summary = 4;
+  string actor_id = 5;
+  string actor_name = 6;
+  string actor_kind = 7;
+  int64 occurred_at = 8;
+  string module = 9;
+  string source_kind = 10;
+  string source_id = 11;
+  uint32 source_revision = 12;
+  string project_id = 13;
+  repeated string audience_ids = 14;
+  bool admin_only = 15;
+}
+message ListActivityRequest { string module = 1; string project_id = 2; string source_kind = 3; string source_id = 4; uint32 page_size = 5; uint32 offset = 6; }
+message ListActivityResponse { repeated ActivityEntry entries = 1; uint32 total_count = 2; uint32 next_offset = 3; }
+message PollActivityRequest { string after_cursor = 1; uint32 page_size = 2; }
+message PollActivityResponse { repeated ActivityEntry entries = 1; string next_cursor = 2; bool has_more = 3; }
+
+message ResolveSourceRequest { string kind = 1; string id = 2; uint32 revision = 3; }
+message ResolveSourceResponse { string kind = 1; string id = 2; uint32 revision = 3; string project_id = 4; string task_id = 5; string report_id = 6; string module = 7; uint32 report_revision = 8; }

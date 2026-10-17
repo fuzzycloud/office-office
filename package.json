@@ -9,11 +9,14 @@
 		"build": "pnpm --filter @office-office/web build",
 		"check": "pnpm --filter @office-office/web check",
 		"generate": "buf generate",
-		"test:e2e": "playwright test"
+		"test:e2e": "playwright test",
+		"test:visual": "playwright test --config playwright.visual.config.ts",
+		"test:visual:update": "playwright test --config playwright.visual.config.ts --update-snapshots"
 	},
 	"devDependencies": {
-		"@bufbuild/protoc-gen-es": "2.13.0",
 		"@biomejs/biome": "2.5.7",
+		"@bufbuild/protoc-gen-es": "2.13.0",
+		"@fontsource/noto-sans": "5.3.0",
 		"@playwright/test": "1.62.1"
 	}
 }
