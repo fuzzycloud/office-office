@@ -342,9 +342,6 @@ test("Approved office screens retain layout and SVG icons", async ({
 			.getByRole("region", { name: "Image gallery" })
 			.getByText("Sample launch artwork.png", { exact: true }),
 	).toBeVisible();
-	await page
-		.getByRole("region", { name: "Image gallery" })
-		.scrollIntoViewIfNeeded();
 	await expect(page.locator('img[src^="blob:"]')).toHaveCount(1);
 	await page
 		.locator('img[src^="blob:"]')
@@ -352,7 +349,13 @@ test("Approved office screens retain layout and SVG icons", async ({
 			Promise.all(images.map((image) => (image as HTMLImageElement).decode())),
 		);
 	await ready(page);
-	await expect(page).toHaveScreenshot("gallery.png");
+	// Capture the gallery itself so automatic scrolling and page chrome cannot
+	// shift the mobile viewport while fonts and thumbnails settle.
+	await expect(
+		page.getByRole("region", { name: "Image gallery" }),
+	).toHaveScreenshot("gallery.png", {
+		stylePath: resolve(__dirname, "component-screenshot.css"),
+	});
 
 	await page.goto("/notifications");
 	await page.getByRole("button", { name: /Notifications, 3 unread/ }).click();

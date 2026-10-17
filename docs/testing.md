@@ -238,7 +238,7 @@ reference typography and the current time. Office records are seeded
 through real authenticated RPC commands into isolated SQLite offices. Gallery
 metadata/bytes are explicit test fixtures; no S3 coverage is implied.
 
-Tall board/report component captures exclude the floating page navbar so it does
+Board, report and gallery component captures exclude the floating page navbar so it does
 not overlap content outside the viewport; full-page captures retain that chrome.
 The tests also assert Lucide SVGs exist in navigation and that member-save actions
 stay in the viewport. The normal functional E2E suite separately verifies source
