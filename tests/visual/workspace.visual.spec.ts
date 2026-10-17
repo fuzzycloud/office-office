@@ -308,6 +308,32 @@ test("Approved office screens retain layout and SVG icons", async ({
 	).toBeVisible();
 	await ready(page);
 	await expect(page).toHaveScreenshot("task-discussion.png");
+	const composer = page.locator(".task-comment-composer");
+	await composer
+		.getByLabel("Add a comment", { exact: true })
+		.fill("Please review @Sample");
+	await composer.getByRole("option").filter({ hasText: agent.name }).click();
+	await composer
+		.getByRole("button", { name: "Add response request", exact: true })
+		.click();
+	await composer
+		.getByRole("combobox", {
+			name: "Find teammate to request a response",
+			exact: true,
+		})
+		.fill(agent.name);
+	await composer.getByRole("option").filter({ hasText: agent.name }).click();
+	await composer
+		.getByRole("button", { name: "Add Mention / FYI", exact: true })
+		.click();
+	await composer
+		.getByRole("combobox", { name: "Find teammate to mention", exact: true })
+		.fill(user.name);
+	await composer.getByRole("option").filter({ hasText: user.email }).click();
+	await ready(page);
+	await expect(composer).toHaveScreenshot("conversation-composer.png", {
+		stylePath: resolve(__dirname, "component-screenshot.css"),
+	});
 
 	await page.goto("/team");
 	await page
