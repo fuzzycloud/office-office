@@ -233,7 +233,7 @@ member editing, research/review, gallery and the notification panel, each in
 light/dark themes at desktop (1440×1000) and mobile (390×844) widths.
 `playwright.visual.config.ts` pins Chromium through the Playwright package,
 locale, timezone, scale and reduced motion. The suite uses locked test-only
-Noto Sans body-font assets and normalized presentation timestamps to stabilize
+Noto Sans body and report-heading font assets and normalized presentation timestamps to stabilize
 reference typography and the current time. Office records are seeded
 through real authenticated RPC commands into isolated SQLite offices. Gallery
 metadata/bytes are explicit test fixtures; no S3 coverage is implied.

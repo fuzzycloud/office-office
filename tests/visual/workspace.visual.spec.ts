@@ -12,7 +12,7 @@ const fontCss =
 				`@font-face{font-family:OfficeVisual;src:url('/visual-font-${weight}.woff2') format('woff2');font-weight:${weight};font-style:normal;font-display:block;}`,
 		)
 		.join("") +
-	"html,body,button,input,select,textarea{font-family:OfficeVisual,sans-serif!important}";
+	"html,body,button,input,select,textarea,.report-prose h2,.report-prose h3,.report-prose h4{font-family:OfficeVisual,sans-serif!important}";
 
 // Only presentation timestamps are normalized; writes still enter the real engine.
 function stableTimes(value: unknown): unknown {
