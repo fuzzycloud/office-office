@@ -643,3 +643,80 @@ for (const failure of ["thumbnail", "upload"]) {
 		expect(deletes).toBe(0);
 	});
 }
+
+test("Admin stages a gallery avatar for a teammate until Save changes", async ({
+	office,
+	page,
+}) => {
+	const { token, user } = await office.bootstrap(false);
+	const created = await office.rpc(
+		"SaveMember",
+		{
+			member: {
+				name: "Avatar teammate",
+				email: "avatar-teammate@example.test",
+				kind: "human",
+				role: "member",
+				status: "active",
+			},
+		},
+		token,
+	);
+	expect(created.ok()).toBeTruthy();
+	const { member } = await created.json();
+	await installFilesRoute(page, token, [
+		imageFile(
+			"shared-admin-picture",
+			"Shared admin picture.png",
+			"projects",
+			user.id,
+		),
+	]);
+	await page.route("**/api/files/*/preview?*", (route) =>
+		route.fulfill({ contentType: "image/png", body: png }),
+	);
+	await page.route("**/api/files?*", (route) => {
+		expect(new URL(route.request().url()).searchParams.get("record_id")).toBe(
+			member.id,
+		);
+		return route.fulfill({ json: { file: { id: "staged-teammate-picture" } } });
+	});
+	let saves = 0;
+	await page.route(
+		"**/rpc/office.v1.OfficeService/SaveMember",
+		async (route) => {
+			saves += 1;
+			const body = route.request().postDataJSON();
+			expect(body.member.avatarFileId).toBe("staged-teammate-picture");
+			await route.fulfill({ json: { member: { ...member, ...body.member } } });
+		},
+	);
+	await signInPage(page, token, "/team");
+	await page
+		.getByRole("row")
+		.filter({ hasText: "Avatar teammate" })
+		.getByRole("button", { name: "Edit", exact: true })
+		.click();
+	const dialog = page.getByRole("dialog", {
+		name: "Edit team member",
+		exact: true,
+	});
+	await dialog.getByLabel("Bio", { exact: true }).fill("Unsaved teammate bio");
+	await dialog
+		.getByRole("button", { name: "Choose existing picture", exact: true })
+		.click();
+	await dialog
+		.getByRole("button", { name: "Use Shared admin picture.png", exact: true })
+		.click();
+	await expect(
+		dialog.getByText("Picture selected. Save changes to apply it.", {
+			exact: true,
+		}),
+	).toBeVisible();
+	expect(saves).toBe(0);
+	await dialog
+		.getByRole("button", { name: "Save changes", exact: true })
+		.click();
+	await expect(dialog).toHaveCount(0);
+	expect(saves).toBe(1);
+});

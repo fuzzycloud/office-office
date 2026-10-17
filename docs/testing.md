@@ -193,3 +193,35 @@ aggregate/event replay with the existing custom rusqlite journal, not Katha's
 SQLx event-store adapter. No release, deployment, data reset or journal migration
 was performed. [Notifications](notifications.md) is the watcher integration
 contract.
+
+## Conversations, attention and activity checkpoint — 2026-10-17
+
+New engine/RPC/MCP cases cover assignment fanout and no-op saves, private sender
+feedback, versioned activity cursors, transaction rollback and restart parity,
+stable member mentions, reply identity, exact references, discussion-to-task
+retry protection, report-review decisions and stale-review cancellation. Tests
+also reject foreign-author/cross-project results, self-review of an edited revision,
+forged workflow request IDs and generic acknowledgement of a backed review request.
+Soft deletion cancels obsolete attention while preserving history.
+
+Browser scenarios exercise the bell, separate unread/unresolved states, complete
+activity history and source navigation, staged admin gallery selection, structured
+task replies, project message edits/deletion/conversion and designated report review.
+The owner-filter test explicitly assigns active members; sample teammates remain
+pending with no login credentials. File-based section routes retain reload, history,
+unauthenticated deep-link recovery and external-write refresh coverage.
+
+These additions use the existing journal schema and rusqlite transaction; no reset,
+SQLx migration or hosted data change is part of this branch. Local layout review uses
+disposable sample offices at desktop and 390px widths. Gallery transport remains an
+explicit browser fixture; the authorization and scoped upload semantics are also
+checked by Rust tests with a test object store. External watchers and runtime starts
+remain outside these tests and outside the application.
+
+Verification passed: 76 Rust tests (six generated examples ignored), Clippy with
+warnings denied, formatting, generated-client checks, frontend typecheck/build,
+browser-source Biome, dependency peer checks and all 11 runtime startup cases.
+The full 59-scenario Chromium run passed; the additional exact-board source case
+then passed on its focused run, bringing the checked-in suite to 60 scenarios.
+Desktop and 390px screenshots were inspected; profile Save/Cancel controls remain
+in the viewport while fields scroll. These checks use isolated local offices.

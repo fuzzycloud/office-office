@@ -23,6 +23,18 @@ const fileSize = (size: bigint) =>
 			: `${(Number(size) / 1024 / 1024).toFixed(1)} MB`;
 
 export default function Files({ workspace }: { workspace: Workspace }) {
+	const source = new URLSearchParams(window.location.search);
+	const sourceId =
+		source.get("sourceKind") === "file" ? source.get("sourceId") || "" : "";
+	const linkedFiles = useQuery({
+		queryKey: ["files", "source", sourceId],
+		queryFn: () => listFiles(""),
+		enabled: !!sourceId,
+		retry: false,
+	});
+	const linkedFile = linkedFiles.data?.files.find(
+		(file) => file.id === sourceId,
+	);
 	const modules = ["projects", "reports"].filter((module) =>
 		workspace.permissions.includes(`${module}:read`),
 	);
@@ -77,6 +89,45 @@ export default function Files({ workspace }: { workspace: Workspace }) {
 	}
 	return (
 		<div className="grid gap-5">
+			{sourceId && (
+				<section
+					className="rounded-box border border-base-300 bg-base-100 p-4"
+					aria-label="Linked file"
+				>
+					{linkedFiles.isPending ? (
+						<p role="status">Loading linked file…</p>
+					) : linkedFiles.isError ? (
+						<p role="alert">{linkedFiles.error.message}</p>
+					) : linkedFile ? (
+						<>
+							<h2 className="text-lg font-semibold">{linkedFile.name}</h2>
+							<p className="text-sm text-base-content/65">
+								Revision {linkedFile.revision} · {linkedFile.contentType}
+							</p>
+							{source.get("revision") &&
+								Number(source.get("revision")) !== linkedFile.revision && (
+									<p className="text-warning">
+										This link references revision {source.get("revision")};
+										current revision {linkedFile.revision} is shown.
+									</p>
+								)}
+							<button
+								type="button"
+								className="btn btn-primary btn-sm mt-3"
+								onClick={() =>
+									void run(() => downloadFile(linkedFile.id, linkedFile.name))
+								}
+							>
+								Download linked file
+							</button>
+						</>
+					) : (
+						<p role="alert">
+							This file is unavailable or you do not have access.
+						</p>
+					)}
+				</section>
+			)}
 			<header>
 				<h2 className="mt-1 text-2xl font-semibold">
 					Project and research files
@@ -375,11 +426,17 @@ export default function Files({ workspace }: { workspace: Workspace }) {
 export function ProfileUpload({
 	memberId,
 	currentFileId,
+	targetMemberId,
+	staged = false,
+	onBusyChange,
 	onUploaded,
 	onRemove,
 }: {
 	memberId: string;
 	currentFileId?: string;
+	targetMemberId?: string;
+	staged?: boolean;
+	onBusyChange?: (busy: boolean) => void;
 	onUploaded: (id: string) => Promise<void>;
 	onRemove?: () => Promise<void>;
 }) {
@@ -405,11 +462,10 @@ export function ProfileUpload({
 	async function choosePicture(item: (typeof pictures)[number]) {
 		const ownProfile =
 			item.module === "profile" &&
-			item.recordId === memberId &&
-			item.uploadedBy === memberId;
+			item.recordId === (targetMemberId || memberId);
 		let id = item.id;
 		if (!ownProfile) {
-			const cacheKey = `${memberId}:${item.id}`;
+			const cacheKey = `${targetMemberId || memberId}:${item.id}`;
 			const preparedId = preparedPictures.current.get(cacheKey);
 			if (preparedId) id = preparedId;
 			else {
@@ -429,6 +485,7 @@ export function ProfileUpload({
 						},
 					),
 					"profile",
+					targetMemberId || "",
 				);
 				preparedPictures.current.set(cacheKey, id);
 				await queryClient.invalidateQueries({ queryKey: ["files"] });
@@ -439,6 +496,7 @@ export function ProfileUpload({
 	}
 	async function perform(action: () => Promise<void>, message: string) {
 		setBusy(true);
+		onBusyChange?.(true);
 		setError("");
 		setNotice("");
 		try {
@@ -448,6 +506,7 @@ export function ProfileUpload({
 			setError(errorMessage(error));
 		} finally {
 			setBusy(false);
+			onBusyChange?.(false);
 			setInputKey((key) => key + 1);
 		}
 	}
@@ -468,13 +527,24 @@ export function ProfileUpload({
 						onChange={(event) => {
 							const file = event.target.files?.[0];
 							if (!file) return;
-							void perform(async () => {
-								if (file.size > 2 * 1024 * 1024)
-									throw new Error("Profile pictures must be 2 MiB or smaller.");
-								const id = await uploadFile(file, "profile");
-								await queryClient.invalidateQueries({ queryKey: ["files"] });
-								await onUploaded(id);
-							}, "Profile picture saved.");
+							void perform(
+								async () => {
+									if (file.size > 2 * 1024 * 1024)
+										throw new Error(
+											"Profile pictures must be 2 MiB or smaller.",
+										);
+									const id = await uploadFile(
+										file,
+										"profile",
+										targetMemberId || "",
+									);
+									await queryClient.invalidateQueries({ queryKey: ["files"] });
+									await onUploaded(id);
+								},
+								staged
+									? "Picture selected. Save changes to apply it."
+									: "Profile picture saved.",
+							);
 						}}
 					/>
 					<p className="text-xs text-base-content/60">
@@ -547,7 +617,9 @@ export function ProfileUpload({
 											onClick={() =>
 												void perform(
 													() => choosePicture(item),
-													"Profile picture saved.",
+													staged
+														? "Picture selected. Save changes to apply it."
+														: "Profile picture saved.",
 												)
 											}
 										>

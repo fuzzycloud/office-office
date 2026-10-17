@@ -173,3 +173,25 @@ test("Reports refreshes its separate list after an AI member writes while away",
 		page.getByRole("button", { name: /External agent route report/ }),
 	).toBeVisible();
 });
+
+test("A board source opens that project's exact board", async ({
+	office,
+	page,
+}) => {
+	const { token } = await office.bootstrap();
+	const workspace = await (await office.rpc("GetWorkspace", {}, token)).json();
+	const board = workspace.boards.find(
+		(item: { name: string }) => item.name === "Sample editorial board",
+	);
+	await page.addInitScript(
+		(value) => sessionStorage.setItem("office-office-session", value),
+		token,
+	);
+	await page.goto(`/projects?sourceKind=board&sourceId=${board.id}`);
+	await expect(
+		page.getByRole("tab", { name: /Sample editorial board/ }),
+	).toHaveAttribute("aria-selected", "true");
+	await expect(
+		page.getByRole("region", { name: "Ideas, 1 tasks", exact: true }),
+	).toBeVisible();
+});

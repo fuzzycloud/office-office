@@ -45,3 +45,16 @@ The template syncs every five minutes, takes a snapshot every 24 hours, and reta
 4. Only after verification, stop the isolated service and explicitly promote the recovered database while the original application remains stopped. Preserve the former volume for rollback and restart replication against the chosen database.
 
 Do not use `-force`, treat a missing backup as an empty office, or automatically fall back to bootstrap on restore failure. Restore can roll back recent password changes or key revocations: treat a recovery as a security event and review credentials. See the upstream [restore reference](https://litestream.io/reference/restore/).
+
+## Conversation/feed upgrade compatibility
+
+The conversation and activity additions extend event payloads and add journal event
+kinds without changing the SQLite journal tables. Older comments replay with empty
+mention/reply/reference fields. Retained report revisions are reconstructed from the
+existing report events; new feed entries begin at upgrade and do not invent actor IDs
+for old name-only activity. No reset or driver migration is needed.
+
+After writing new project-message, review or feed events, an older binary that does
+not recognize those event kinds will reject replay. For rollback, restore an isolated
+pre-upgrade backup rather than pointing that binary at the newer journal. Preserve
+both the database and its corresponding private objects.

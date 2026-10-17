@@ -46,6 +46,8 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Exercise the full isolated browser suite
         run: pnpm test:e2e
+      - name: Check generated file route tree
+        run: git diff --exit-code -- apps/web/src/routeTree.gen.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:

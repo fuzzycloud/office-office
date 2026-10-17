@@ -1,3 +1,4 @@
+import { useSourceAnchor } from "./SourceLink";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
@@ -6,11 +7,16 @@ import {
 	deleteTaskComment,
 	getReport,
 	listReports,
+	listNotifications,
 	listTaskDiscussion,
 	type Member,
 	saveTaskComment,
 	type Task,
 } from "./api";
+import ConversationFields, {
+	emptySelection,
+	ReferenceLinks,
+} from "./ConversationFields";
 import MemberAvatar from "./MemberAvatar";
 import { NotificationComposer } from "./Notifications";
 
@@ -49,6 +55,8 @@ export default function TaskDetails({
 	const [editingTask, setEditingTask] = useState(false);
 	const [draft, setDraft] = useState(task);
 	const [body, setBody] = useState("");
+	const [selection, setSelection] = useState(emptySelection);
+	const [parentId, setParentId] = useState("");
 	const [editComment, setEditComment] = useState<{
 		id: string;
 		revision: number;
@@ -70,6 +78,22 @@ export default function TaskDetails({
 			opener?.focus();
 		};
 	}, []);
+	const attention = useQuery({
+		queryKey: ["notifications", "task", task.id],
+		queryFn: () =>
+			listNotifications({
+				scope: "inbox",
+				status: "",
+				pageSize: 100,
+				offset: 0,
+			}),
+		retry: false,
+		refetchInterval: 20000,
+	});
+	const linkedAttention =
+		attention.data?.notifications.filter(
+			(n) => n.sourceKind === "task" && n.sourceId === task.id,
+		) || [];
 	const discussion = useQuery({
 		queryKey: ["task-discussion", task.id],
 		queryFn: () => listTaskDiscussion(task.id),
@@ -108,6 +132,7 @@ export default function TaskDetails({
 		await Promise.all([
 			cache.invalidateQueries({ queryKey: ["task-discussion", task.id] }),
 			cache.invalidateQueries({ queryKey: ["workspace"] }),
+			cache.invalidateQueries({ queryKey: ["notifications"] }),
 		]);
 	};
 	const mutation = useMutation({
@@ -127,12 +152,16 @@ export default function TaskDetails({
 				taskId: task.id,
 				commentId: editComment?.id || "",
 				body: body.trim(),
+				parentId,
+				...selection,
 				expectedRevision: editComment?.revision || 0,
 			});
 		},
 		onSuccess: async (_result, action) => {
 			if (action === "save" || editComment?.id === deleteId) {
 				setBody("");
+				setParentId("");
+				setSelection(emptySelection());
 				setEditComment(null);
 			}
 			setDeleteId("");
@@ -164,6 +193,7 @@ export default function TaskDetails({
 	const comments = discussion.data?.comments || [];
 	const change = (key: keyof Task, value: string) =>
 		setDraft((current) => ({ ...current, [key]: value }));
+	useSourceAnchor(discussion.data);
 	return (
 		<dialog
 			ref={dialog}
@@ -197,6 +227,26 @@ export default function TaskDetails({
 						className="task-detail-content"
 						aria-label="Task description and discussion"
 					>
+						{linkedAttention.length > 0 && (
+							<div className="flex flex-wrap gap-2 mb-3">
+								<span className="badge badge-primary badge-outline">
+									{linkedAttention.filter((n) => n.readAt === 0n).length} unread
+								</span>
+								<span className="badge badge-warning badge-outline">
+									{
+										linkedAttention.filter(
+											(n) =>
+												n.kind !== "notice" &&
+												["pending", "claimed"].includes(n.status),
+										).length
+									}{" "}
+									need response
+								</span>
+								<a className="link text-sm" href="/notifications">
+									Open requests
+								</a>
+							</div>
+						)}
 						{currentUser.role !== "viewer" && !requestResponse && (
 							<button
 								type="button"
@@ -460,7 +510,23 @@ export default function TaskDetails({
 									)}
 									<div className="task-comment-list">
 										{comments.map((comment) => (
-											<article className="task-comment" key={comment.id}>
+											<article
+												className={`task-comment ${comment.parentId ? "ml-4 border-l-2 border-base-300 pl-3" : ""}`}
+												key={comment.id}
+												id={`source-task_comment-${comment.id}`}
+											>
+												{comment.parentId && (
+													<p className="text-xs text-base-content/65">
+														<a
+															className="link"
+															href={`#source-task_comment-${comment.parentId}`}
+														>
+															Reply to{" "}
+														</a>{" "}
+														{comments.find((c) => c.id === comment.parentId)
+															?.authorName || "earlier comment"}
+													</p>
+												)}
 												<div className="task-comment-byline">
 													{(() => {
 														const author = members.find(
@@ -503,6 +569,45 @@ export default function TaskDetails({
 												>
 													{comment.deleted ? "Comment deleted" : comment.body}
 												</p>
+												{!comment.deleted && (
+													<>
+														<p className="text-sm text-base-content/65">
+															{comment.mentionIds
+																.map(
+																	(id) =>
+																		`@${members.find((m) => m.id === id)?.name || "Unavailable teammate"}`,
+																)
+																.join(" ")}
+														</p>
+														<ReferenceLinks references={comment.references} />
+														{comment.responseRecipientIds.length > 0 && (
+															<p className="text-xs text-warning">
+																Response requested from{" "}
+																{comment.responseRecipientIds
+																	.map(
+																		(id) =>
+																			members.find((m) => m.id === id)?.name ||
+																			"Teammate",
+																	)
+																	.join(", ")}
+															</p>
+														)}
+														{canEdit && (
+															<button
+																type="button"
+																className="btn btn-ghost btn-xs mt-2"
+																onClick={() => {
+																	setParentId(comment.id);
+																	setEditComment(null);
+																	setBody("");
+																	setSelection(emptySelection());
+																}}
+															>
+																Reply
+															</button>
+														)}
+													</>
+												)}
 												{!comment.deleted &&
 													canEdit &&
 													(comment.authorId === currentUser.id ||
@@ -539,6 +644,14 @@ export default function TaskDetails({
 																				revision: comment.revision,
 																			});
 																			setBody(comment.body);
+																			setParentId(comment.parentId);
+																			setSelection({
+																				mentionIds: [...comment.mentionIds],
+																				references: [...comment.references],
+																				responseRecipientIds: [
+																					...comment.responseRecipientIds,
+																				],
+																			});
 																			setDeleteId("");
 																			setError("");
 																		}}
@@ -583,7 +696,11 @@ export default function TaskDetails({
 										>
 											<label className="form-control">
 												<span className="label-text font-medium mb-2">
-													{editComment ? "Edit comment" : "Add a comment"}
+													{editComment
+														? "Edit comment"
+														: parentId
+															? "Reply to comment"
+															: "Add a comment"}
 												</span>
 												<textarea
 													className="textarea textarea-bordered w-full min-h-28"
@@ -595,6 +712,22 @@ export default function TaskDetails({
 													placeholder="Share context with the team"
 												/>
 											</label>
+											<ConversationFields
+												projectId={task.projectId}
+												members={members}
+												value={selection}
+												onChange={setSelection}
+												disabled={busy || !!editComment}
+											/>
+											{parentId && !editComment && (
+												<button
+													type="button"
+													className="btn btn-ghost btn-xs"
+													onClick={() => setParentId("")}
+												>
+													Cancel reply
+												</button>
+											)}
 											<div className="flex justify-end gap-2 mt-2">
 												{editComment && (
 													<button

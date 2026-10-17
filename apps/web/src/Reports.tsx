@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import ReportReviews from "./ReportReviews";
 import ActionIcon from "./ActionIcon";
 import { getReport, listReports, saveReport, type Report } from "./api";
 import type { Member, Project, Task } from "./api";
@@ -149,7 +150,13 @@ export default function Reports({
 	const [status, setStatus] = useState("");
 	const [projectId, setProjectId] = useState("");
 	const [offset, setOffset] = useState(0);
-	const [selectedId, setSelectedId] = useState("");
+	const source = new URLSearchParams(window.location.search);
+	const [selectedId, setSelectedId] = useState(
+		source.get("sourceKind") === "report" ? source.get("sourceId") || "" : "",
+	);
+	const [selectedRevision, setSelectedRevision] = useState(
+		Number(source.get("revision")) || 0,
+	);
 	const [draft, setDraft] = useState<ReportDraft | null>(null);
 	const [editing, setEditing] = useState(false);
 	const [saveError, setSaveError] = useState("");
@@ -167,8 +174,8 @@ export default function Reports({
 			}),
 	});
 	const detailQuery = useQuery({
-		queryKey: ["report", selectedId],
-		queryFn: () => getReport(selectedId),
+		queryKey: ["report", selectedId, selectedRevision],
+		queryFn: () => getReport(selectedId, selectedRevision),
 		enabled: !!selectedId && !editing,
 	});
 	const saveMutation = useMutation({
@@ -184,6 +191,7 @@ export default function Reports({
 			await queryClient.invalidateQueries({ queryKey: ["report", saved.id] });
 			queryClient.setQueryData(["report", saved.id], { report: saved });
 			await queryClient.invalidateQueries({ queryKey: ["workspace"] });
+			setSelectedRevision(0);
 			setSelectedId(saved.id);
 			setDraft(null);
 			setEditing(false);
@@ -197,6 +205,11 @@ export default function Reports({
 	});
 	const reports = listQuery.data?.reports ?? [];
 	const current = detailQuery.data?.report ?? null;
+	const historical =
+		!!current &&
+		selectedRevision > 0 &&
+		(reports.find((r) => r.id === current.id)?.revision || current.revision) >
+			current.revision;
 	const rangeLabel = listQuery.data
 		? listQuery.data.totalCount === 0
 			? "0 reports"
@@ -368,6 +381,7 @@ export default function Reports({
 									className={`report-list-item ${selectedId === report.id && !editing ? "is-selected" : ""}`}
 									disabled={saveMutation.isPending}
 									onClick={() => {
+										setSelectedRevision(0);
 										setSelectedId(report.id);
 										setDraft(null);
 										setEditing(false);
@@ -709,7 +723,7 @@ export default function Reports({
 									<>
 										<button
 											className="btn btn-outline btn-sm"
-											disabled={saveMutation.isPending}
+											disabled={historical || saveMutation.isPending}
 											onClick={() => beginEdit(current)}
 										>
 											<ActionIcon name="edit" />
@@ -777,6 +791,24 @@ export default function Reports({
 								</p>
 							</div>
 							<ReportBody body={current.body} />
+							{selectedRevision > 0 && (
+								<p className="alert mt-4 text-sm">
+									Viewing exact revision {selectedRevision}.{" "}
+									<button
+										className="link"
+										onClick={() => setSelectedRevision(0)}
+									>
+										View latest revision
+									</button>
+								</p>
+							)}
+							<ReportReviews
+								key={`${current.id}:${current.revision}`}
+								report={current}
+								members={members}
+								currentUser={currentUser}
+								canEdit={canEdit && !historical}
+							/>
 							{current.sources.length > 0 && (
 								<section className="report-sources">
 									<h4>Sources</h4>

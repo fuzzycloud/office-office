@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import ActionIcon from "./ActionIcon";
+import ActivityHistory from "./ActivityHistory";
 import {
 	createNotification,
 	listNotifications,
@@ -12,6 +12,7 @@ import {
 	updateNotification,
 	type Workspace,
 } from "./api";
+import SourceLink from "./SourceLink";
 
 const kinds = [
 	["notice", "Notice"],
@@ -294,7 +295,9 @@ function NotificationItem({
 	const terminal = ["acknowledged", "dismissed", "cancelled"].includes(
 		n.status,
 	);
+	const reviewRequest = n.sourceKind === "report_review";
 	const canCancel =
+		!reviewRequest &&
 		!terminal &&
 		(n.senderId === workspace.currentUser.id ||
 			workspace.currentUser.role === "admin");
@@ -313,16 +316,13 @@ function NotificationItem({
 			await cache.invalidateQueries({ queryKey: ["notifications"] });
 		},
 	});
-	const sourceRoute =
-		n.sourceKind === "task" || n.sourceKind === "project"
-			? "/projects"
-			: n.sourceKind === "report"
-				? "/reports"
-				: n.sourceKind === "file"
-					? "/files"
-					: null;
+	const sourceRoute = Boolean(n.sourceKind && n.sourceId);
 	return (
-		<article className="p-4 sm:p-6" aria-label={n.title}>
+		<article
+			id={`source-notification-${n.id}`}
+			className="p-4 sm:p-6"
+			aria-label={n.title}
+		>
 			<div className="flex flex-wrap gap-2 items-center text-sm mb-2">
 				<span className="badge badge-outline">{label(n.kind)}</span>
 				<span
@@ -352,13 +352,14 @@ function NotificationItem({
 				)}
 				{sourceRoute && (
 					<p>
-						<Link to={sourceRoute} className="link">
-							{n.sourceKind === "task" || n.sourceKind === "project"
-								? "Go to Projects"
-								: n.sourceKind === "report"
-									? "Go to Reports"
-									: "Go to Files"}
-						</Link>{" "}
+						<SourceLink
+							kind={n.sourceKind}
+							id={n.sourceId}
+							revision={n.sourceRevision}
+							className="link"
+						>
+							Open related {label(n.sourceKind)}
+						</SourceLink>{" "}
 						<span>
 							{" "}
 							—{" "}
@@ -372,6 +373,19 @@ function NotificationItem({
 						</span>
 					</p>
 				)}
+				{n.resultId && (
+					<p>
+						<SourceLink
+							kind={n.resultKind}
+							id={n.resultId}
+							revision={n.resultRevision}
+							className="link"
+						>
+							Open result {n.resultKind}
+							{n.resultRevision ? ` revision ${n.resultRevision}` : ""}
+						</SourceLink>
+					</p>
+				)}
 				{n.note && (
 					<p className="whitespace-pre-wrap break-words">Note: {n.note}</p>
 				)}
@@ -379,9 +393,21 @@ function NotificationItem({
 					<p>A teammate or connected service has claimed this request.</p>
 				)}
 			</div>
+			{reviewRequest && !terminal && (
+				<p className="mt-3 text-sm">
+					<SourceLink
+						kind={n.sourceKind}
+						id={n.sourceId}
+						revision={n.sourceRevision}
+					>
+						Review this report or cancel its review request
+					</SourceLink>
+					. Review decisions are recorded on the report.
+				</p>
+			)}
 			{(mine || canCancel) && (
 				<fieldset disabled={mutation.isPending} className="mt-4 grid gap-3">
-					{!terminal && (
+					{!terminal && !reviewRequest && (
 						<label className="grid gap-1 max-w-prose">
 							<span className="text-sm">Response note (optional)</span>
 							<input
@@ -402,7 +428,7 @@ function NotificationItem({
 								Mark read
 							</button>
 						)}
-						{mine && !terminal && (
+						{mine && !terminal && !reviewRequest && (
 							<>
 								<button
 									type="button"
@@ -471,11 +497,13 @@ export default function Notifications({ workspace }: { workspace: Workspace }) {
 	const query = useQuery({
 		queryKey: ["notifications", scope, status, offset],
 		queryFn: () => listNotifications({ scope, status, pageSize: 20, offset }),
+		enabled: scope !== "activity",
 		retry: false,
 		refetchInterval: 20000,
 		refetchIntervalInBackground: false,
 	});
 	const scopes = [
+		["activity", "Office activity"],
 		["inbox", "My inbox"],
 		["sent", "Sent"],
 		...(workspace.currentUser.role === "admin" ? [["all", "All"]] : []),
@@ -526,83 +554,93 @@ export default function Notifications({ workspace }: { workspace: Workspace }) {
 						</button>
 					))}
 				</fieldset>
-				<label className="flex items-center gap-2 text-sm">
-					<span>Status</span>
-					<select
-						className="select select-bordered select-sm"
-						value={status}
-						onChange={(e) => {
-							setStatus(e.target.value);
-							setOffset(0);
-						}}
+				{scope !== "activity" && (
+					<label className="flex items-center gap-2 text-sm">
+						<span>Status</span>
+						<select
+							className="select select-bordered select-sm"
+							value={status}
+							onChange={(e) => {
+								setStatus(e.target.value);
+								setOffset(0);
+							}}
+						>
+							<option value="">All statuses</option>
+							{statuses.map((s) => (
+								<option key={s} value={s}>
+									{label(s)}
+								</option>
+							))}
+						</select>
+					</label>
+				)}
+				{scope !== "activity" && (
+					<button
+						type="button"
+						className="btn btn-ghost btn-sm sm:ml-auto"
+						aria-label="Refresh notifications"
+						disabled={query.isFetching}
+						onClick={() => void query.refetch()}
 					>
-						<option value="">All statuses</option>
-						{statuses.map((s) => (
-							<option key={s} value={s}>
-								{label(s)}
-							</option>
-						))}
-					</select>
-				</label>
-				<button
-					type="button"
-					className="btn btn-ghost btn-sm sm:ml-auto"
-					aria-label="Refresh notifications"
-					disabled={query.isFetching}
-					onClick={() => void query.refetch()}
-				>
-					<ActionIcon name="refresh" />
-					Refresh
-				</button>
+						<ActionIcon name="refresh" />
+						Refresh
+					</button>
+				)}
 			</div>
-			{query.isPending && <p role="status">Loading notifications…</p>}
-			{query.isError && (
-				<p role="alert" className="alert alert-error">
-					Could not load notifications: {query.error.message}
-				</p>
-			)}
-			{query.data && (
+			{scope === "activity" ? (
+				<ActivityHistory workspace={workspace} />
+			) : (
 				<>
-					<div className="bg-base-100 border border-base-300 rounded-box divide-y divide-base-300">
-						{query.data.notifications.length ? (
-							query.data.notifications.map((n) => (
-								<NotificationItem
-									key={n.id}
-									notification={n}
-									workspace={workspace}
-								/>
-							))
-						) : (
-							<p className="p-6 text-base-content/70">
-								No notifications match this view.
-							</p>
-						)}
-					</div>
-					<div className="flex flex-wrap justify-between items-center gap-3 mt-4 text-sm">
-						<p>
-							{query.data.totalCount
-								? `${offset + 1}–${offset + query.data.notifications.length} of ${query.data.totalCount}`
-								: "0 notifications"}
+					{query.isPending && <p role="status">Loading notifications…</p>}
+					{query.isError && (
+						<p role="alert" className="alert alert-error">
+							Could not load notifications: {query.error.message}
 						</p>
-						<div className="flex gap-2">
-							<button
-								type="button"
-								className="btn btn-sm"
-								disabled={!offset || query.isFetching}
-								onClick={() => setOffset(Math.max(0, offset - 20))}
-							>
-								Previous
-							</button>
-							<button
-								type="button"
-								className="btn btn-sm"
-								disabled={!query.data.nextOffset || query.isFetching}
-								onClick={() => setOffset(query.data.nextOffset)}
-							>
-								Next
-							</button>
-						</div>
-					</div>
+					)}
+					{query.data && (
+						<>
+							<div className="bg-base-100 border border-base-300 rounded-box divide-y divide-base-300">
+								{query.data.notifications.length ? (
+									query.data.notifications.map((n) => (
+										<NotificationItem
+											key={n.id}
+											notification={n}
+											workspace={workspace}
+										/>
+									))
+								) : (
+									<p className="p-6 text-base-content/70">
+										No notifications match this view.
+									</p>
+								)}
+							</div>
+							<div className="flex flex-wrap justify-between items-center gap-3 mt-4 text-sm">
+								<p>
+									{query.data.totalCount
+										? `${offset + 1}–${offset + query.data.notifications.length} of ${query.data.totalCount}`
+										: "0 notifications"}
+								</p>
+								<div className="flex gap-2">
+									<button
+										type="button"
+										className="btn btn-sm"
+										disabled={!offset || query.isFetching}
+										onClick={() => setOffset(Math.max(0, offset - 20))}
+									>
+										Previous
+									</button>
+									<button
+										type="button"
+										className="btn btn-sm"
+										disabled={!query.data.nextOffset || query.isFetching}
+										onClick={() => setOffset(query.data.nextOffset)}
+									>
+										Next
+									</button>
+								</div>
+							</div>
+						</>
+					)}
 				</>
 			)}
 		</section>

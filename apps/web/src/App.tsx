@@ -42,8 +42,11 @@ import {
 } from "./api";
 import Files, { ProfileUpload } from "./Files";
 import MemberAvatar from "./MemberAvatar";
+import NotificationBell from "./NotificationBell";
 import Notifications from "./Notifications";
+import ProjectDiscussion from "./ProjectDiscussion";
 import Reports from "./Reports";
+import { useSourceAnchor } from "./SourceLink";
 import TaskDetails from "./TaskDetails";
 
 type Page =
@@ -607,6 +610,7 @@ export default function App() {
 							</div>
 						</div>
 						<div className="flex-none gap-2">
+							<NotificationBell workspace={data} />
 							<div className="badge badge-success badge-outline gap-1">
 								● {data.demoMode ? "Sample data" : "Office data"} ·{" "}
 								{data.persistentStorage ? "SQLite saved" : "In-memory"}
@@ -1488,6 +1492,7 @@ function Team({
 	onEdit: (item: Member) => void;
 	onAdd: () => void;
 }) {
+	useSourceAnchor(members);
 	return (
 		<>
 			<PageTitle
@@ -1524,7 +1529,7 @@ function Team({
 					</thead>
 					<tbody>
 						{members.map((person) => (
-							<tr key={person.id}>
+							<tr key={person.id} id={`source-member-${person.id}`}>
 								<td>
 									<div className="flex items-center gap-3">
 										<MemberAvatar
@@ -1661,6 +1666,7 @@ function Customers({
 	onAdd: () => void;
 }) {
 	const [search, setSearch] = useState("");
+	useSourceAnchor(items);
 	const filtered = items.filter((item) =>
 		`${item.name} ${item.company} ${item.email}`
 			.toLowerCase()
@@ -1699,6 +1705,7 @@ function Customers({
 					{filtered.map((item) => (
 						<article
 							className="card border border-base-300 bg-base-100 shadow-sm"
+							id={`source-customer-${item.id}`}
 							key={item.id}
 						>
 							<div className="card-body">
@@ -1790,11 +1797,30 @@ function Projects({
 	onAdd: () => void;
 }) {
 	const [filter, setFilter] = useState("all");
+	const source = new URLSearchParams(window.location.search);
+	const sourceTask =
+		source.get("sourceKind") === "task"
+			? tasks.find((task) => task.id === source.get("sourceId"))
+			: undefined;
+	const sourceBoard =
+		source.get("sourceKind") === "board"
+			? boards.find((board) => board.id === source.get("sourceId"))
+			: undefined;
 	const [selectedProjectId, setSelectedProjectId] = useState(
-		items[0]?.id || "",
+		sourceTask?.projectId ||
+			sourceBoard?.projectId ||
+			(source.get("sourceKind") === "project" ? source.get("sourceId") : "") ||
+			items[0]?.id ||
+			"",
 	);
-	const [selectedBoardId, setSelectedBoardId] = useState("");
-	const [selectedTaskId, setSelectedTaskId] = useState("");
+	const [selectedBoardId, setSelectedBoardId] = useState(
+		sourceTask?.boardId ||
+			sourceBoard?.id ||
+			(window.location.hash.startsWith("#source-board-")
+				? window.location.hash.slice("#source-board-".length)
+				: ""),
+	);
+	const [selectedTaskId, setSelectedTaskId] = useState(sourceTask?.id || "");
 	const [taskSearch, setTaskSearch] = useState("");
 	const [ownerFilter, setOwnerFilter] = useState("");
 	const [priorityFilter, setPriorityFilter] = useState("");
@@ -2413,6 +2439,17 @@ function Projects({
 					}
 					action={canEdit && !items.length ? "New project" : undefined}
 					onClick={onAdd}
+				/>
+			)}
+			{selectedProject && (
+				<ProjectDiscussion
+					key={selectedProject.id}
+					projectId={selectedProject.id}
+					members={members}
+					boards={projectBoards}
+					canEdit={canEdit}
+					canConvert={["admin", "manager"].includes(currentUser.role)}
+					currentUser={currentUser}
 				/>
 			)}
 			{selectedTask && (
@@ -3268,6 +3305,7 @@ function RecordDialog({
 	onSubmit: (value: RecordDraft) => void;
 }) {
 	const [formError, setFormError] = useState("");
+	const [pictureBusy, setPictureBusy] = useState(false);
 	const fieldId = useId();
 	const isEdit = Boolean(initial);
 	const readString = (key: keyof RecordDraft, fallback = "") => {
@@ -3508,16 +3546,18 @@ function RecordDialog({
 			}}
 		>
 			<section
-				className="modal-box max-h-[90vh] max-w-2xl overflow-y-auto"
+				className="modal-box max-h-[90dvh] max-w-2xl overflow-hidden flex flex-col"
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby="record-title"
 			>
 				<div className="flex items-start justify-between">
 					<div>
-						<p className="text-sm font-semibold uppercase tracking-wider text-base-content/50">
-							{isEdit ? "Update record" : "New record"}
-						</p>
+						{kind !== "member" && (
+							<p className="text-sm font-semibold uppercase tracking-wider text-base-content/50">
+								{isEdit ? "Update record" : "New record"}
+							</p>
+						)}
 						<h2 className="mt-1 text-2xl font-semibold" id="record-title">
 							{isEdit ? "Edit " : "Add "}
 							{labels[kind]}
@@ -3535,16 +3575,18 @@ function RecordDialog({
 				</div>
 				<p className="mt-2 text-sm text-base-content/60">
 					{kind === "member"
-						? values.kind === "agent"
-							? "Saving an AI user creates a member-bound key. Copy its secret now; it is shown once."
-							: "Adding someone records them here; it does not send an invitation."
+						? isEdit
+							? "Update this teammate’s profile and access. Changes apply when you save."
+							: values.kind === "agent"
+								? "Saving an AI user creates a member-bound key. Copy its secret now; it is shown once."
+								: "Adding someone records them here; it does not send an invitation."
 						: kind === "post"
 							? "This saves a queue record only. It will not publish to a channel."
 							: "Save changes to the shared workspace."}
 				</p>
 				{kind === "member" && (
 					<div className="form-control mt-4">
-						<span className="label-text mb-2 font-medium">User type</span>
+						<span className="label-text font-medium">User type</span>
 						{isEdit ? (
 							<span className="badge badge-outline w-fit">
 								{values.kind === "agent" ? "AI user" : "Human user"}
@@ -3580,14 +3622,65 @@ function RecordDialog({
 						{formError || error}
 					</div>
 				)}
-				<form className="mt-5 grid gap-4 sm:grid-cols-2" onSubmit={submit}>
+				<form
+					id={`${fieldId}-form`}
+					className="mt-5 grid min-h-0 gap-4 overflow-y-auto sm:grid-cols-2 pr-1"
+					onSubmit={submit}
+				>
+					{kind === "member" && (
+						<section
+							className="sm:col-span-2 rounded-box border border-base-300 p-3 flex flex-wrap items-center justify-between gap-3"
+							aria-label="Member profile picture"
+						>
+							<div className="flex items-center gap-4">
+								<MemberAvatar
+									name={values.name || "New teammate"}
+									avatarUrl={values.avatarUrl}
+									avatarFileId={values.avatarFileId}
+									className="size-16"
+								/>
+								<div>
+									<h3 className="font-semibold">Profile picture</h3>
+									<p className="text-sm text-base-content/65">
+										Preview the picture before saving.
+									</p>
+								</div>
+							</div>
+							{values.id ? (
+								<ProfileUpload
+									memberId={data.currentUser.id}
+									targetMemberId={values.id}
+									staged
+									onBusyChange={setPictureBusy}
+									currentFileId={values.avatarFileId}
+									onUploaded={async (id) =>
+										setValues((value) => ({
+											...value,
+											avatarFileId: id,
+											avatarUrl: "",
+										}))
+									}
+									onRemove={
+										values.avatarFileId
+											? async () =>
+													setValues((value) => ({ ...value, avatarFileId: "" }))
+											: undefined
+									}
+								/>
+							) : (
+								<p className="mt-3 text-sm text-base-content/65">
+									Save this member first to upload or choose a gallery picture.
+								</p>
+							)}
+						</section>
+					)}
 					{fields.map((field) => (
 						<div
 							key={field.name}
-							className={`form-control ${field.textarea ? "sm:col-span-2" : ""}`}
+							className={`form-control grid gap-1 min-w-0 ${field.textarea ? "sm:col-span-2" : ""}`}
 						>
 							<label
-								className="label-text mb-2 font-medium"
+								className="label-text font-medium"
 								htmlFor={`${fieldId}-${field.name}`}
 							>
 								{field.label}
@@ -3595,7 +3688,7 @@ function RecordDialog({
 							{field.options ? (
 								<select
 									id={`${fieldId}-${field.name}`}
-									className="select select-bordered"
+									className="select select-bordered w-full"
 									value={values[field.name]}
 									onChange={(event) => update(field.name, event.target.value)}
 								>
@@ -3608,14 +3701,14 @@ function RecordDialog({
 							) : field.textarea ? (
 								<textarea
 									id={`${fieldId}-${field.name}`}
-									className="textarea textarea-bordered min-h-28"
+									className={`textarea textarea-bordered w-full ${kind === "member" ? "min-h-20" : "min-h-28"}`}
 									value={values[field.name]}
 									onChange={(event) => update(field.name, event.target.value)}
 								/>
 							) : (
 								<input
 									id={`${fieldId}-${field.name}`}
-									className="input input-bordered"
+									className="input input-bordered w-full"
 									type={field.type || "text"}
 									value={values[field.name]}
 									onChange={(event) => update(field.name, event.target.value)}
@@ -3624,15 +3717,15 @@ function RecordDialog({
 						</div>
 					))}
 					{kind === "member" && values.kind !== "agent" && (
-						<label className="form-control sm:col-span-2">
-							<span className="label-text mb-2 font-medium">
+						<label className="form-control grid gap-2 sm:col-span-2">
+							<span className="label-text font-medium">
 								Temporary password{" "}
 								<span className="font-normal text-base-content/55">
 									(optional, at least 12 characters)
 								</span>
 							</span>
 							<input
-								className="input input-bordered"
+								className="input input-bordered w-full"
 								type="password"
 								autoComplete="new-password"
 								value={values.password}
@@ -3645,21 +3738,26 @@ function RecordDialog({
 							/>
 						</label>
 					)}
-					<div className="modal-action sm:col-span-2">
-						<button
-							type="button"
-							className="btn btn-ghost"
-							onClick={onClose}
-							disabled={busy}
-						>
-							Cancel
-						</button>
-						<button className="btn btn-primary" disabled={busy}>
-							{busy && <span className="loading loading-spinner loading-sm" />}
-							{isEdit ? "Save changes" : `Add ${labels[kind]}`}
-						</button>
-					</div>
 				</form>
+				<div className="modal-action shrink-0 border-t border-base-300 pt-4">
+					<button
+						type="button"
+						className="btn btn-ghost"
+						onClick={onClose}
+						disabled={busy}
+					>
+						Cancel
+					</button>
+					<button
+						type="submit"
+						form={`${fieldId}-form`}
+						className="btn btn-primary"
+						disabled={busy || pictureBusy}
+					>
+						{busy && <span className="loading loading-spinner loading-sm" />}
+						{isEdit ? "Save changes" : `Add ${labels[kind]}`}
+					</button>
+				</div>
 			</section>
 		</div>
 	);

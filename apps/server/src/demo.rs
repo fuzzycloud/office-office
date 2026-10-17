@@ -59,7 +59,7 @@ pub(super) async fn register(actor: &mut WorkspaceActor, token: &str) -> Result<
     else {
         unreachable!()
     };
-    let second_member_id = second_member.member.expect("saved member").id;
+    second_member.member.expect("saved member");
 
     let mut customer_ids = Vec::new();
     for (name, company, status, notes) in [
@@ -188,6 +188,7 @@ pub(super) async fn register(actor: &mut WorkspaceActor, token: &str) -> Result<
     };
     let editorial_board_id = board.board.expect("saved board").id;
 
+    // Sample teammates are pending; assignments require an active recipient.
     let task_specs = [
         (
             0usize,
@@ -195,7 +196,7 @@ pub(super) async fn register(actor: &mut WorkspaceActor, token: &str) -> Result<
             "Todo",
             "Sample task — plan launch",
             "Sample task for the preview. Fictional launch planning.",
-            member_id.clone(),
+            String::new(),
             "medium",
             14i64,
         ),
@@ -205,7 +206,7 @@ pub(super) async fn register(actor: &mut WorkspaceActor, token: &str) -> Result<
             "In progress",
             "Sample task — outline launch story",
             "Sample work in progress for the fictional launch.",
-            member_id.clone(),
+            String::new(),
             "high",
             0,
         ),
@@ -215,7 +216,7 @@ pub(super) async fn register(actor: &mut WorkspaceActor, token: &str) -> Result<
             "Review",
             "Sample task — review launch checklist",
             "Sample review task; no real approval is requested.",
-            second_member_id.clone(),
+            String::new(),
             "medium",
             0i64,
         ),
@@ -225,7 +226,7 @@ pub(super) async fn register(actor: &mut WorkspaceActor, token: &str) -> Result<
             "Done",
             "Sample task — confirm fictional brief",
             "Sample completed task for exploring board activity.",
-            second_member_id.clone(),
+            String::new(),
             "low",
             -5,
         ),
@@ -235,7 +236,7 @@ pub(super) async fn register(actor: &mut WorkspaceActor, token: &str) -> Result<
             "Ideas",
             "Sample task — collect story ideas",
             "Sample editorial work for the preview.",
-            member_id.clone(),
+            String::new(),
             "low",
             12,
         ),
@@ -255,7 +256,7 @@ pub(super) async fn register(actor: &mut WorkspaceActor, token: &str) -> Result<
             "Ready",
             "Sample task — prepare post copy",
             "Sample copy awaiting a human review; this is not an approval.",
-            second_member_id.clone(),
+            String::new(),
             "medium",
             0,
         ),
@@ -265,7 +266,7 @@ pub(super) async fn register(actor: &mut WorkspaceActor, token: &str) -> Result<
             "Todo",
             "Sample task — list discovery questions",
             "Sample task in the on-hold project.",
-            second_member_id.clone(),
+            String::new(),
             "medium",
             10,
         ),
@@ -285,7 +286,7 @@ pub(super) async fn register(actor: &mut WorkspaceActor, token: &str) -> Result<
             "Done",
             "Sample task — archive refresh checklist",
             "Sample completed task in a completed fictional project.",
-            second_member_id.clone(),
+            String::new(),
             "low",
             -12,
         ),

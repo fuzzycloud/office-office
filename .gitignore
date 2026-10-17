@@ -25,3 +25,7 @@ node_modules/
 
 # Local AWS credentials/configuration.
 /.aws
+
+# Local implementation plans for unreleased work.
+/docs/superpowers/
+*.tsbuildinfo

@@ -19,11 +19,20 @@ test("sample board counts, search, owner and priority filters; drag and accessib
 	page,
 	office,
 }) => {
-	const { token } = await office.bootstrap();
+	const { token, user } = await office.bootstrap();
 	const workspace = await (await office.rpc("GetWorkspace", {}, token)).json();
 	const task = workspace.tasks.find(
 		(item: { title: string }) => item.title === taskTitle,
 	);
+	// Sample teammates are pending; assign two cards to an active member through
+	// the real command path before exercising owner filters.
+	for (const assigned of workspace.tasks.filter((item: { title: string }) =>
+		[taskTitle, "Sample task — outline launch story"].includes(item.title),
+	)) {
+		assigned.assigneeId = user.id;
+		const saved = await office.rpc("SaveTask", { task: assigned }, token);
+		expect(saved.ok()).toBeTruthy();
+	}
 	await openBoard(page, office.url, token);
 	await expect(page.getByText("4 of 4 tasks", { exact: true })).toBeVisible();
 	await expect(
