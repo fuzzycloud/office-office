@@ -228,8 +228,9 @@ in the viewport while fields scroll. These checks use isolated local offices.
 
 ## Visual regression checks
 
-`pnpm test:visual` compares 24 approved screenshots: boards, task discussions,
-member editing, research/review, gallery and the notification panel, each in
+`pnpm test:visual` compares 28 approved screenshots: boards, task discussions,
+the composer with FYI/response chips, member editing, research/review, gallery
+and the notification panel, each in
 light/dark themes at desktop (1440×1000) and mobile (390×844) widths.
 `playwright.visual.config.ts` pins Chromium through the Playwright package,
 locale, timezone, scale and reduced motion. The suite uses locked test-only
@@ -238,12 +239,18 @@ reference typography and the current time. Office records are seeded
 through real authenticated RPC commands into isolated SQLite offices. Gallery
 metadata/bytes are explicit test fixtures; no S3 coverage is implied.
 
-Board, report and gallery component captures exclude the floating page navbar so it does
-not overlap content outside the viewport; full-page captures retain that chrome.
+Board, composer, report and gallery component captures exclude the floating page
+navbar so it does not overlap content outside the viewport; full-page captures retain that chrome.
 The tests also assert Lucide SVGs exist in navigation and that member-save actions
 stay in the viewport. The normal functional E2E suite separately verifies source
 writes → recipient polling for assignment, member-ID mention, explicit request and
 reply, without manually calling `CreateNotification` from the browser.
+
+`composer.spec.ts` checks keyboard/mobile member selection, distinct identities
+with duplicate names, FYI versus explicit response intent, unlinked-name
+acknowledgement and resets, ordinary email text, removing chips, no-op edits,
+draft preservation on a failed save and receipt retries without repeated writes.
+Receipts read actual sent notifications for the saved source revision.
 
 To intentionally change approved screenshots, run:
 

@@ -59,6 +59,9 @@ test("Browser assignments, structured mentions and replies reach notification po
 		.getByRole("textbox", { name: "Add a comment", exact: true })
 		.fill("@Browser recipient is plain text");
 	await dialog
+		.getByLabel("Post without notifying these names", { exact: true })
+		.check();
+	await dialog
 		.getByRole("button", { name: "Post comment", exact: true })
 		.click();
 	await expect(
@@ -76,15 +79,22 @@ test("Browser assignments, structured mentions and replies reach notification po
 		.getByRole("textbox", { name: "Add a comment", exact: true })
 		.fill("Please investigate this browser question");
 	await dialog
-		.getByRole("button", { name: /Mentions, response requests and references/ })
+		.getByRole("button", { name: "Add Mention / FYI", exact: true })
 		.click();
 	await dialog
-		.getByLabel("Find teammate to mention", { exact: true })
+		.getByRole("combobox", { name: "Find teammate to mention", exact: true })
 		.fill(member.name);
-	await dialog.getByLabel(`@${member.name} (AI)`, { exact: true }).check();
+	await dialog.getByRole("option").filter({ hasText: member.name }).click();
 	await dialog
-		.getByLabel(`Request response from ${member.name}`, { exact: true })
-		.check();
+		.getByRole("button", { name: "Add response request", exact: true })
+		.click();
+	await dialog
+		.getByRole("combobox", {
+			name: "Find teammate to request a response",
+			exact: true,
+		})
+		.fill(member.name);
+	await dialog.getByRole("option").filter({ hasText: member.name }).click();
 	await dialog
 		.getByRole("button", { name: "Post comment", exact: true })
 		.click();
@@ -99,10 +109,10 @@ test("Browser assignments, structured mentions and replies reach notification po
 			recipientToken,
 		)
 	).json();
-	expect(selected.notifications).toHaveLength(2);
+	expect(selected.notifications).toHaveLength(1);
 	expect(
 		selected.notifications.map((n: { kind: string }) => n.kind).sort(),
-	).toEqual(["notice", "response_request"]);
+	).toEqual(["response_request"]);
 	const sourceId = selected.notifications[0].sourceId;
 	for (const notification of selected.notifications) {
 		expect(notification).toMatchObject({
@@ -194,16 +204,43 @@ test("Task replies preserve member IDs, explicit response requests and exact rep
 	await dialog
 		.getByRole("textbox", { name: "Add a comment", exact: true })
 		.fill("Structured browser comment");
+	const reviewerResult = await office.rpc(
+		"SaveMember",
+		{
+			member: {
+				name: "Reference reviewer",
+				kind: "agent",
+				role: "member",
+				status: "active",
+			},
+		},
+		token,
+	);
+	expect(reviewerResult.ok()).toBeTruthy();
+	const { member: reviewer } = await reviewerResult.json();
+	// Load the new teammate into the directory before selecting recipients.
+	await page.reload();
 	await dialog
-		.getByRole("button", { name: /Mentions, response requests and references/ })
+		.getByRole("textbox", { name: "Add a comment", exact: true })
+		.fill("Structured browser comment");
+	await dialog
+		.getByRole("button", { name: "Add Mention / FYI", exact: true })
 		.click();
 	await dialog
-		.getByLabel("Find teammate to mention", { exact: true })
+		.getByRole("combobox", { name: "Find teammate to mention", exact: true })
 		.fill(user.name);
-	await dialog.getByLabel(`@${user.name}`, { exact: true }).check();
+	await dialog.getByRole("option").filter({ hasText: user.email }).click();
 	await dialog
-		.getByLabel(`Request response from ${user.name}`, { exact: true })
-		.check();
+		.getByRole("button", { name: "Add response request", exact: true })
+		.click();
+	await dialog
+		.getByRole("combobox", {
+			name: "Find teammate to request a response",
+			exact: true,
+		})
+		.fill(reviewer.name);
+	await dialog.getByRole("option").filter({ hasText: reviewer.name }).click();
+	await dialog.getByRole("button", { name: /^Attach references/ }).click();
 	await dialog
 		.getByLabel("Attach exact report or file revision", { exact: true })
 		.selectOption(`report:${report.id}`);
@@ -242,7 +279,7 @@ test("Task replies preserve member IDs, explicit response requests and exact rep
 		(c: { body: string }) => c.body === "Structured browser comment",
 	);
 	expect(saved.mentionIds).toEqual([user.id]);
-	expect(saved.responseRecipientIds).toEqual([user.id]);
+	expect(saved.responseRecipientIds).toEqual([reviewer.id]);
 	expect(saved.references).toEqual([
 		{ kind: "report", id: report.id, revision: report.revision },
 	]);

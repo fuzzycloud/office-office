@@ -13,10 +13,11 @@ import {
 	saveTaskComment,
 	type Task,
 } from "./api";
-import ConversationFields, {
-	emptySelection,
-	ReferenceLinks,
-} from "./ConversationFields";
+import { emptySelection, ReferenceLinks } from "./ConversationFields";
+import ConversationComposer from "./ConversationComposer";
+import ConversationReceipt, {
+	type SavedConversation,
+} from "./ConversationReceipt";
 import MemberAvatar from "./MemberAvatar";
 import { NotificationComposer } from "./Notifications";
 
@@ -55,6 +56,8 @@ export default function TaskDetails({
 	const [editingTask, setEditingTask] = useState(false);
 	const [draft, setDraft] = useState(task);
 	const [body, setBody] = useState("");
+	const [savedConversation, setSavedConversation] =
+		useState<SavedConversation | null>(null);
 	const [selection, setSelection] = useState(emptySelection);
 	const [parentId, setParentId] = useState("");
 	const [editComment, setEditComment] = useState<{
@@ -157,7 +160,14 @@ export default function TaskDetails({
 				expectedRevision: editComment?.revision || 0,
 			});
 		},
-		onSuccess: async (_result, action) => {
+		onSuccess: async (result, action) => {
+			if (action === "save" && result.comment)
+				setSavedConversation({
+					kind: "task_comment",
+					id: result.comment.id,
+					revision: result.comment.revision,
+					unchanged: editComment?.revision === result.comment.revision,
+				});
 			if (action === "save" || editComment?.id === deleteId) {
 				setBody("");
 				setParentId("");
@@ -679,56 +689,57 @@ export default function TaskDetails({
 										))}
 									</div>
 									{canEdit ? (
-										<form
-											className="task-comment-composer"
-											onSubmit={(event) => {
-												event.preventDefault();
-												if (
-													new TextEncoder().encode(body.trim()).length > 10000
-												) {
-													setError(
-														"Keep the comment within 10,000 bytes. Shorten the text and try again.",
-													);
-													return;
+										<>
+											{savedConversation && (
+												<ConversationReceipt
+													source={savedConversation}
+													members={members}
+												/>
+											)}
+											<ConversationComposer
+												key={
+													editComment
+														? `edit:${editComment.id}`
+														: `reply:${parentId}`
 												}
-												mutation.mutate("save");
-											}}
-										>
-											<label className="form-control">
-												<span className="label-text font-medium mb-2">
-													{editComment
+												className="task-comment-composer"
+												label={
+													editComment
 														? "Edit comment"
 														: parentId
 															? "Reply to comment"
-															: "Add a comment"}
-												</span>
-												<textarea
-													className="textarea textarea-bordered w-full min-h-28"
-													value={body}
-													onChange={(event) => setBody(event.target.value)}
-													disabled={busy}
-													required
-													maxLength={10000}
-													placeholder="Share context with the team"
-												/>
-											</label>
-											<ConversationFields
+															: "Add a comment"
+												}
+												body={body}
+												onBodyChange={setBody}
 												projectId={task.projectId}
 												members={members}
-												value={selection}
-												onChange={setSelection}
-												disabled={busy || !!editComment}
-											/>
-											{parentId && !editComment && (
-												<button
-													type="button"
-													className="btn btn-ghost btn-xs"
-													onClick={() => setParentId("")}
-												>
-													Cancel reply
-												</button>
-											)}
-											<div className="flex justify-end gap-2 mt-2">
+												selection={selection}
+												onSelectionChange={setSelection}
+												disabled={busy}
+												submitDisabled={conflict}
+												submitLabel={
+													mutation.isPending
+														? "Saving…"
+														: editComment
+															? "Save comment"
+															: "Post comment"
+												}
+												onSubmit={() => {
+													setSavedConversation(null);
+													mutation.mutate("save");
+												}}
+											>
+												{parentId && !editComment && (
+													<button
+														type="button"
+														className="btn btn-ghost btn-sm"
+														disabled={busy}
+														onClick={() => setParentId("")}
+													>
+														Cancel reply
+													</button>
+												)}
 												{editComment && (
 													<button
 														type="button"
@@ -736,6 +747,8 @@ export default function TaskDetails({
 														disabled={busy}
 														onClick={() => {
 															setEditComment(null);
+															setParentId("");
+															setSelection(emptySelection());
 															setBody("");
 															setError("");
 															setConflict(false);
@@ -744,18 +757,8 @@ export default function TaskDetails({
 														Cancel edit
 													</button>
 												)}
-												<button
-													className="btn btn-primary btn-sm"
-													disabled={busy || !body.trim() || conflict}
-												>
-													{mutation.isPending
-														? "Saving…"
-														: editComment
-															? "Save comment"
-															: "Post comment"}
-												</button>
-											</div>
-										</form>
+											</ConversationComposer>
+										</>
 									) : (
 										<p className="task-discussion-empty">
 											You have read-only access to this discussion.

@@ -14,6 +14,23 @@ identities. Select actual visible, active members from the team directory;
 renaming someone must not reroute an old request. Preserve historical attribution
 when a member is disabled. A plain-text `@name` is not an authenticated mention.
 
+In the browser composer, type `@` or use **Add Mention / FYI** to choose an
+active member. Selected people appear as removable chips. **Mention / FYI**
+creates an informational notice; **Request response** explicitly asks the
+selected person to respond. These choices apply equally to humans and AI.
+Choosing a person in one group moves them out of the other. Picking their
+inline `@mention` again preserves an existing explicit response request.
+Typed names without a linked recipient require an acknowledgement before
+posting them as plain text; email addresses are not treated as mentions.
+
+After saving, the composer checks the caller's sent notifications for the exact
+saved comment/message revision and shows the recipients actually notified.
+Replies can notify the parent author without an explicit chip. An edit that
+retains its recipients creates no new notification. A receipt verification
+failure does not retry the write: the saved message remains saved, and only
+verification is retried. A created notification proves neither delivery to an
+external runtime nor that someone has started work.
+
 Use explicit **Request response** actions. Posting a comment,
 mentioning someone, editing text or loading a discussion never launches work.
 A response request records the source comment/message and revision, requester,

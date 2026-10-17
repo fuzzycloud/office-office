@@ -9,11 +9,16 @@ import {
 	type Board,
 	type Member,
 } from "./api";
-import ConversationFields, {
+import {
 	emptySelection,
 	ReferenceLinks,
 	sourceHref,
 } from "./ConversationFields";
+
+import ConversationComposer from "./ConversationComposer";
+import ConversationReceipt, {
+	type SavedConversation,
+} from "./ConversationReceipt";
 
 export default function ProjectDiscussion({
 	projectId,
@@ -33,6 +38,8 @@ export default function ProjectDiscussion({
 	const cache = useQueryClient();
 	const boardFieldId = useId();
 	const [body, setBody] = useState("");
+	const [savedConversation, setSavedConversation] =
+		useState<SavedConversation | null>(null);
 	const [parentId, setParentId] = useState("");
 	const [edit, setEdit] = useState<{ id: string; revision: number } | null>(
 		null,
@@ -67,7 +74,14 @@ export default function ProjectDiscussion({
 				},
 				edit?.revision || 0,
 			),
-		onSuccess: async () => {
+		onSuccess: async (result) => {
+			if (result.message)
+				setSavedConversation({
+					kind: "project_message",
+					id: result.message.id,
+					revision: result.message.revision,
+					unchanged: edit?.revision === result.message.revision,
+				});
 			setBody("");
 			setEdit(null);
 			setParentId("");
@@ -360,45 +374,49 @@ export default function ProjectDiscussion({
 				</form>
 			)}
 			{canEdit && (
-				<form
-					onSubmit={(event) => {
-						event.preventDefault();
-						save.mutate();
-					}}
-					className="mt-4 grid gap-2"
-				>
-					<label className="grid gap-2 font-medium">
-						{edit
-							? "Edit project message"
-							: parentId
-								? "Reply to project message"
-								: "Add project message"}
-						<textarea
-							className="textarea textarea-bordered w-full min-h-24 font-normal"
-							value={body}
-							onChange={(event) => setBody(event.target.value)}
-							required
-							maxLength={10000}
-							disabled={busy}
-						/>
-					</label>
-					<ConversationFields
-						projectId={projectId}
-						members={members}
-						value={selection}
-						onChange={setSelection}
-						disabled={busy}
-					/>
+				<>
+					{savedConversation && (
+						<ConversationReceipt source={savedConversation} members={members} />
+					)}
 					{save.isError && (
 						<p role="alert" className="text-error">
 							{save.error.message} Your draft is preserved.
 						</p>
 					)}
-					<div className="flex justify-end gap-2">
+					<ConversationComposer
+						key={edit ? `edit:${edit.id}` : `reply:${parentId}`}
+						className="mt-4 grid gap-2"
+						label={
+							edit
+								? "Edit project message"
+								: parentId
+									? "Reply to project message"
+									: "Add project message"
+						}
+						body={body}
+						onBodyChange={setBody}
+						projectId={projectId}
+						members={members}
+						selection={selection}
+						onSelectionChange={setSelection}
+						disabled={busy}
+						submitLabel={
+							save.isPending
+								? "Saving…"
+								: edit
+									? "Save message"
+									: "Post message"
+						}
+						onSubmit={() => {
+							setSavedConversation(null);
+							save.mutate();
+						}}
+					>
 						{(parentId || edit) && (
 							<button
-								className="btn btn-ghost btn-sm"
 								type="button"
+								className="btn btn-ghost btn-sm"
+								disabled={busy}
 								onClick={() => {
 									setEdit(null);
 									setParentId("");
@@ -410,18 +428,8 @@ export default function ProjectDiscussion({
 								Cancel {edit ? "edit" : "reply"}
 							</button>
 						)}
-						<button
-							className="btn btn-primary btn-sm"
-							disabled={busy || !body.trim()}
-						>
-							{save.isPending
-								? "Saving…"
-								: edit
-									? "Save message"
-									: "Post message"}
-						</button>
-					</div>
-				</form>
+					</ConversationComposer>
+				</>
 			)}
 		</section>
 	);
