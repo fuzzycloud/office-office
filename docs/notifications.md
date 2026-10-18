@@ -167,6 +167,13 @@ the member ID in `responseRecipientIds`. A connected worker may claim an eligibl
 request on its next poll, subject to its own sender policy, access and availability.
 Neither creating nor claiming that request proves a runtime is running.
 
+In a reply, **Reply to [person] → Request response** addresses the parent author
+directly, even when the body contains no `@mention`. The saved
+`responseRecipientIds` includes that member ID and produces one corresponding
+`response_request`. The default **FYI** reply keeps the derived parent-author
+notice informational. The receipt confirms the actual notification kind and
+recipient; restarting a watcher cannot turn an informational notice into work.
+
 A new task-comment or project-message reply creates one `notice` for its active
 parent author. Self replies, unchanged saves and text edits do not repeat it. If
 that author is already explicitly mentioned or response-selected, the selected

@@ -12,6 +12,7 @@ import {
 	saveTaskComment,
 	type Task,
 } from "./api";
+import ConversationBody from "./ConversationBody";
 import ConversationComposer from "./ConversationComposer";
 import { emptySelection, ReferenceLinks } from "./ConversationFields";
 import ConversationReceipt, {
@@ -235,6 +236,7 @@ export default function TaskDetails({
 	const busy =
 		mutation.isPending || saveTaskMutation.isPending || notificationBusy;
 	const comments = discussion.data?.comments || [];
+	const replyParent = comments.find((comment) => comment.id === parentId);
 	const change = (key: keyof Task, value: string) =>
 		setDraft((current) => ({ ...current, [key]: value }));
 	useSourceAnchor(discussion.data);
@@ -611,7 +613,18 @@ export default function TaskDetails({
 														comment.deleted ? "text-base-content/55 italic" : ""
 													}
 												>
-													{comment.deleted ? "Comment deleted" : comment.body}
+													{comment.deleted ? (
+														"Comment deleted"
+													) : (
+														<ConversationBody
+															body={comment.body}
+															members={members}
+															mentionIds={comment.mentionIds}
+															responseRecipientIds={
+																comment.responseRecipientIds
+															}
+														/>
+													)}
 												</p>
 												{!comment.deleted && (
 													<>
@@ -747,6 +760,12 @@ export default function TaskDetails({
 												body={body}
 												onBodyChange={setBody}
 												projectId={task.projectId}
+												replyTo={
+													replyParent && {
+														memberId: replyParent.authorId,
+														name: replyParent.authorName,
+													}
+												}
 												members={members}
 												selection={selection}
 												onSelectionChange={setSelection}
@@ -769,7 +788,11 @@ export default function TaskDetails({
 														type="button"
 														className="btn btn-ghost btn-sm"
 														disabled={busy}
-														onClick={() => setParentId("")}
+														onClick={() => {
+															setParentId("");
+															setBody("");
+															setSelection(emptySelection());
+														}}
 													>
 														Cancel reply
 													</button>

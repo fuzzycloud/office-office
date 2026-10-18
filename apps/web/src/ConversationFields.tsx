@@ -69,8 +69,17 @@ export function MemberOptions({
 	const activeOption = useRef<HTMLButtonElement>(null);
 	const activeMemberId = members[activeIndex]?.id;
 	useEffect(() => {
-		if (activeMemberId)
-			activeOption.current?.scrollIntoView({ block: "nearest" });
+		const option = activeOption.current;
+		const list = option?.parentElement;
+		if (!activeMemberId || !option || !list) return;
+		// Scroll only the options, never the containing modal/page. A top-layer
+		// popover remains a DOM descendant of those scrolling containers.
+		const optionBox = option.getBoundingClientRect();
+		const listBox = list.getBoundingClientRect();
+		if (optionBox.top < listBox.top)
+			list.scrollTop -= listBox.top - optionBox.top;
+		else if (optionBox.bottom > listBox.bottom)
+			list.scrollTop += optionBox.bottom - listBox.bottom;
 	}, [activeMemberId]);
 	return (
 		<>
@@ -92,7 +101,7 @@ export function MemberOptions({
 						aria-selected={index === activeIndex}
 						className={`block w-full text-left rounded px-3 py-2 cursor-pointer text-sm ${index === activeIndex ? "bg-base-200" : "hover:bg-base-200"}`}
 						onMouseEnter={() => onActiveIndexChange(index)}
-						onMouseDown={(event) => event.preventDefault()}
+						onPointerDown={(event) => event.preventDefault()}
 						onClick={() => onSelect(member)}
 					>
 						<span className="block font-medium break-words">{member.name}</span>
