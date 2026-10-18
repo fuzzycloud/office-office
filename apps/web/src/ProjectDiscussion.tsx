@@ -1,24 +1,23 @@
-import { useSourceAnchor } from "./SourceLink";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import {
+	type Board,
 	createTaskFromMessage,
 	deleteProjectMessage,
 	listProjectDiscussion,
-	saveProjectMessage,
-	type Board,
 	type Member,
+	saveProjectMessage,
 } from "./api";
+import ConversationComposer from "./ConversationComposer";
 import {
 	emptySelection,
 	ReferenceLinks,
 	sourceHref,
 } from "./ConversationFields";
-
-import ConversationComposer from "./ConversationComposer";
 import ConversationReceipt, {
 	type SavedConversation,
 } from "./ConversationReceipt";
+import { useSourceAnchor } from "./SourceLink";
 
 export default function ProjectDiscussion({
 	projectId,
@@ -63,6 +62,40 @@ export default function ProjectDiscussion({
 		]);
 	};
 	const save = useMutation({
+		// Freeze receipt intent before any background refresh can observe this write.
+		onMutate: () => ({
+			kind: "project_message" as const,
+			contextId: projectId,
+			expected: {
+				mentionIds: [...selection.mentionIds],
+				responseRecipientIds: [...selection.responseRecipientIds],
+				parentId,
+			},
+			previous: (() => {
+				const old = discussion.data?.messages.find(
+					(record) => record.id === edit?.id,
+				);
+				return old
+					? {
+							mentionIds: [...old.mentionIds],
+							responseRecipientIds: [...old.responseRecipientIds],
+						}
+					: undefined;
+			})(),
+			replyRecipientId: (() => {
+				const authorId = discussion.data?.messages.find(
+					(record) => record.id === parentId,
+				)?.authorId;
+				return authorId &&
+					authorId !== currentUser.id &&
+					members.some(
+						(member) => member.id === authorId && member.status === "active",
+					)
+					? authorId
+					: "";
+			})(),
+			previousRevision: edit?.revision,
+		}),
 		mutationFn: () =>
 			saveProjectMessage(
 				{
@@ -74,13 +107,13 @@ export default function ProjectDiscussion({
 				},
 				edit?.revision || 0,
 			),
-		onSuccess: async (result) => {
-			if (result.message)
+		onSuccess: async (result, _variables, submitted) => {
+			if (result.message && submitted)
 				setSavedConversation({
-					kind: "project_message",
+					...submitted,
 					id: result.message.id,
 					revision: result.message.revision,
-					unchanged: edit?.revision === result.message.revision,
+					unchanged: submitted.previousRevision === result.message.revision,
 				});
 			setBody("");
 			setEdit(null);

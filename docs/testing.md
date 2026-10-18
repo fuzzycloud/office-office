@@ -250,7 +250,28 @@ reply, without manually calling `CreateNotification` from the browser.
 with duplicate names, FYI versus explicit response intent, unlinked-name
 acknowledgement and resets, ordinary email text, removing chips, no-op edits,
 draft preservation on a failed save and receipt retries without repeated writes.
-Receipts read actual sent notifications for the saved source revision.
+Receipts read both the persisted source and actual sent notifications for its
+saved revision, comparing them with the intent captured before submission.
+
+`notification-repair.spec.ts` covers action-mode autocomplete for task and project
+conversations, stable IDs through create/edit/reply, deliberate FYI replies,
+missing saved recipients, missing emitted notifications and safe verification
+retry. It also exercises a delayed save response after discussion refresh and
+overlapping notification pages, so valid delivery does not produce a false
+mismatch. Its local worker-protocol round-trip starts with an actual UI comment,
+then uses the AI member's own token to poll, claim, reply and acknowledge with
+an exact result reference. Another poll confirms no fresh actionable reply loop.
+
+This deterministic protocol test does not launch Hermes. The deployed UI →
+installed worker → actual profile → discussion acceptance check remains a
+separate operator verification; follow [the hosted checklist](notifications.md#verifying-the-composition-path).
+The historical cause of old comments saved without recipients remains unknown;
+tests do not retroactively address them or replay missed business instructions.
+
+Local verification on 2026-10-18 passed all 71 functional browser/API tests,
+all 28 approved screenshots across four visual configurations, frontend
+typecheck/build and focused Biome checks. Independent review found no remaining
+blockers in the application-side repair. Hosted worker acceptance is pending.
 
 To intentionally change approved screenshots, run:
 

@@ -240,7 +240,8 @@ export default function ConversationFields({
 			</legend>
 			<p className="text-xs text-base-content/70">
 				Mention / FYI notifies teammates. Request a response explicitly when you
-				need an answer. Ordinary comments do not start agents.
+				need an answer or action. Connected workers may pick up eligible
+				requests on their next poll; FYI notices do not request execution.
 			</p>
 			{(
 				[

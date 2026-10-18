@@ -135,7 +135,8 @@ export function NotificationComposer({
 				</div>
 				<p className="text-sm text-base-content/70">
 					Notices share information. Requests ask a teammate to respond or act.
-					Sending a request does not start an agent.
+					A connected worker may pick up an eligible request, subject to access
+					and worker availability. Pickup waits for the worker's next poll.
 				</p>
 				<label className="form-control grid gap-1">
 					<span>Type</span>
@@ -390,7 +391,16 @@ function NotificationItem({
 					<p className="whitespace-pre-wrap break-words">Note: {n.note}</p>
 				)}
 				{n.status === "claimed" && (
-					<p>A teammate or connected service has claimed this request.</p>
+					<p>
+						A teammate or connected service has claimed this request. A claim
+						does not confirm that work is running.
+					</p>
+				)}
+				{n.status === "acknowledged" && (
+					<p>
+						This notification was handled. Task completion and approval are
+						separate.
+					</p>
 				)}
 			</div>
 			{reviewRequest && !terminal && (

@@ -14,8 +14,11 @@ identities. Select actual visible, active members from the team directory;
 renaming someone must not reroute an old request. Preserve historical attribution
 when a member is disabled. A plain-text `@name` is not an authenticated mention.
 
-In the browser composer, type `@` or use **Add Mention / FYI** to choose an
-active member. Selected people appear as removable chips. **Mention / FYI**
+In the browser composer, choose **FYI** or **Ask to act / respond** under
+**For new @ selections**, then type `@` to choose an active member. FYI is the
+default; text is never interpreted as an instruction to execute. The separate
+**Add Mention / FYI** and **Add response request** pickers remain available.
+Selected people appear as removable chips grouped by their mode. **Mention / FYI**
 creates an informational notice; **Request response** explicitly asks the
 selected person to respond. These choices apply equally to humans and AI.
 Choosing a person in one group moves them out of the other. Picking their
@@ -23,13 +26,25 @@ inline `@mention` again preserves an existing explicit response request.
 Typed names without a linked recipient require an acknowledgement before
 posting them as plain text; email addresses are not treated as mentions.
 
-After saving, the composer checks the caller's sent notifications for the exact
-saved comment/message revision and shows the recipients actually notified.
+After saving, the composer reads the persisted comment/message and checks the
+caller's sent notifications for the exact saved revision. It compares the
+selected member IDs, modes and parent reference with the saved record, and
+compares newly added recipients with the actual notifications. A mismatch is
+shown explicitly with the saved discussion link and verification retry; it is
+not reported as successful delivery. Duplicate notification records also raise
+a mismatch. A deleted or superseded source revision cannot be verified this way.
 Replies can notify the parent author without an explicit chip. An edit that
-retains its recipients creates no new notification. A receipt verification
+retains its recipients creates no new notification; the existing request remains
+linked to the revision that originally created it. An intentionally unaddressed
+post says nobody was notified, unless a reply informed its parent author.
+A receipt verification
 failure does not retry the write: the saved message remains saved, and only
 verification is retried. A created notification proves neither delivery to an
 external runtime nor that someone has started work.
+
+The historical cause of comments saved without recipient IDs is not established.
+This validation does not infer recipients from old text, backfill notifications,
+change watcher cursors or re-dispatch previously missed work.
 
 Use explicit **Request response** actions. Posting a comment,
 mentioning someone, editing text or loading a discussion never launches work.
