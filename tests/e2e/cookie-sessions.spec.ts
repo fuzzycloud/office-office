@@ -356,18 +356,16 @@ test("a delayed cookie login response reconciles identity in both tabs", async (
 	const ready = new Promise<void>((resolve) => {
 		fetched = resolve;
 	});
-	await page.route(
-		"**/auth/login",
-		async (route) => {
-			const response = await route.fetch();
-			expect(response.ok()).toBeTruthy();
-			expect((await response.json()).user.role).toBe("admin");
-			fetched();
-			await held;
-			await route.fulfill({ response });
-		},
-		{ times: 1 },
-	);
+	// Keep interception installed while fulfillment starts session recovery.
+	// A one-shot route tears interception down at that same boundary.
+	await page.route("**/auth/login", async (route) => {
+		const response = await route.fetch();
+		expect(response.ok()).toBeTruthy();
+		expect((await response.json()).user.role).toBe("admin");
+		fetched();
+		await held;
+		await route.fulfill({ response });
+	});
 	try {
 		// Both forms start unauthenticated before the held response changes cookies.
 		await other.goto(`${office.url}/`);
@@ -431,6 +429,7 @@ test("a delayed cookie login response reconciles identity in both tabs", async (
 		).not.toBe(viewerMarker);
 	} finally {
 		release();
+		await page.unroute("**/auth/login");
 		await other.close();
 	}
 });
