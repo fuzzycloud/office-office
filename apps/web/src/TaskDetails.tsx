@@ -1,4 +1,3 @@
-import { useSourceAnchor } from "./SourceLink";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
@@ -6,20 +5,21 @@ import ActionIcon from "./ActionIcon";
 import {
 	deleteTaskComment,
 	getReport,
-	listReports,
 	listNotifications,
+	listReports,
 	listTaskDiscussion,
 	type Member,
 	saveTaskComment,
 	type Task,
 } from "./api";
-import { emptySelection, ReferenceLinks } from "./ConversationFields";
 import ConversationComposer from "./ConversationComposer";
+import { emptySelection, ReferenceLinks } from "./ConversationFields";
 import ConversationReceipt, {
 	type SavedConversation,
 } from "./ConversationReceipt";
 import MemberAvatar from "./MemberAvatar";
 import { NotificationComposer } from "./Notifications";
+import { useSourceAnchor } from "./SourceLink";
 
 const time = (value: bigint) =>
 	new Intl.DateTimeFormat(undefined, {
@@ -139,6 +139,40 @@ export default function TaskDetails({
 		]);
 	};
 	const mutation = useMutation({
+		// Freeze receipt intent before any background refresh can observe this write.
+		onMutate: () => ({
+			kind: "task_comment" as const,
+			contextId: task.id,
+			expected: {
+				mentionIds: [...selection.mentionIds],
+				responseRecipientIds: [...selection.responseRecipientIds],
+				parentId,
+			},
+			previous: (() => {
+				const old = discussion.data?.comments.find(
+					(record) => record.id === editComment?.id,
+				);
+				return old
+					? {
+							mentionIds: [...old.mentionIds],
+							responseRecipientIds: [...old.responseRecipientIds],
+						}
+					: undefined;
+			})(),
+			replyRecipientId: (() => {
+				const authorId = discussion.data?.comments.find(
+					(record) => record.id === parentId,
+				)?.authorId;
+				return authorId &&
+					authorId !== currentUser.id &&
+					members.some(
+						(member) => member.id === authorId && member.status === "active",
+					)
+					? authorId
+					: "";
+			})(),
+			previousRevision: editComment?.revision,
+		}),
 		mutationFn: async (action: "save" | "delete") => {
 			if (action === "delete") {
 				const comment = discussion.data?.comments.find(
@@ -160,13 +194,13 @@ export default function TaskDetails({
 				expectedRevision: editComment?.revision || 0,
 			});
 		},
-		onSuccess: async (result, action) => {
-			if (action === "save" && result.comment)
+		onSuccess: async (result, action, submitted) => {
+			if (action === "save" && result.comment && submitted)
 				setSavedConversation({
-					kind: "task_comment",
+					...submitted,
 					id: result.comment.id,
 					revision: result.comment.revision,
-					unchanged: editComment?.revision === result.comment.revision,
+					unchanged: submitted.previousRevision === result.comment.revision,
 				});
 			if (action === "save" || editComment?.id === deleteId) {
 				setBody("");

@@ -4,6 +4,7 @@ import ConversationFields, {
 	type ConversationSelection,
 	MemberOptions,
 	matchingMembers,
+	type RecipientIntent,
 	selectRecipient,
 } from "./ConversationFields";
 
@@ -159,6 +160,8 @@ export default function ConversationComposer({
 	const [token, setToken] = useState<MentionToken | null>(null);
 	const [activeIndex, setActiveIndex] = useState(0);
 	const [error, setError] = useState("");
+	const [autocompleteIntent, setAutocompleteIntent] =
+		useState<RecipientIntent>("mentionIds");
 	// Associate acknowledgement with the exact draft, including linked IDs and
 	// reference changes, so an external update cannot reuse an old acknowledgement.
 	const draftKey = JSON.stringify([body, selection]);
@@ -203,8 +206,13 @@ export default function ConversationComposer({
 		const cursor = token.start + member.name.length + 2;
 		changeBody(nextBody);
 		// A prior, explicit response request remains a response request.
-		if (!selection.responseRecipientIds.includes(member.id)) {
-			changeSelection(selectRecipient(selection, "mentionIds", member.id));
+		if (
+			autocompleteIntent === "responseRecipientIds" ||
+			!selection.responseRecipientIds.includes(member.id)
+		) {
+			changeSelection(
+				selectRecipient(selection, autocompleteIntent, member.id),
+			);
 		}
 		setToken(null);
 		requestAnimationFrame(() => {
@@ -250,6 +258,35 @@ export default function ConversationComposer({
 			>
 				{label}
 			</label>
+			<fieldset
+				aria-label="Autocomplete notification mode"
+				className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3 rounded-box border border-base-300 p-3 text-sm"
+				disabled={disabled || selectionDisabled}
+			>
+				<legend className="px-1 text-xs text-base-content/70">
+					For new @ selections
+				</legend>
+				{(
+					[
+						["mentionIds", "FYI"],
+						["responseRecipientIds", "Ask to act / respond"],
+					] as const
+				).map(([intent, name]) => (
+					<label
+						key={intent}
+						className="flex items-center gap-2 cursor-pointer"
+					>
+						<input
+							type="radio"
+							name={`${id}-autocomplete-intent`}
+							className="radio radio-sm radio-primary"
+							checked={autocompleteIntent === intent}
+							onChange={() => setAutocompleteIntent(intent)}
+						/>
+						{name}
+					</label>
+				))}
+			</fieldset>
 			<div className="relative min-w-0">
 				<textarea
 					ref={textarea}
@@ -308,8 +345,10 @@ export default function ConversationComposer({
 				{pickerOpen && (
 					<div className="absolute inset-x-0 top-full z-30 mt-1 grid max-h-[min(20rem,45vh)] gap-1 overflow-y-auto rounded-box border border-base-300 bg-base-100 p-2 shadow-lg">
 						<p className="text-xs text-base-content/70">
-							Choose Mention / FYI · use ↑ ↓ and Enter, or tap a teammate.
-							Escape closes.
+							{autocompleteIntent === "mentionIds"
+								? "Choose Mention / FYI"
+								: "Ask to act / respond"}{" "}
+							· use ↑ ↓ and Enter, or tap a teammate. Escape closes.
 						</p>
 						<MemberOptions
 							members={matches}

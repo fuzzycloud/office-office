@@ -161,6 +161,11 @@ Saving a new assignment or changing its assignee creates an automatic
 `work_request`. Selecting a real member in the structured mention picker creates
 an informational `notice`; plain text such as `@tara` is not a member identity.
 Use **Request response** for an explicit question that a watcher may dispatch.
+The inline comment/message picker also offers **Ask to act / respond** before
+choosing an `@` recipient. FYI is informational; selecting action mode stores
+the member ID in `responseRecipientIds`. A connected worker may claim an eligible
+request on its next poll, subject to its own sender policy, access and availability.
+Neither creating nor claiming that request proves a runtime is running.
 
 A new task-comment or project-message reply creates one `notice` for its active
 parent author. Self replies, unchanged saves and text edits do not repeat it. If
@@ -178,3 +183,28 @@ These behaviors apply to new source commands after upgrade. Existing comments
 and assignments are not replayed into new requests, so already manually forwarded
 work is not dispatched again. This does not require a watcher to manufacture
 notifications that the application should produce.
+
+## Verifying the composition path
+
+The post-save receipt reads the saved source and its exact-revision notifications,
+then compares them with the author's selected intent. A missing or different
+recipient/mode, unexpected reply reference, or missing/duplicate notification is
+a visible verification mismatch. Retry verification only reads records; it never
+posts the comment again. An intentional post without recipients reports that
+nobody was notified, while a reply can still inform its parent author.
+
+For a hosted acceptance check, use a clearly labelled internal test discussion
+and harmless instruction. Select **Ask to act / respond** in the deployed UI,
+submit once, and read back the exact saved body, stable recipient ID, parent and
+revision. Confirm one actionable notification for that source revision. Observe
+the installed watcher's claim and actual profile launch, its reply at the same
+discussion and acknowledgement with the matching claim ID and result reference.
+Read back those records, then allow another polling cycle to check for duplicate
+execution or reply loops. Repeat with FYI (notice only, no launch) and an
+intentional unaddressed post (clear no-notification receipt).
+
+The automated local worker-protocol test covers UI → RPC → SQLite → claim →
+reply → acknowledgement. It does not invoke Hermes or prove a hosted worker ran.
+Do not mark the full hosted integration verified from a direct notification API
+smoke test, a claim, or a subprocess exit alone. Acknowledgement means handling
+of the notification, independently of task completion and human approval.
