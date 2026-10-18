@@ -1,49 +1,34 @@
-import { type ReactNode, useId, useRef, useState } from "react";
+import {
+	autoUpdate,
+	flip,
+	offset,
+	shift,
+	size,
+	useFloating,
+} from "@floating-ui/react";
+import {
+	type ReactNode,
+	useId,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 import type { Member } from "./api";
 import ConversationFields, {
 	type ConversationSelection,
 	MemberOptions,
 	matchingMembers,
+	memberIdentity,
 	type RecipientIntent,
 	selectRecipient,
 } from "./ConversationFields";
+import {
+	emailRanges,
+	mentionStarts,
+	nameAtStart,
+} from "./conversationMentions";
 
 type MentionToken = { start: number; end: number; query: string };
-
-// A name is a notification target only after the author picks its stable ID.
-// These helpers recognize text for warnings and search, never to add recipients.
-function mentionStarts(body: string) {
-	return [...body.matchAll(/(^|[\s([{<"'“‘,:;!?])@/gu)].map(
-		(match) => (match.index ?? 0) + match[1].length,
-	);
-}
-
-function emailRanges(body: string) {
-	return [...body.matchAll(/[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+/gu)].map(
-		(match) => ({
-			start: match.index ?? 0,
-			end: (match.index ?? 0) + match[0].length,
-		}),
-	);
-}
-
-function nameAtStart(text: string, members: Member[]) {
-	const lower = text.toLocaleLowerCase();
-	return members
-		.filter((member) => {
-			if (!member.name || !lower.startsWith(member.name.toLocaleLowerCase()))
-				return false;
-			const next = text[member.name.length];
-			if (
-				next &&
-				[".", "'", "’"].includes(next) &&
-				/[\p{L}\p{N}]/u.test(text[member.name.length + 1] || "")
-			)
-				return false;
-			return !next || /[\s.,;:!?()[\]{}<>"'“”‘’]/u.test(next);
-		})
-		.sort((left, right) => right.name.length - left.name.length)[0];
-}
 
 export function unlinkedMentionNames(
 	body: string,
@@ -129,6 +114,7 @@ export type ConversationComposerProps = {
 	selection: ConversationSelection;
 	onSelectionChange: (value: ConversationSelection) => void;
 	projectId: string;
+	replyTo?: { memberId: string; name: string };
 	disabled: boolean;
 	selectionDisabled?: boolean;
 	submitDisabled?: boolean;
@@ -146,6 +132,7 @@ export default function ConversationComposer({
 	selection,
 	onSelectionChange,
 	projectId,
+	replyTo,
 	disabled,
 	selectionDisabled = false,
 	submitDisabled = false,
@@ -180,7 +167,38 @@ export default function ConversationComposer({
 	const acknowledged = acknowledgedDraft === draftKey;
 	const matches = matchingMembers(members, token?.query || "");
 	const pickerOpen = !!token && !disabled && !selectionDisabled;
+	const { refs, floatingStyles, elements, update } = useFloating({
+		open: pickerOpen,
+		placement: "bottom-start",
+		strategy: "fixed",
+		whileElementsMounted: autoUpdate,
+		middleware: [
+			offset(4),
+			flip({ padding: 12 }),
+			shift({ padding: 12 }),
+			size({
+				padding: 12,
+				apply({ availableHeight, availableWidth, rects, elements }) {
+					Object.assign(elements.floating.style, {
+						width: `${Math.min(rects.reference.width, availableWidth)}px`,
+						maxHeight: `${Math.max(0, Math.min(320, availableHeight))}px`,
+					});
+				},
+			}),
+		],
+	});
+	// Native top-layer placement escapes modal overflow without moving the picker
+	// out of its conversation or the dialog's focus boundary.
+	useLayoutEffect(() => {
+		if (pickerOpen && elements.floating) {
+			elements.floating.showPopover();
+			update();
+		}
+	}, [pickerOpen, elements.floating, update]);
 	const selectedIndex = Math.min(activeIndex, matches.length - 1);
+	const replyMemberId = replyTo?.memberId || "";
+	const replyMember = members.find((member) => member.id === replyMemberId);
+	const replyRequested = selection.responseRecipientIds.includes(replyMemberId);
 
 	const updateToken = (nextBody: string, cursor: number) => {
 		setToken(
@@ -221,6 +239,28 @@ export default function ConversationComposer({
 		});
 	};
 
+	const openMention = () => {
+		const input = textarea.current;
+		if (!input || disabled || selectionDisabled) return;
+		const start = input.selectionStart;
+		const end = input.selectionEnd;
+		const existing = mentionAtCursor(body, start, members, selection);
+		if (existing) {
+			setToken(existing);
+		} else {
+			const prefix = body.slice(0, start);
+			const separator =
+				prefix && !/[\s([{<"'“‘,:;!?]$/u.test(prefix) ? " " : "";
+			const nextBody = `${prefix}${separator}@${body.slice(end)}`;
+			const at = start + separator.length;
+			changeBody(nextBody);
+			setToken({ start: at, end: at + 1, query: "" });
+			requestAnimationFrame(() => input.setSelectionRange(at + 1, at + 1));
+		}
+		setActiveIndex(0);
+		input.focus();
+	};
+
 	return (
 		<form
 			className={className}
@@ -252,12 +292,90 @@ export default function ConversationComposer({
 				onSubmit();
 			}}
 		>
-			<label
-				htmlFor={`${id}-body`}
-				className="block label-text font-medium mb-2"
-			>
-				{label}
-			</label>
+			{replyTo && (
+				<fieldset
+					aria-label="Reply notification mode"
+					className="rounded-box border border-base-300 bg-base-200 p-3 mb-3 grid gap-2 text-sm"
+					disabled={disabled || selectionDisabled}
+				>
+					<legend className="px-1 font-medium">
+						Reply to{" "}
+						{replyMember?.name || replyTo.name || "unavailable teammate"}
+					</legend>
+					{replyMember && (
+						<p className="text-xs text-base-content/70 break-all">
+							{memberIdentity(replyMember, members)}
+						</p>
+					)}
+					<div className="flex flex-wrap gap-x-4 gap-y-2">
+						<label className="flex items-center gap-2 cursor-pointer">
+							<input
+								type="radio"
+								name={`${id}-reply-intent`}
+								className="radio radio-sm radio-primary"
+								checked={!replyRequested}
+								onChange={() =>
+									changeSelection({
+										...selection,
+										responseRecipientIds: selection.responseRecipientIds.filter(
+											(memberId) => memberId !== replyMemberId,
+										),
+									})
+								}
+							/>
+							FYI
+						</label>
+						<label className="flex items-center gap-2 cursor-pointer">
+							<input
+								type="radio"
+								name={`${id}-reply-intent`}
+								className="radio radio-sm radio-primary"
+								checked={replyRequested}
+								disabled={replyMember?.status !== "active"}
+								onChange={() =>
+									changeSelection(
+										selectRecipient(
+											selection,
+											"responseRecipientIds",
+											replyMemberId,
+										),
+									)
+								}
+							/>
+							Request response
+						</label>
+					</div>
+					<p className="text-xs text-base-content/70">
+						FYI keeps the reply informational. Request response addresses this
+						person directly, without another @mention.
+					</p>
+					{replyMember?.status !== "active" && (
+						<p className="text-xs text-warning">
+							This parent author is inactive or unavailable. You can save an FYI
+							reply, but they will not be notified.
+						</p>
+					)}
+				</fieldset>
+			)}
+			<div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+				<label htmlFor={`${id}-body`} className="label-text font-medium">
+					{label}
+				</label>
+				<button
+					type="button"
+					className="btn btn-ghost btn-sm"
+					disabled={disabled || selectionDisabled}
+					onMouseDown={(event) => event.preventDefault()}
+					onClick={openMention}
+					aria-controls={pickerOpen ? listId : undefined}
+					aria-expanded={pickerOpen}
+				>
+					<span aria-hidden="true" className="text-lg">
+						@
+					</span>{" "}
+					Mention someone
+				</button>
+			</div>
 			<fieldset
 				aria-label="Autocomplete notification mode"
 				className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3 rounded-box border border-base-300 p-3 text-sm"
@@ -289,7 +407,10 @@ export default function ConversationComposer({
 			</fieldset>
 			<div className="relative min-w-0">
 				<textarea
-					ref={textarea}
+					ref={(element) => {
+						textarea.current = element;
+						refs.setReference(element);
+					}}
 					id={`${id}-body`}
 					className="textarea textarea-bordered w-full min-h-28"
 					value={body}
@@ -309,6 +430,7 @@ export default function ConversationComposer({
 						if (!pickerOpen || event.nativeEvent.isComposing) return;
 						if (event.key === "Escape") {
 							event.preventDefault();
+							event.stopPropagation();
 							setToken(null);
 						}
 						if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -343,7 +465,12 @@ export default function ConversationComposer({
 					aria-invalid={!!error}
 				/>
 				{pickerOpen && (
-					<div className="absolute inset-x-0 top-full z-30 mt-1 grid max-h-[min(20rem,45vh)] gap-1 overflow-y-auto rounded-box border border-base-300 bg-base-100 p-2 shadow-lg">
+					<div
+						ref={refs.setFloating}
+						popover="manual"
+						style={floatingStyles}
+						className="m-0 grid gap-1 overflow-y-auto rounded-box border border-base-300 bg-base-100 p-2 text-base-content shadow-lg"
+					>
 						<p className="text-xs text-base-content/70">
 							{autocompleteIntent === "mentionIds"
 								? "Choose Mention / FYI"

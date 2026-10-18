@@ -15,7 +15,9 @@ renaming someone must not reroute an old request. Preserve historical attributio
 when a member is disabled. A plain-text `@name` is not an authenticated mention.
 
 In the browser composer, choose **FYI** or **Ask to act / respond** under
-**For new @ selections**, then type `@` to choose an active member. FYI is the
+**For new @ selections**, then type `@` or click **Mention someone** to choose an active member.
+The picker searches names and emails, supports arrow keys and Enter, and stays
+inside the viewport above scrolling dialogs. Escape closes only the picker. FYI is the
 default; text is never interpreted as an instruction to execute. The separate
 **Add Mention / FYI** and **Add response request** pickers remain available.
 Selected people appear as removable chips grouped by their mode. **Mention / FYI**
@@ -25,6 +27,25 @@ Choosing a person in one group moves them out of the other. Picking their
 inline `@mention` again preserves an existing explicit response request.
 Typed names without a linked recipient require an acknowledgement before
 posting them as plain text; email addresses are not treated as mentions.
+Saved task comments and project messages highlight inline `@names` only when
+backed by their saved recipient IDs. The highlight tooltip shows identities and
+FYI/request modes; duplicate names retain all linked identities rather than
+assuming which person the text denotes. Unlinked text stays plain. A renamed or
+unavailable member may no longer match the old text; recipient chips remain the
+record of addressing. Highlighting never creates notifications or backfills old
+comments. Floating UI positions the existing structured picker; the native
+popover top layer keeps it clear of modal clipping without a rich-text editor.
+
+Replies also show **Reply to [person]** with an explicit **FYI / Request response**
+choice. FYI is the default. Request response selects the parent author's stable
+member ID without requiring another `@mention`; its recipient chip and the reply
+choice stay in sync. This addresses the parent author independently of the mode
+for new `@` selections. Switching back to FYI removes that response recipient
+while preserving other selected people. Inactive or unavailable parent authors
+cannot receive response requests; an ordinary reply can still be saved.
+Cancelling or switching replies clears the previous reply draft and addressing.
+These controls work for task comments and project discussions, including editing
+a reply; an edit with unchanged recipients does not send requests again.
 
 After saving, the composer reads the persisted comment/message and checks the
 caller's sent notifications for the exact saved revision. It compares the

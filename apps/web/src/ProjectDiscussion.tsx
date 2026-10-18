@@ -8,6 +8,7 @@ import {
 	type Member,
 	saveProjectMessage,
 } from "./api";
+import ConversationBody from "./ConversationBody";
 import ConversationComposer from "./ConversationComposer";
 import {
 	emptySelection,
@@ -157,6 +158,9 @@ export default function ProjectDiscussion({
 		},
 	});
 	const busy = save.isPending || task.isPending || remove.isPending;
+	const replyParent = discussion.data?.messages.find(
+		(message) => message.id === parentId,
+	);
 	useSourceAnchor(discussion.data);
 	return (
 		<section
@@ -212,7 +216,16 @@ export default function ProjectDiscussion({
 							{new Date(Number(message.createdAt) * 1000).toLocaleString()}
 						</p>
 						<p className="whitespace-pre-wrap break-words mt-1">
-							{message.deleted ? "Message deleted" : message.body}
+							{message.deleted ? (
+								"Message deleted"
+							) : (
+								<ConversationBody
+									body={message.body}
+									members={members}
+									mentionIds={message.mentionIds}
+									responseRecipientIds={message.responseRecipientIds}
+								/>
+							)}
 						</p>
 						{!message.deleted && (
 							<>
@@ -429,6 +442,12 @@ export default function ProjectDiscussion({
 						body={body}
 						onBodyChange={setBody}
 						projectId={projectId}
+						replyTo={
+							replyParent && {
+								memberId: replyParent.authorId,
+								name: replyParent.authorName,
+							}
+						}
 						members={members}
 						selection={selection}
 						onSelectionChange={setSelection}

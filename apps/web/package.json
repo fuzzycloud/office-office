@@ -14,6 +14,7 @@
 		"@bufbuild/protobuf": "2.13.0",
 		"@connectrpc/connect": "2.1.2",
 		"@connectrpc/connect-web": "2.1.2",
+		"@floating-ui/react": "0.27.20",
 		"@tanstack/react-form": "1.33.3",
 		"@tanstack/react-query": "5.101.4",
 		"@tanstack/react-router": "1.170.45",

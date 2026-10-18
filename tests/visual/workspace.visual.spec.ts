@@ -308,10 +308,39 @@ test("Approved office screens retain layout and SVG icons", async ({
 	).toBeVisible();
 	await ready(page);
 	await expect(page).toHaveScreenshot("task-discussion.png");
+	await page
+		.getByRole("dialog")
+		.getByRole("article")
+		.filter({
+			hasText:
+				"The sample research draft is ready. Please check the sources and assumptions.",
+		})
+		.getByRole("button", { name: "Reply", exact: true })
+		.click();
+	const replyComposer = page.locator(".task-comment-composer");
+	await replyComposer
+		.getByRole("group", { name: "Reply notification mode" })
+		.getByRole("radio", { name: "Request response", exact: true })
+		.check();
+	await replyComposer
+		.getByLabel("Reply to comment", { exact: true })
+		.fill("Sample reply: please verify the research sources.");
+	await ready(page);
+	await expect(replyComposer).toHaveScreenshot("reply-composer.png", {
+		stylePath: resolve(__dirname, "component-screenshot.css"),
+	});
+	await replyComposer
+		.getByRole("button", { name: "Cancel reply", exact: true })
+		.click();
 	const composer = page.locator(".task-comment-composer");
 	await composer
 		.getByLabel("Add a comment", { exact: true })
 		.fill("Please review @Sample");
+	await expect(
+		composer.getByRole("listbox", { name: "Active teammates" }),
+	).toBeInViewport({ ratio: 1 });
+	await ready(page);
+	await expect(page).toHaveScreenshot("mention-autocomplete.png");
 	await composer.getByRole("option").filter({ hasText: agent.name }).click();
 	await composer
 		.getByRole("button", { name: "Add response request", exact: true })
